@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: #07090a;
+  color: #c7d0d6;
+  font-family: "IBM Plex Sans", "Aptos", "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Near-black graphite canvas with subtle grid + noise texture. */
+.canvas {
+  background-color: #07090a;
+  background-image:
+    radial-gradient(circle at 50% 0%, rgba(34, 211, 238, 0.06), transparent 60%),
+    linear-gradient(rgba(58, 71, 80, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(58, 71, 80, 0.14) 1px, transparent 1px);
+  background-size: 100% 100%, 28px 28px, 28px 28px;
+}
+
+.noise::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/></svg>");
+  opacity: 0.35;
+  z-index: 0;
+}
+
+/* Restrained scanline sweep for the live header. */
+.scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.5), transparent);
+  pointer-events: none;
+  z-index: 5;
+}
+
+@layer base {
+  * {
+    @apply border-graphite-700;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5 {
+    @apply font-display;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: "Saira Condensed", "DIN Condensed", "Arial Narrow", ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: 0.02em;
+  }
+  .font-mono {
+    font-family: "IBM Plex Mono", "Cascadia Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+  .text-label {
+    @apply font-mono text-[10px] uppercase tracking-[0.14em] text-graphite-500;
+  }
+  .text-condensed {
+    @apply font-display font-semibold uppercase tracking-[0.1em];
+  }
+}
+
+/* Slim scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #263039 transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #263039;
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
