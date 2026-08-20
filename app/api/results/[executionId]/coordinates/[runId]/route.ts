@@ -7,10 +7,14 @@ export const runtime = "nodejs";
 
 export async function GET(
   _req: Request,
-  { params }: { params: { executionId: string; runId: string } },
+  { params }: { params: Promise<{ executionId: string; runId: string }> },
 ): Promise<NextResponse> {
-  const executionId = decodeURIComponent(params.executionId || "");
-  const runId = decodeURIComponent(params.runId || "");
+  const {
+    executionId: encodedExecutionId,
+    runId: encodedRunId,
+  } = await params;
+  const executionId = decodeURIComponent(encodedExecutionId || "");
+  const runId = decodeURIComponent(encodedRunId || "");
   if (!isSafeId(executionId) || !isSafeId(runId)) {
     return NextResponse.json({ error: "invalid identifier" }, { status: 400 });
   }

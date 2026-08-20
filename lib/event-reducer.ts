@@ -436,8 +436,7 @@ function appendConversation(
           : "";
   const entry: ConversationEntry = {
     id:
-      callId ??
-      `${event.run_id ?? ""}-${event.timestamp}-${event.event_type}-${conversation.length}`,
+      `${callId ?? event.run_id ?? "event"}-${event.timestamp ?? 0}-${event.event_type}-${conversation.length}`,
     role,
     eventType: event.event_type,
     callId,

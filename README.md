@@ -36,15 +36,16 @@ NEXT_PUBLIC_TESIS_POLL_MS=2000
 ## Run
 
 ```bash
-npm run dev      # http://127.0.0.1:3000 (bound to localhost)
+npm run dev      # http://127.0.0.1:3000 (also reachable via the current WSL IP)
 npm run build && npm run start
 ```
 
 The live dashboard begins in a waiting state. When you start an experiment
 with `python -m tesis run --config config.yaml` (or the headless CLI), it
 auto-adopts the newest active descriptor, replays the journal from cursor zero,
-then polls for new events. On completion a button links to the detailed
-results page.
+then polls for new events. If no run is active when the page opens, it replays
+the newest journaled or artifact-backed run so completed experiments remain
+visible. On completion a button links to the detailed results page.
 
 ## Routes
 
@@ -53,8 +54,8 @@ Live dashboard:
 - `/` — four-quadrant runtime monitor (AKG traversal, coordinate, conversation, outcomes)
 - `/results/[executionId]` — detailed + thesis scoring explorer
 
-Read-only API (all bound to localhost, path-contained under `TESIS_ROOT`,
-response-redacted):
+Read-only API (served by the local Next.js process, path-contained under
+`TESIS_ROOT`, response-redacted):
 
 - `GET /api/runtime/runs` — scan active/recent descriptors and manifests
 - `GET /api/runtime/runs/[executionId]` — resolve one run
@@ -71,8 +72,9 @@ The browser poll interval is configured with `NEXT_PUBLIC_TESIS_POLL_MS`.
 - Responses pass through a secret-key redaction allowlist and mask known
   credential values; no API keys, cookies, passwords, or session tokens are
   returned or rendered.
-- The dev server binds to `127.0.0.1`. There are no endpoints that launch,
-  cancel, or control experiments, and no arbitrary filesystem/proc reads.
+- The dev server binds to `0.0.0.0` for WSL/Windows host access. There are no
+  endpoints that launch, cancel, or control experiments, and no arbitrary
+  filesystem/proc reads.
 
 ## Scripts
 

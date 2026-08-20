@@ -4,9 +4,9 @@
   "private": true,
   "description": "Read-only web observer and artifact explorer for the TESIS penetration-testing framework.",
   "scripts": {
-    "dev": "next dev --hostname 127.0.0.1 --port 3001",
+    "dev": "next dev --hostname 0.0.0.0",
     "build": "next build",
-    "start": "next start --hostname 127.0.0.1",
+    "start": "next start --hostname 0.0.0.0",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },

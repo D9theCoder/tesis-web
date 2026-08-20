@@ -8,9 +8,10 @@ export const runtime = "nodejs";
 
 export async function GET(
   _req: Request,
-  { params }: { params: { executionId: string } },
+  { params }: { params: Promise<{ executionId: string }> },
 ): Promise<NextResponse> {
-  const executionId = decodeURIComponent(params.executionId || "");
+  const { executionId: encodedExecutionId } = await params;
+  const executionId = decodeURIComponent(encodedExecutionId || "");
   if (!isSafeId(executionId)) {
     return NextResponse.json({ error: "invalid execution id" }, { status: 400 });
   }

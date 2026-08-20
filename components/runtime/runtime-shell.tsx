@@ -62,7 +62,9 @@ export function RuntimeShell() {
     setReplaying(true);
   }, []);
 
-  // Discovery loop: auto-adopt the newest active descriptor.
+  // Discovery loop: prefer the newest active descriptor. If the experiment
+  // already finished before the browser opened, replay the newest journaled
+  // or artifact-backed run instead of leaving the observer in standby.
   useEffect(() => {
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -73,8 +75,13 @@ export function RuntimeShell() {
         if (stopped) return;
         setRuns(res.runs);
         const active = res.active && res.active.length ? res.active[0] : null;
-        if (active && followingRef.current !== active.executionId) {
-          adopt(active.executionId, active);
+        const replayable =
+          !followingRef.current
+            ? res.runs.find((run) => run.hasJournal || run.hasArtifact) ?? null
+            : null;
+        const candidate = active ?? replayable;
+        if (candidate && followingRef.current !== candidate.executionId) {
+          adopt(candidate.executionId, candidate);
         }
         setError(null);
       } catch (e) {
