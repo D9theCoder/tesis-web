@@ -1,348 +1,653 @@
 "use client";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
-import { Maximize, Minus, Plus, LocateFixed } from "lucide-react";
-import type { AkgEdge, AkgNode, AkgSnapshot } from "@/lib/schemas";
-import { cn } from "@/lib/utils";
-import { AKG_SNAPSHOT } from "@/lib/akg-static";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  BaseEdge,
+  Handle,
+  MarkerType,
+  Position,
+  ReactFlow,
+  ReactFlowProvider,
+  useNodesInitialized,
+  useReactFlow,
+  type Edge,
+  type EdgeProps,
+  type Node,
+  type NodeProps,
+  type NodeChange,
+  type Viewport,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+import type { AkgSnapshot } from "@/lib/schemas";
+import {
+  layoutAkg,
+  snapshotLayoutKey,
+  shortNodeLabel,
+  roundedRoute,
+  traversedPairs,
+  directedPair,
+  focusNodeIds,
+  type AkgLayout,
+  type PlacedNode,
+  type PlacedEdge,
+} from "@/lib/akg-layout";
 
-type NodeState = "unknown" | "active" | "visited" | "confirmed" | "chain-enabled" | "blocked" | "current";
-
-interface LayoutNode extends AkgNode {
-  x: number;
-  y: number;
-  state: NodeState;
-  w: number;
-  h: number;
-}
-
-interface LayoutEdge extends AkgEdge {
-  active: boolean;
-  current: boolean;
-  confirmedVia: boolean;
-}
-
-const W = 1000;
-const H = 640;
-
-// Deterministic positions (surface columns x traversal layers).
-const POS: Record<string, [number, number]> = {
-  unauthenticated: [500, 40],
-  sqli: [180, 120],
-  access_control: [500, 120],
-  brute_force: [820, 120],
-  sqli_union: [80, 210],
-  sqli_error: [180, 210],
-  sqli_boolean_blind: [280, 210],
-  sqli_time_blind: [205, 290],
-  ac_idor: [420, 210],
-  ac_vertical_escalation: [500, 210],
-  ac_force_browse: [580, 210],
-  bf_dictionary: [720, 210],
-  bf_spray: [820, 210],
-  sqli_union_confirmed: [80, 380],
-  sqli_error_confirmed: [180, 380],
-  sqli_boolean_blind_confirmed: [280, 380],
-  sqli_time_blind_confirmed: [205, 460],
-  ac_idor_confirmed: [420, 380],
-  ac_vertical_escalation_confirmed: [500, 380],
-  ac_force_browse_confirmed: [580, 380],
-  bf_dictionary_confirmed: [720, 380],
-  bf_spray_confirmed: [820, 380],
-  sqli_confirmed: [180, 470],
-  access_control_confirmed: [500, 470],
-  brute_force_confirmed: [820, 470],
-  credentials_extracted: [720, 555],
-  admin_session_obtained: [500, 555],
-  data_exfiltrated: [280, 555],
-  authenticated_session: [660, 300],
+type Props = {
+  snapshot: AkgSnapshot;
+  currentNode: string | null;
+  selectedMethod: string | null;
+  akgPath: string[];
+  confirmedVulns: string[];
+  achievedOutcomes: string[];
+  viableMethods: string[];
+  onLayoutReady?: () => void;
 };
+type CardNode = Node<
+  {
+    placed: PlacedNode;
+    current: boolean;
+    achieved: boolean;
+    visited: boolean;
+    chosen: boolean;
+  },
+  "card"
+>;
+type RouteEdge = Edge<
+  { placed: PlacedEdge; traversed: boolean; latest: boolean; pulse: boolean },
+  "route"
+>;
 
-const KIND_COLOR: Record<AkgNode["kind"], string> = {
-  entry: "#fcd34d",
-  surface: "#67e8f9",
-  method: "#8b98a3",
-  confirmed: "#a3e635",
-  outcome: "#f87171",
-};
+function NodeCard({ data }: NodeProps<CardNode>) {
+  const { placed, current, achieved, visited, chosen } = data;
+  const node = placed.node;
+  const badge = achieved
+    ? node.kind === "outcome"
+      ? "✓ Achieved"
+      : "✓ Confirmed"
+    : node.kind === "confirmed"
+      ? "◇ Confirmation"
+      : node.kind;
+  return (
+    <div
+      className={`akg-node ${current ? "is-current" : ""} ${achieved ? "is-achieved" : ""} ${chosen ? "is-selected" : ""}`}
+      title={`${node.label ?? node.id}\n${node.id}`}
+      data-node-id={node.id}
+      data-current={current}
+      data-achieved={achieved}
+    >
+      {placed.ports.map((port) => (
+        <Handle
+          key={port.id}
+          id={port.id}
+          type={port.source ? "source" : "target"}
+          position={port.source ? Position.Right : Position.Left}
+          isConnectable={false}
+          style={{
+            left: port.x,
+            top: port.y,
+            right: "auto",
+            transform: "translate(-50%, -50%)",
+          }}
+        />
+      ))}
+      <span className="akg-node-label">{shortNodeLabel(node)}</span>
+      <span className="akg-node-kind">
+        {badge}
+        {current ? " · Current" : visited ? " · Visited" : ""}
+      </span>
+    </div>
+  );
+}
+function RoutedEdge({ id, data, markerEnd }: EdgeProps<RouteEdge>) {
+  if (!data) return null;
+  return (
+    <g
+      data-edge-id={data.placed.edge.id}
+      data-traversed={data.traversed}
+      data-latest={data.latest}
+      className={data.pulse ? "akg-edge-pulse" : ""}
+    >
+      {data.placed.points.map((points, index) => (
+        <BaseEdge
+          key={index}
+          id={`${id}-${index}`}
+          path={roundedRoute(points)}
+          markerEnd={
+            index === data.placed.points.length - 1 ? markerEnd : undefined
+          }
+          interactionWidth={16}
+          style={{
+            stroke: data.latest
+              ? "var(--akg-current)"
+              : data.traversed
+                ? "var(--akg-traversed)"
+                : "var(--akg-edge)",
+            strokeWidth: data.traversed ? 2.5 : 1,
+            strokeDasharray: data.placed.edge.isChain ? "7 5" : undefined,
+          }}
+        />
+      ))}
+    </g>
+  );
+}
+function SurfaceGroup({ data }: NodeProps<Node<{ label: string }>>) {
+  return (
+    <div className="akg-surface-label">{data.label.replace(/_/g, " ")}</div>
+  );
+}
+const nodeTypes = { card: NodeCard, surfaceGroup: SurfaceGroup };
+const edgeTypes = { route: RoutedEdge };
 
-interface AkgGraphProps {
-  snapshot?: AkgSnapshot;
-  currentNode?: string | null;
-  selectedMethod?: string | null;
-  akgPath?: string[];
-  confirmedVulns?: string[];
-  achievedOutcomes?: string[];
-  viableMethods?: string[];
-  className?: string;
+export function AkgGraph(props: Props) {
+  return (
+    <ReactFlowProvider>
+      <GraphCanvas {...props} />
+    </ReactFlowProvider>
+  );
 }
 
-function computeStates(props: AkgGraphProps): Map<string, NodeState> {
-  const map = new Map<string, NodeState>();
+function GraphCanvas(props: Props) {
   const {
+    snapshot,
+    akgPath,
     currentNode,
-    selectedMethod,
-    akgPath = [],
-    confirmedVulns = [],
-    achievedOutcomes = [],
-    viableMethods = [],
+    confirmedVulns,
+    achievedOutcomes,
+    onLayoutReady,
   } = props;
-  const confirmed = new Set(confirmedVulns);
-  const achieved = new Set(achievedOutcomes);
-  const visited = new Set<string>(akgPath);
+  const [layout, setLayout] = useState<AkgLayout | null>(null);
+  const [layoutError, setLayoutError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  const [view, setView] = useState<"full" | "focus">("full");
+  const [selected, setSelected] = useState<{
+    kind: "node" | "edge";
+    id: string;
+  } | null>(null);
+  const [legend, setLegend] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [pulse, setPulse] = useState<string | null>(null);
+  const [measurements, setMeasurements] = useState<
+    Record<string, { width: number; height: number }>
+  >({});
+  const root = useRef<HTMLDivElement>(null);
+  const expandButton = useRef<HTMLButtonElement>(null);
+  const drawerClose = useRef<HTMLButtonElement>(null);
+  const selectionOrigin = useRef<HTMLElement | null>(null);
+  const savedViewport = useRef<Viewport | null>(null);
+  const flow = useReactFlow();
+  const initialized = useNodesInitialized();
+  const onNodesChange = useCallback((changes: NodeChange[]) => {
+    // Controlled React Flow nodes must retain browser measurements. Keeping
+    // these separate from placement lets runtime updates preserve both.
+    const dimensions = changes.filter(
+      (change) => change.type === "dimensions" && change.dimensions,
+    );
+    if (!dimensions.length) return;
+    setMeasurements((previous) => {
+      const next = { ...previous };
+      let changed = false;
+      for (const change of dimensions) {
+        if (change.type !== "dimensions" || !change.dimensions) continue;
+        if (
+          next[change.id]?.width !== change.dimensions.width ||
+          next[change.id]?.height !== change.dimensions.height
+        ) {
+          next[change.id] = change.dimensions;
+          changed = true;
+        }
+      }
+      return changed ? next : previous;
+    });
+  }, []);
+  const key = snapshotLayoutKey(snapshot);
+  const readyCallback = useRef(onLayoutReady);
+  useEffect(() => {
+    readyCallback.current = onLayoutReady;
+  }, [onLayoutReady]);
+  useEffect(() => {
+    let stopped = false;
+    // Reset the pending external layout request before subscribing to its result.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLayout(null);
+    setLayoutError(null);
+    void layoutAkg(snapshot)
+      .then((result) => {
+        if (!stopped) setLayout(result);
+      })
+      .catch((error) => {
+        if (!stopped)
+          setLayoutError(
+            error instanceof Error ? error.message : "Graph layout failed",
+          );
+      });
+    return () => {
+      stopped = true;
+    };
+    // Content, rather than object identity, controls cached placement.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, retry]);
 
-  for (const node of props.snapshot?.nodes ?? AKG_SNAPSHOT.nodes) {
-    const id = node.id;
-    if (currentNode && id === currentNode) {
-      map.set(id, "current");
-    } else if (confirmed.has(id)) {
-      map.set(id, "confirmed");
-    } else if (achieved.has(id)) {
-      map.set(id, "chain-enabled");
-    } else if (selectedMethod && id === selectedMethod) {
-      map.set(id, "active");
-    } else if (visited.has(id)) {
-      map.set(id, "visited");
-    } else if (viableMethods.includes(id)) {
-      map.set(id, "active");
-    } else {
-      map.set(id, "unknown");
-    }
-  }
-  return map;
-}
+  const fit = useCallback(() => {
+    return flow.fitView({
+      padding: 0.12,
+      duration: 0,
+      minZoom: 0.08,
+      maxZoom: 1,
+    });
+  }, [flow]);
+  useEffect(() => {
+    if (!layout || !initialized) return;
+    let stopped = false;
+    const frame = requestAnimationFrame(async () => {
+      await fit();
+      if (!stopped) readyCallback.current?.();
+    });
+    return () => {
+      stopped = true;
+      cancelAnimationFrame(frame);
+    };
+  }, [layout, initialized, view, fit]);
 
-const STATE_RING: Record<NodeState, string> = {
-  current: "stroke-ember-400 drop-shadow-[0_0_6px_rgba(245,158,11,0.7)]",
-  active: "stroke-ember-400",
-  visited: "stroke-graphite-400",
-  confirmed: "stroke-confirm-400",
-  "chain-enabled": "stroke-signal-400",
-  blocked: "stroke-danger-500",
-  unknown: "stroke-graphite-600",
-};
+  const latest =
+    akgPath.length > 1
+      ? directedPair(akgPath[akgPath.length - 2], akgPath[akgPath.length - 1])
+      : null;
+  useEffect(() => {
+    // Synchronize a short arrival animation with a newly observed traversal.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPulse(latest);
+    const timer = setTimeout(() => setPulse(null), 750);
+    return () => clearTimeout(timer);
+  }, [latest, akgPath.length]);
 
-const STATE_FILL: Record<NodeState, string> = {
-  current: "fill-ember-500/25",
-  active: "fill-ember-500/12",
-  visited: "fill-graphite-700/50",
-  confirmed: "fill-confirm-500/15",
-  "chain-enabled": "fill-signal-500/15",
-  blocked: "fill-danger-500/15",
-  unknown: "fill-graphite-800/80",
-};
-
-export function AkgGraph({
-  snapshot = AKG_SNAPSHOT,
-  className,
-  ...props
-}: AkgGraphProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
-
-  const states = useMemo(() => computeStates(props), [props]);
-
-  const nodeById = useMemo(() => {
-    const m = new Map<string, AkgNode>();
-    for (const n of snapshot.nodes) m.set(n.id, n);
-    return m;
-  }, [snapshot]);
-
-  const layoutNodes: LayoutNode[] = useMemo(
+  const pairs = useMemo(() => traversedPairs(akgPath), [akgPath]);
+  const visible = useMemo(
     () =>
-      snapshot.nodes
-        .map((node) => {
-          const [x, y] = POS[node.id] ?? [500, 300];
-          return {
-            ...node,
-            x,
-            y,
-            w: 124,
-            h: 34,
-            state: states.get(node.id) ?? "unknown",
-          };
-        }),
-    [snapshot, states],
+      view === "full"
+        ? new Set(snapshot.nodes.map((node) => node.id))
+        : focusNodeIds(
+            snapshot,
+            akgPath,
+            currentNode,
+            selected?.kind === "node" ? selected.id : null,
+          ),
+    [view, snapshot, akgPath, currentNode, selected],
+  );
+  const nodes: Node[] = useMemo(
+    () =>
+      !layout
+        ? []
+        : [
+            ...layout.groups.map((group) => ({
+              id: `presentation:${group.id}`,
+              type: "surfaceGroup",
+              position: { x: group.x, y: group.y },
+              data: { label: group.label },
+              style: { width: group.width, height: group.height },
+              className: "akg-surface-group",
+              selectable: false,
+              focusable: false,
+              zIndex: -1,
+              hidden: !layout.nodes.some(
+                (node) =>
+                  node.surface === group.label && visible.has(node.node.id),
+              ),
+            })),
+            ...layout.nodes.map(
+              (placed): CardNode => ({
+                id: placed.node.id,
+                type: "card",
+                position: { x: placed.x, y: placed.y },
+                style: { width: placed.width, height: placed.height },
+                data: {
+                  placed,
+                  current: currentNode === placed.node.id,
+                  achieved:
+                    confirmedVulns.includes(placed.node.id) ||
+                    achievedOutcomes.includes(placed.node.id),
+                  visited: akgPath.includes(placed.node.id),
+                  chosen:
+                    selected?.kind === "node" && selected.id === placed.node.id,
+                },
+                hidden: !visible.has(placed.node.id),
+                ariaLabel: `${placed.node.label ?? placed.node.id}, ${placed.node.kind}. Inspect node`,
+              }),
+            ),
+          ].map((node) => ({ ...node, measured: measurements[node.id] })),
+    [
+      layout,
+      visible,
+      currentNode,
+      confirmedVulns,
+      achievedOutcomes,
+      akgPath,
+      selected,
+      measurements,
+    ],
+  );
+  const edges: RouteEdge[] = useMemo(
+    () =>
+      !layout
+        ? []
+        : layout.edges.map((placed) => {
+            const pair = directedPair(placed.edge.source, placed.edge.target);
+            const traversed = pairs.has(pair),
+              isLatest = pair === latest;
+            return {
+              id: placed.edge.id,
+              source: placed.edge.source,
+              target: placed.edge.target,
+              sourceHandle: placed.sourcePort,
+              targetHandle: placed.targetPort,
+              type: "route",
+              data: {
+                placed,
+                traversed,
+                latest: isLatest,
+                pulse: pulse === pair,
+              },
+              hidden:
+                !visible.has(placed.edge.source) ||
+                !visible.has(placed.edge.target),
+              markerEnd: {
+                type: MarkerType.ArrowClosed,
+                color: isLatest ? "#e8ad56" : traversed ? "#639ea8" : "#394750",
+                width: 16,
+                height: 16,
+              },
+              ariaLabel: `${placed.edge.source} to ${placed.edge.target}. Inspect transition`,
+            };
+          }),
+    [layout, pairs, latest, pulse, visible],
   );
 
-  const layoutEdges: LayoutEdge[] = useMemo(() => {
-    const confirmed = new Set(props.confirmedVulns ?? []);
-    const achieved = new Set(props.achievedOutcomes ?? []);
-    const known = new Set([...confirmed, ...achieved]);
-    const pathSet = new Set(props.akgPath ?? []);
-    const currentNode = props.currentNode;
-    return snapshot.edges.map((e) => {
-      const current =
-        (pathSet.has(e.source) && pathSet.has(e.target)) ||
-        e.source === currentNode ||
-        e.target === currentNode;
-      return {
-        ...e,
-        current,
-        active: false,
-        confirmedVia: known.has(e.source) || known.has(e.target),
-      };
+  const center = (id: string) => {
+    const node = layout?.nodes.find((placed) => placed.node.id === id);
+    if (node)
+      void flow.setCenter(node.x + node.width / 2, node.y + node.height / 2, {
+        zoom: Math.max(flow.getZoom(), 0.9),
+        duration: 0,
+      });
+  };
+  const closeExpanded = useCallback(() => {
+    setExpanded(false);
+    requestAnimationFrame(() => {
+      if (savedViewport.current) void flow.setViewport(savedViewport.current);
+      expandButton.current?.focus();
     });
-  }, [snapshot, props]);
-
-  const onWheel = (e: React.WheelEvent) => {
-    const factor = e.deltaY < 0 ? 1.12 : 0.89;
-    setScale((s) => Math.min(3, Math.max(0.4, s * factor)));
-  };
-
-  const onPointerDown = (e: React.PointerEvent) => {
-    drag.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  };
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!drag.current) return;
-    const dx = e.clientX - drag.current.x;
-    const dy = e.clientY - drag.current.y;
-    setOffset({ x: drag.current.ox + dx, y: drag.current.oy + dy });
-  };
-  const onPointerUp = () => {
-    drag.current = null;
-  };
-
-  const fit = () => {
-    const el = containerRef.current;
-    if (!el) return;
-    const s = Math.min(el.clientWidth / W, el.clientHeight / H, 1.4);
-    setScale(Math.max(0.5, s));
-    setOffset({
-      x: (el.clientWidth - W * s) / 2,
-      y: (el.clientHeight - H * s) / 2,
+  }, [flow]);
+  useEffect(() => {
+    if (!expanded) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const others = [
+      ...document.querySelectorAll<HTMLElement>(
+        "body > header, .runtime-toolbar, .mock-summary, .runtime-sidebar",
+      ),
+    ];
+    const oldInert = others.map((element) => element.inert);
+    others.forEach((element) => {
+      element.inert = true;
     });
-  };
+    root.current?.focus();
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeExpanded();
+      }
+      if (event.key === "Tab") {
+        const targets = [
+          ...root.current!.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [tabindex="0"]',
+          ),
+        ].filter((element) => element.getClientRects().length);
+        const first = targets[0],
+          last = targets.at(-1);
+        if (
+          event.shiftKey &&
+          (document.activeElement === first ||
+            document.activeElement === root.current)
+        ) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", keydown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      others.forEach((element, i) => {
+        element.inert = oldInert[i];
+      });
+      document.removeEventListener("keydown", keydown);
+    };
+  }, [expanded, closeExpanded]);
+  useEffect(() => {
+    if (selected) drawerClose.current?.focus();
+  }, [selected]);
 
+  const inspectedNode =
+    selected?.kind === "node"
+      ? layout?.nodes.find((node) => node.node.id === selected.id)
+      : undefined;
+  const inspectedEdge =
+    selected?.kind === "edge"
+      ? snapshot.edges.find((edge) => edge.id === selected.id)
+      : undefined;
+  const inspect = (kind: "node" | "edge", id: string) => {
+    selectionOrigin.current = document.activeElement as HTMLElement;
+    setSelected({ kind, id });
+  };
   return (
-    <div className={cn("relative flex h-full flex-col overflow-hidden", className)}>
-      <div className="flex items-center justify-between gap-2 border-b border-graphite-700/60 px-2 py-1">
-        <Legend />
-        <div className="flex items-center gap-1">
-          <button onClick={() => setScale((s) => Math.min(3, s * 1.2))} className="rounded-sm border border-graphite-700 p-1 text-graphite-400 hover:text-graphite-200" aria-label="Zoom in"><Plus size={12} /></button>
-          <button onClick={() => setScale((s) => Math.max(0.4, s / 1.2))} className="rounded-sm border border-graphite-700 p-1 text-graphite-400 hover:text-graphite-200" aria-label="Zoom out"><Minus size={12} /></button>
-          <button onClick={fit} className="flex items-center gap-1 rounded-sm border border-graphite-700 px-1.5 py-1 text-graphite-400 hover:text-graphite-200" aria-label="Fit to view">
-            <LocateFixed size={12} /> Fit
+    <div
+      ref={root}
+      data-layout-ready={initialized}
+      className={`akg-view ${expanded ? "akg-expanded" : ""}`}
+      role={expanded ? "dialog" : undefined}
+      aria-modal={expanded ? true : undefined}
+      aria-label="Attack knowledge graph"
+      tabIndex={expanded ? -1 : undefined}
+    >
+      <header className="akg-heading">
+        <div>
+          <span className="akg-eyebrow">Attack knowledge graph</span>
+          <h2>Traversal map</h2>
+        </div>
+        <span className="akg-count" data-testid="node-count">
+          {snapshot.nodes.filter((node) => visible.has(node.id)).length}/
+          {snapshot.nodes.length} nodes
+        </span>
+      </header>
+      <div className="akg-toolbar" aria-label="Graph controls">
+        <div className="akg-view-switch">
+          <button
+            aria-pressed={view === "full"}
+            onClick={() => setView("full")}
+          >
+            Full graph
+          </button>
+          <button
+            aria-pressed={view === "focus"}
+            onClick={() => setView("focus")}
+          >
+            Focus path
           </button>
         </div>
-      </div>
-      <div
-        ref={containerRef}
-        className="relative flex-1 cursor-grab touch-none overflow-hidden active:cursor-grabbing"
-        onWheel={onWheel}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-      >
-        <svg
-          width="100%"
-          height="100%"
-          viewBox={`0 0 ${W} ${H}`}
-          className="select-none"
-          onDoubleClick={fit}
+        <button onClick={fit}>Fit</button>
+        <button
+          onClick={() => currentNode && center(currentNode)}
+          disabled={!currentNode}
         >
-          {/* grid backdrop */}
-          <defs>
-            <pattern id="dotgrid" width="28" height="28" patternUnits="userSpaceOnUse">
-              <circle cx="1.5" cy="1.5" r="1.2" fill="#1b232a" />
-            </pattern>
-          </defs>
-          <rect width={W} height={H} fill="url(#dotgrid)" />
-          <g transform={`translate(${offset.x},${offset.y}) scale(${scale})`}>
-            {layoutEdges.map((edge) => {
-              const s = nodeById.get(edge.source);
-              const t = nodeById.get(edge.target);
-              if (!s || !t) return null;
-              const sx = (POS[edge.source] ?? [500, 300])[0];
-              const sy = (POS[edge.source] ?? [500, 300])[1];
-              const tx = (POS[edge.target] ?? [500, 300])[0];
-              const ty = (POS[edge.target] ?? [500, 300])[1];
-              const midY = (sy + ty) / 2;
-              const pathD = `M ${sx} ${sy + (sx === tx ? 0 : 0)} Q ${(sx + tx) / 2} ${midY - 20}, ${tx} ${ty}`;
-              const isConfirmed = edge.confirmedVia;
-              const isCurrent = edge.current;
-              return (
-                <g key={edge.id}>
-                  <path
-                    d={pathD}
-                    fill="none"
-                    stroke={isCurrent ? "#f59e0b" : edge.isChain ? "#67e8f9" : isConfirmed ? "#a3e635" : "#263039"}
-                    strokeWidth={isCurrent ? 2.4 : edge.isChain ? 1.6 : 1.2}
-                    strokeDasharray={edge.isChain ? "5 4" : undefined}
-                    opacity={isCurrent ? 1 : edge.isChain ? 0.7 : 0.5}
-                  />
-                  {edge.isChain && (
-                    <path
-                      d={pathD}
-                      fill="none"
-                      stroke="#67e8f9"
-                      strokeWidth={1.2}
-                      strokeDasharray="5 4"
-                      opacity={edge.confirmedVia ? 0.9 : 0.2}
-                    />
-                  )}
-                </g>
-              );
-            })}
-            {layoutNodes.map((node) => {
-              const x = node.x - node.w / 2;
-              const y = node.y - node.h / 2;
-              const isCurrent = node.state === "current";
-              return (
-                <g key={node.id} transform={`translate(${x},${y})`} className="cursor-pointer">
-                  <rect
-                    width={node.w}
-                    height={node.h}
-                    rx={4}
-                    className={cn(STATE_FILL[node.state], STATE_RING[node.state], "stroke-[1.4]")}
-                  />
-                  <text
-                    x={node.w / 2}
-                    y={node.h / 2 + 3}
-                    textAnchor="middle"
-                    fontSize={10}
-                    fontFamily="JetBrains Mono, monospace"
-                    fill={isCurrent ? "#fcd34d" : node.state === "confirmed" ? "#a3e635" : KIND_COLOR[node.kind]}
-                    className={isCurrent ? "animate-pulse" : ""}
-                  >
-                    {node.label ?? node.id.replace(/_/g, " ")}
-                  </text>
-                </g>
-              );
-            })}
-          </g>
-        </svg>
+          Center current
+        </button>
+        <button aria-label="Zoom out" onClick={() => void flow.zoomOut()}>
+          −
+        </button>
+        <button aria-label="Zoom in" onClick={() => void flow.zoomIn()}>
+          +
+        </button>
+        <button
+          ref={expandButton}
+          onClick={() => {
+            if (expanded) closeExpanded();
+            else {
+              savedViewport.current = flow.getViewport();
+              setExpanded(true);
+            }
+          }}
+        >
+          {expanded ? "Close expanded view" : "Expand"}
+        </button>
+        <button
+          aria-expanded={legend}
+          onClick={() => setLegend((value) => !value)}
+        >
+          Legend
+        </button>
       </div>
+      {legend && (
+        <div className="akg-legend">
+          <span className="legend-current">● Current / latest</span>
+          <span className="legend-traversed">→ Traversed</span>
+          <span className="legend-achieved">✓ Confirmed / achieved</span>
+          <span>◇ Pending</span>
+          <span>┄ Chain</span>
+          <span className="legend-failed">✕ Mismatch</span>
+        </div>
+      )}
+      <div className="akg-canvas">
+        {layoutError ? (
+          <div className="akg-layout-message" role="alert">
+            Layout failed: {layoutError}
+            <button onClick={() => setRetry((value) => value + 1)}>
+              Retry layout
+            </button>
+          </div>
+        ) : !layout ? (
+          <div className="akg-layout-message" role="status">
+            Arranging graph…
+          </div>
+        ) : (
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            nodesDraggable={false}
+            nodesConnectable={false}
+            edgesReconnectable={false}
+            deleteKeyCode={null}
+            minZoom={0.08}
+            maxZoom={2.5}
+            onNodeClick={(_, node) => inspect("node", node.id)}
+            onEdgeClick={(_, edge) => inspect("edge", edge.id)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              const element = (event.target as HTMLElement).closest(
+                ".react-flow__node, .react-flow__edge",
+              );
+              const id = element?.getAttribute("data-id");
+              if (id) {
+                event.preventDefault();
+                inspect(
+                  element!.classList.contains("react-flow__node")
+                    ? "node"
+                    : "edge",
+                  id,
+                );
+              }
+            }}
+            colorMode="dark"
+          />
+        )}
+        {selected && (
+          <aside className="akg-details" aria-label="Graph inspection">
+            <button
+              ref={drawerClose}
+              aria-label="Close inspection"
+              onClick={() => {
+                setSelected(null);
+                selectionOrigin.current?.focus();
+              }}
+            >
+              ×
+            </button>
+            {inspectedNode && (
+              <>
+                <h3>{inspectedNode.node.label ?? inspectedNode.node.id}</h3>
+                <dl>
+                  <dt>ID</dt>
+                  <dd>{inspectedNode.node.id}</dd>
+                  <dt>Kind</dt>
+                  <dd>{inspectedNode.node.kind}</dd>
+                  <dt>Surface</dt>
+                  <dd>
+                    {inspectedNode.surface ??
+                      inspectedNode.node.surface ??
+                      "Shared"}
+                  </dd>
+                  <dt>Runtime state</dt>
+                  <dd>
+                    {currentNode === inspectedNode.node.id ? "Current · " : ""}
+                    {confirmedVulns.includes(inspectedNode.node.id)
+                      ? "Confirmed"
+                      : achievedOutcomes.includes(inspectedNode.node.id)
+                        ? "Achieved"
+                        : akgPath.includes(inspectedNode.node.id)
+                          ? "Visited"
+                          : "Pending"}
+                  </dd>
+                </dl>
+              </>
+            )}
+            {inspectedEdge && (
+              <>
+                <h3>
+                  {inspectedEdge.isChain ? "Chain transition" : "Transition"}
+                </h3>
+                <dl>
+                  <dt>Source</dt>
+                  <dd>{inspectedEdge.source}</dd>
+                  <dt>Target</dt>
+                  <dd>{inspectedEdge.target}</dd>
+                  <dt>Preconditions</dt>
+                  <dd>{inspectedEdge.preconditions.join(", ") || "None"}</dd>
+                  <dt>Target agent</dt>
+                  <dd>{inspectedEdge.targetAgent ?? "None"}</dd>
+                </dl>
+              </>
+            )}
+          </aside>
+        )}
+      </div>
+      <nav className="akg-traversal" aria-label="Numbered traversal">
+        <span>PATH</span>
+        {akgPath.length ? (
+          akgPath.map((id, index) => (
+            <button
+              key={`${index}-${id}`}
+              title={id}
+              onClick={() => center(id)}
+              aria-label={`Step ${index + 1}: ${id}`}
+            >
+              <b>{index + 1}</b>
+              {shortNodeLabel(
+                snapshot.nodes.find((node) => node.id === id) ?? {
+                  id,
+                  type: "node",
+                  kind: "method",
+                },
+              )}
+            </button>
+          ))
+        ) : (
+          <span className="akg-empty-path">Waiting for traversal</span>
+        )}
+      </nav>
     </div>
   );
-}
-
-function Legend() {
-  const items: Array<[NodeState, string]> = [
-    ["current", "current"],
-    ["active", "active"],
-    ["visited", "visited"],
-    ["confirmed", "confirmed"],
-    ["chain-enabled", "chain"],
-    ["blocked", "blocked"],
-    ["unknown", "unknown"],
-  ];
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-label">Legend</span>
-      {items.map(([state, label]) => (
-        <span key={state} className="flex items-center gap-1">
-          <span className={cn("h-2 w-2 rounded-sm border", STATE_FILL[state], STATE_RING[state])} />
-          <span className="font-mono text-[9px] uppercase text-graphite-400">{label}</span>
-        </span>
-      ))}
-    </div>
-  );
-}
-
-export function NodeRow({ children }: { children: ReactNode }) {
-  return <>{children}</>;
 }

@@ -49,6 +49,8 @@ export default function ResultsPage() {
 
   useEffect(() => {
     let stopped = false;
+    // Reset loading when subscribing to another result request.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     fetchResult(executionId)
       .then((r) => {

@@ -279,16 +279,33 @@ export function reduceEvents(
           if (typeof v === "string") next.viableMethods = pushUnique(next.viableMethods, v);
         }
       }
-      const path = data["akg_path"];
-      if (Array.isArray(path)) {
-        next.akgPath = path.map(String).filter(Boolean);
-      }
       // Do NOT overwrite confirmedVulns / achievedOutcomes here — a graph.state
       // snapshot can be stale relative to previously confirmed findings.
       next.metrics = updateSnapshotCounters(next.metrics, data);
     } else if (event.node && type.includes("node")) {
       next.currentNode = event.node;
     }
+
+    // A valid traversal snapshot is authoritative, including repeated visits.
+    // Do not coerce malformed paths or erase progress with an empty payload.
+    const path = data.akg_path;
+    if (
+      Array.isArray(path) &&
+      path.length > 0 &&
+      path.every((id) => typeof id === "string" && id.trim().length > 0)
+    ) {
+      const candidate = path as string[];
+      const extendsObserved =
+        next.akgPath.length === 0 ||
+        (candidate.length >= next.akgPath.length &&
+          next.akgPath.every((node, index) => candidate[index] === node));
+      if (extendsObserved) {
+        next.akgPath = [...candidate];
+        next.currentNode = candidate[candidate.length - 1];
+      }
+    }
+    next.confirmedVulns = pushManyUnique(next.confirmedVulns, data.confirmed_vulns);
+    next.achievedOutcomes = pushManyUnique(next.achievedOutcomes, data.achieved_outcomes);
 
     // --- method selection ---
     if (type.includes("method.selected") || type.includes("select")) {
@@ -402,7 +419,6 @@ export function reduceEvents(
 }
 
 function computeElapsed(state: LiveRunState): number {
-  const end = state.endedAt ?? Date.now() / 1000 - state.lastPolledAt + state.lastPolledAt;
   const start = state.startedAt;
   if (start == null) return 0;
   const upper = state.endedAt ?? Date.now() / 1000;

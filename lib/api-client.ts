@@ -4,6 +4,7 @@ import type {
   RunListResponse,
   RunSummary,
 } from "@/lib/schemas";
+import type { AkgMockSimulation } from "@/lib/akg-mock";
 import { normalizeResult } from "@/lib/result-normalizer";
 
 /** Browser-safe read-only client for the observer route handlers. */
@@ -88,4 +89,9 @@ export async function fetchCoordinateResult(
 
 export async function fetchAkg(signal?: AbortSignal): Promise<Record<string, unknown>> {
   return getJson<Record<string, unknown>>("/api/akg", signal);
+}
+
+/** Load the checked-in YAML fixture used by the dashboard's mock traversal. */
+export async function fetchAkgMock(signal?: AbortSignal): Promise<AkgMockSimulation> {
+  return getJson<AkgMockSimulation>("/api/mock/akg", signal);
 }

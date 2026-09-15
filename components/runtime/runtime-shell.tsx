@@ -1,293 +1,433 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Activity, ExternalLink, Radio, RefreshCw, ServerOff } from "lucide-react";
-import type { LiveRunState, RunSummary } from "@/lib/schemas";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, ScrollArea } from "@/components/ui/primitives";
+import { Activity, ExternalLink, FlaskConical, Radio } from "lucide-react";
+import type { AkgSnapshot, LiveRunState, RunSummary } from "@/lib/schemas";
+import { Badge, Button, ScrollArea } from "@/components/ui/primitives";
 import { initialState, reduceEvents } from "@/lib/event-reducer";
-import { fetchAkg, fetchEvents, fetchResult, fetchRuns } from "@/lib/api-client";
-import { AkgGraph } from "@/components/runtime/akg-graph";
+import {
+  fetchAkg,
+  fetchAkgMock,
+  fetchEvents,
+  fetchResult,
+  fetchRuns,
+} from "@/lib/api-client";
 import { CoordinatePanel } from "@/components/runtime/coordinate-panel";
 import { ConversationPanel } from "@/components/runtime/conversation-panel";
 import { OutcomePanel } from "@/components/runtime/outcome-panel";
 import { fmtClock, normalizeRunStatus } from "@/lib/formatters";
-import type { AkgSnapshot } from "@/lib/schemas";
 import { AKG_SNAPSHOT } from "@/lib/akg-static";
-import { cn } from "@/lib/utils";
+import { normalizeAkgSnapshot } from "@/lib/akg-snapshot";
+import {
+  verifyAkgMockState,
+  type AkgMockSimulation,
+  type AkgMockVerification,
+} from "@/lib/akg-mock";
 
+const AkgGraph = dynamic(
+  () => import("./akg-graph").then((module) => module.AkgGraph),
+  { ssr: false },
+);
 const DISCOVER_MS = 4000;
 const POLL_MS = Number(process.env.NEXT_PUBLIC_TESIS_POLL_MS ?? 2000);
 
+type MockSession = {
+  id: number;
+  phase: "loading" | "running" | "passed" | "failed";
+  snapshot: AkgSnapshot;
+  simulation?: AkgMockSimulation;
+  state: LiveRunState;
+  index: number;
+  ready: boolean;
+  verification?: AkgMockVerification;
+  error?: string;
+};
+
+function stateForRun(run: RunSummary) {
+  const state = initialState(run.executionId);
+  Object.assign(state, {
+    runId: run.runId ?? null,
+    mode: run.mode,
+    surface: run.surface ?? null,
+    securityLevel: run.securityLevel ?? null,
+    provider: run.provider ?? null,
+    model: run.model ?? null,
+    payloadMode: run.payloadMode ?? null,
+    experimentCondition: run.experimentCondition ?? null,
+    targetMethod: run.targetMethod ?? null,
+    targetUrl: run.targetUrl ?? null,
+  });
+  state.metrics.generationBudget = state.metrics.remainingBudget =
+    run.candidateBudget ?? 0;
+  state.metrics.maxIterations = state.metrics.remainingIterations =
+    run.maxIterations ?? 0;
+  return state;
+}
+
 export function RuntimeShell() {
   const [runs, setRuns] = useState<RunSummary[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [activeRun, setActiveRun] = useState<RunSummary | null>(null);
-  const [state, setState] = useState<LiveRunState>(initialState());
+  const [liveState, setLiveState] = useState<LiveRunState>(initialState);
   const [hasArtifact, setHasArtifact] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [replaying, setReplaying] = useState(false);
   const [akg, setAkg] = useState<AkgSnapshot>(AKG_SNAPSHOT);
+  const [mock, setMock] = useState<MockSession | null>(null);
+  const [generation, setGeneration] = useState(0);
+  const epoch = useRef(0);
+  const mockRef = useRef<MockSession | null>(null);
+  const requests = useRef(new Set<AbortController>());
+  const replayTimer = useRef<ReturnType<typeof setTimeout>>();
+  const following = useRef<string | null>(null);
+  const cursor = useRef(0);
+  const artifact = useRef(false);
 
-  const cursorRef = useRef(0);
-  const followingRef = useRef<string | null>(null);
-  const stateRef = useRef(state);
-  stateRef.current = state;
-  const hasArtifactRef = useRef(false);
+  const invalidate = useCallback(() => {
+    epoch.current += 1;
+    for (const request of requests.current) request.abort();
+    requests.current.clear();
+    clearTimeout(replayTimer.current);
+    return epoch.current;
+  }, []);
+  useEffect(
+    () => () => {
+      invalidate();
+    },
+    [invalidate],
+  );
 
   const adopt = useCallback((executionId: string, run: RunSummary) => {
-    if (followingRef.current === executionId) return;
-    followingRef.current = executionId;
-    cursorRef.current = 0;
-    setActiveId(executionId);
+    if (mockRef.current || following.current === executionId) return;
+    following.current = executionId;
+    cursor.current = 0;
+    artifact.current = false;
     setActiveRun(run);
-    const next = initialState(executionId);
-    next.runId = run.runId ?? null;
-    next.mode = run.mode;
-    next.surface = run.surface ?? null;
-    next.securityLevel = run.securityLevel ?? null;
-    next.provider = run.provider ?? null;
-    next.model = run.model ?? null;
-    next.payloadMode = run.payloadMode ?? null;
-    next.experimentCondition = run.experimentCondition ?? null;
-    next.targetMethod = run.targetMethod ?? null;
-    next.targetUrl = run.targetUrl ?? null;
-    next.metrics.generationBudget = run.candidateBudget ?? 0;
-    next.metrics.remainingBudget = run.candidateBudget ?? 0;
-    next.metrics.maxIterations = run.maxIterations ?? 0;
-    next.metrics.remainingIterations = run.maxIterations ?? 0;
-    setState(next);
+    setLiveState(stateForRun(run));
     setHasArtifact(false);
-    hasArtifactRef.current = false;
-    setReplaying(true);
   }, []);
 
-  // Discovery loop: prefer the newest active descriptor. If the experiment
-  // already finished before the browser opened, replay the newest journaled
-  // or artifact-backed run instead of leaving the observer in standby.
+  // Both loops serialize their own requests. Every continuation checks the epoch,
+  // including artifact fetches and failures that arrive after mock mode starts.
   useEffect(() => {
+    if (mockRef.current) return;
+    const id = epoch.current;
+    const controller = new AbortController();
+    const activeRequests = requests.current;
+    activeRequests.add(controller);
     let stopped = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    const discovery = async () => {
+    const valid = () => !stopped && epoch.current === id && !mockRef.current;
+    let discoverTimer: ReturnType<typeof setTimeout>;
+    let pollTimer: ReturnType<typeof setTimeout>;
+    const discover = async () => {
       try {
-        const res = await fetchRuns();
-        if (stopped) return;
-        setRuns(res.runs);
-        const active = res.active && res.active.length ? res.active[0] : null;
-        const replayable =
-          !followingRef.current
-            ? res.runs.find((run) => run.hasJournal || run.hasArtifact) ?? null
-            : null;
-        const candidate = active ?? replayable;
-        if (candidate && followingRef.current !== candidate.executionId) {
-          adopt(candidate.executionId, candidate);
-        }
+        const result = await fetchRuns(controller.signal);
+        if (!valid()) return;
+        setRuns(result.runs);
+        const candidate =
+          result.active?.[0] ??
+          (!following.current
+            ? result.runs.find((run) => run.hasJournal || run.hasArtifact)
+            : null);
+        if (candidate) adopt(candidate.executionId, candidate);
         setError(null);
-      } catch (e) {
-        if (!stopped) setError(e instanceof Error ? e.message : "discovery failed");
+      } catch (cause) {
+        if (valid())
+          setError(cause instanceof Error ? cause.message : "Discovery failed");
+      } finally {
+        if (valid()) discoverTimer = setTimeout(discover, DISCOVER_MS);
       }
     };
-
-    void discovery();
-    timer = setInterval(() => void discovery(), DISCOVER_MS);
-    return () => {
-      stopped = true;
-      if (timer) clearInterval(timer);
-    };
-  }, [adopt]);
-
-  // Event polling loop for the adopted run.
-  useEffect(() => {
-    let stopped = false;
-    let timer: ReturnType<typeof setInterval> | undefined;
-
     const poll = async () => {
-      if (!followingRef.current) return;
-      const executionId = followingRef.current;
+      const executionId = following.current;
       try {
-        const res = await fetchEvents(executionId, cursorRef.current);
-        if (stopped || followingRef.current !== executionId) return;
-        cursorRef.current = res.nextCursor;
-        setState((prev) => {
-          const next = reduceEvents(prev, res.events, {
-            nowEpochSec: Date.now() / 1000,
-            status: res.status,
-            connection: connectionFromStatus(res.status),
-          });
-          return next;
-        });
-        setReplaying(false);
-        const terminal = ["completed", "cancelled", "error"].includes(normalizeRunStatus(res.status));
-        if (terminal && !hasArtifactRef.current) {
-          const result = await fetchResult(executionId);
-          if (result && !stopped && followingRef.current === executionId) {
+        if (!executionId || !valid()) return;
+        const result = await fetchEvents(
+          executionId,
+          cursor.current,
+          controller.signal,
+        );
+        if (!valid() || following.current !== executionId) return;
+        cursor.current = result.nextCursor;
+        const status = normalizeRunStatus(result.status);
+        setLiveState((previous) =>
+          reduceEvents(previous, result.events, {
+            status,
+            connection:
+              status === "active" ||
+              status === "completed" ||
+              status === "cancelled" ||
+              status === "error" ||
+              status === "stale"
+                ? status
+                : "waiting",
+          }),
+        );
+        if (
+          ["completed", "cancelled", "error"].includes(status) &&
+          !artifact.current
+        ) {
+          const resultArtifact = await fetchResult(
+            executionId,
+            controller.signal,
+          );
+          if (!valid() || following.current !== executionId) return;
+          if (resultArtifact) {
+            artifact.current = true;
             setHasArtifact(true);
-            hasArtifactRef.current = true;
           }
         }
       } catch {
-        /* transient failures are retried on the next tick */
+        /* Retry transient journal errors on the next poll. */
+      } finally {
+        if (valid()) pollTimer = setTimeout(poll, POLL_MS);
       }
     };
-
+    void discover();
     void poll();
-    timer = setInterval(() => void poll(), POLL_MS);
-    return () => {
-      stopped = true;
-      if (timer) clearInterval(timer);
-    };
-  }, []);
-
-  useEffect(() => {
-    let stopped = false;
-    void fetchAkg()
+    void fetchAkg(controller.signal)
       .then((raw) => {
-        if (stopped) return;
-        const nodes = Array.isArray(raw.nodes)
-          ? raw.nodes.map((node) => {
-              const n = node as Record<string, unknown>;
-              const type = typeof n.type === "string" ? n.type : "node";
-              return {
-                id: String(n.id ?? ""),
-                kind: (typeof n.kind === "string" ? n.kind : type) as AkgSnapshot["nodes"][number]["kind"],
-                type,
-                surface: typeof n.surface === "string" ? n.surface : undefined,
-                method: typeof n.method === "string" ? n.method : undefined,
-                label: String(n.label ?? String(n.id ?? "").replace(/_/g, " ")),
-                payloadProfile: (n.payloadProfile ?? n.payload_profile) as AkgSnapshot["nodes"][number]["payloadProfile"],
-              };
-            })
-          : [];
-        const edges = Array.isArray(raw.edges)
-          ? raw.edges.map((edge, index) => {
-              const e = edge as Record<string, unknown>;
-              return {
-                id: String(e.id ?? `akg-e-${index}`),
-                source: String(e.source ?? ""),
-                target: String(e.target ?? ""),
-                isChain: Boolean(e.isChain ?? e.is_chain),
-                preconditions: Array.isArray(e.preconditions) ? e.preconditions.map(String) : [],
-                targetAgent: typeof (e.targetAgent ?? e.target_agent) === "string" ? String(e.targetAgent ?? e.target_agent) : undefined,
-                priority: typeof e.priority === "number" ? e.priority : 100,
-              };
-            })
-          : [];
-        if (nodes.length && edges.length) {
-          setAkg({ schema_version: String(raw.schema_version ?? "akg.v1"), nodes, edges, source: typeof raw.source === "string" ? raw.source : undefined });
-        }
+        if (valid()) setAkg(normalizeAkgSnapshot(raw));
       })
       .catch(() => undefined);
     return () => {
       stopped = true;
+      controller.abort();
+      activeRequests.delete(controller);
+      clearTimeout(discoverTimer);
+      clearTimeout(pollTimer);
     };
+  }, [generation, adopt]);
+
+  const publishMock = useCallback((session: MockSession) => {
+    mockRef.current = session;
+    setMock(session);
   }, []);
 
-  const connectionFromStatus = (status: string): LiveRunState["connection"] => {
-    const s = normalizeRunStatus(status);
-    if (s === "active" || s === "stale" || s === "completed" || s === "cancelled" || s === "error") return s;
-    return "waiting";
+  const runMockTest = useCallback(async () => {
+    const id = invalidate();
+    const session: MockSession = {
+      id,
+      phase: "loading",
+      snapshot: akg,
+      state: initialState(),
+      index: 0,
+      ready: false,
+    };
+    publishMock(session);
+    // Tear down scheduled live callbacks as soon as mock mode starts, in
+    // addition to invalidating/aborting any requests already in flight.
+    setGeneration((value) => value + 1);
+    setError(null);
+    const controller = new AbortController();
+    requests.current.add(controller);
+    try {
+      const [simulation, rawSnapshot] = await Promise.all([
+        fetchAkgMock(controller.signal),
+        fetchAkg(controller.signal).catch(() => null),
+      ]);
+      if (epoch.current !== id) return;
+      // Capture once; layout, filtering and verification all share this object.
+      publishMock({
+        ...session,
+        simulation,
+        snapshot: rawSnapshot ? normalizeAkgSnapshot(rawSnapshot) : akg,
+        state: stateForRun(simulation.run),
+      });
+    } catch (cause) {
+      if (epoch.current === id)
+        publishMock({
+          ...session,
+          phase: "failed",
+          error: cause instanceof Error ? cause.message : "Mock loading failed",
+        });
+    } finally {
+      controller.abort();
+      requests.current.delete(controller);
+    }
+  }, [akg, invalidate, publishMock]);
+
+  const layoutReady = useCallback(() => {
+    const session = mockRef.current;
+    if (
+      session?.simulation &&
+      session.phase === "loading" &&
+      epoch.current === session.id
+    ) {
+      publishMock({ ...session, ready: true, phase: "running" });
+    }
+  }, [publishMock]);
+
+  useEffect(() => {
+    if (!mock?.ready || mock.phase !== "running" || !mock.simulation) return;
+    const id = mock.id;
+    replayTimer.current = setTimeout(() => {
+      const session = mockRef.current;
+      if (
+        !session ||
+        session.id !== id ||
+        epoch.current !== id ||
+        !session.simulation
+      )
+        return;
+      const event = session.simulation.events[session.index];
+      const index = session.index + 1;
+      const done = index === session.simulation.events.length;
+      const state = reduceEvents(session.state, [event], {
+        nowEpochSec: event.timestamp,
+        status: done ? "completed" : "active",
+        connection: done ? "completed" : "active",
+      });
+      const verification = done
+        ? verifyAkgMockState(
+            state,
+            session.simulation.assertions,
+            session.snapshot,
+          )
+        : undefined;
+      publishMock({
+        ...session,
+        state,
+        index,
+        verification,
+        phase: verification
+          ? verification.passed
+            ? "passed"
+            : "failed"
+          : "running",
+      });
+    }, mock.simulation.seed.intervalMs);
+    return () => clearTimeout(replayTimer.current);
+  }, [mock, publishMock]);
+
+  const returnToLive = () => {
+    invalidate();
+    mockRef.current = null;
+    setMock(null);
+    following.current = null;
+    cursor.current = 0;
+    setActiveRun(null);
+    setLiveState(initialState());
+    setHasArtifact(false);
+    setGeneration((value) => value + 1);
   };
-
-  const akgProps = useMemo(
-    () => ({
-      currentNode: state.currentNode,
-      selectedMethod: state.selectedMethod,
-      akgPath: state.akgPath,
-      confirmedVulns: state.confirmedVulns,
-      achievedOutcomes: state.achievedOutcomes,
-      viableMethods: state.viableMethods,
-    }),
-    [state],
-  );
-
+  const state = mock?.state ?? liveState;
+  const activeId = mock?.simulation?.executionId ?? activeRun?.executionId;
   return (
-    <div className="flex h-full flex-col">
-      <div className="noise relative flex flex-wrap items-center justify-between gap-2 border-b border-graphite-700/70 bg-graphite-900/70 px-4 py-2">
+    <div className="runtime-shell">
+      <div className="runtime-toolbar">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Radio size={16} className="text-signal-400" />
-            <span className="font-display text-[14px] font-semibold uppercase tracking-[0.15em] text-graphite-100">
-              Runtime Monitor
-            </span>
-          </div>
-          {activeRun ? (
-            <Badge variant={state.connection === "active" ? "cyan" : state.connection === "completed" ? "lime" : "amber"}>
-              <Activity size={9} /> {state.connection}
-            </Badge>
-          ) : (
-            <Badge variant="outline">standby</Badge>
-          )}
-          {activeId && (
-            <span className="hidden font-mono text-[10px] text-graphite-500 lg:inline">
-              {activeId.slice(0, 30)}
-            </span>
-          )}
+          <Radio size={16} className="text-signal-400" />
+          <span className="font-display uppercase tracking-widest">
+            Runtime Monitor
+          </span>
+          <Badge variant="outline">
+            <Activity size={9} />
+            {mock ? "simulation" : state.connection}
+          </Badge>
         </div>
-        <div className="flex items-center gap-2">
-          {replaying && (
-            <span className="flex items-center gap-1 font-mono text-[10px] text-ember-300">
-              <RefreshCw size={10} className="animate-spin" /> replaying…
+        <div className="flex flex-wrap items-center gap-2">
+          {mock && (
+            <span role="status" className={`mock-status ${mock.phase}`}>
+              {mock.phase === "passed"
+                ? "✓ AKG verified"
+                : mock.phase === "failed"
+                  ? "✕ AKG mismatch"
+                  : mock.phase === "loading"
+                    ? "◷ Loading mock / layout"
+                    : "◷ Running mock"}
             </span>
           )}
-          {hasArtifact && activeId && (
-            <Button variant="amber" className="h-7">
-              <Link href={`/results/${activeId}`} className="flex items-center gap-1.5">
-                <ExternalLink size={12} /> Open detailed results
-              </Link>
-            </Button>
+          <Button
+            onClick={runMockTest}
+            aria-label="Run seeded AKG traversal test"
+          >
+            <FlaskConical size={12} />
+            {mock ? "Rerun mock" : "Mock AKG test"}
+          </Button>
+          {mock && <Button onClick={returnToLive}>Return to live</Button>}
+          {!mock && hasArtifact && activeId && (
+            <Link
+              href={`/results/${activeId}`}
+              className="flex items-center gap-1 text-sm"
+            >
+              <ExternalLink size={12} />
+              Open detailed results
+            </Link>
           )}
         </div>
       </div>
-
-      {error && (
-        <div className="flex items-center gap-2 border-b border-danger-500/40 bg-danger-500/10 px-4 py-1.5 font-mono text-[11px] text-danger-400">
-          <ServerOff size={12} /> {error} — retrying discovery…
+      {error && !mock && (
+        <div role="alert" className="runtime-error">
+          {error} — retrying discovery…
         </div>
       )}
-
-      {!activeId ? (
-        <WaitingState runs={runs} onPick={(r) => adopt(r.executionId, r)} />
-      ) : (
-        <div className="grid flex-1 grid-cols-1 gap-2 overflow-hidden p-2 md:grid-cols-2 md:grid-rows-2">
-          <Quadrant title="AKG Traversal" id="akg">
-            <AkgGraph {...akgProps} snapshot={akg} />
-          </Quadrant>
-          <Quadrant title="Coordinate" id="coord">
-            <CoordinatePanel state={state} />
-          </Quadrant>
-          <Quadrant title="Conversation" id="conv">
-            <ConversationPanel state={state} />
-          </Quadrant>
-          <Quadrant title="Outcomes" id="outcome">
-            <OutcomePanel state={state} />
-          </Quadrant>
+      {mock && (
+        <div className="mock-summary">
+          <span>{mock.simulation?.seed.name ?? "Loading fixture"}</span>
+          <span data-testid="replay-count">
+            {mock.index}/{mock.simulation?.events.length ?? "…"} events reduced
+          </span>
+          {mock.verification && (
+            <span>
+              {mock.verification.transitions} transitions ·{" "}
+              {mock.verification.checks.filter((check) => check.passed).length}/
+              {mock.verification.checks.length} checks passed
+            </span>
+          )}
+          {mock.error && <span role="alert">{mock.error}</span>}
+          {mock.verification && !mock.verification.passed && (
+            <details open className="verification-details">
+              <summary>Verification mismatches</summary>
+              {mock.verification.checks
+                .filter((check) => !check.passed)
+                .map((check) => (
+                  <p key={check.id}>
+                    <strong>{check.label}</strong> — {check.detail}
+                  </p>
+                ))}
+            </details>
+          )}
         </div>
+      )}
+      <div className="runtime-dashboard">
+        <section className="akg-panel" aria-label="AKG Traversal">
+          <AkgGraph
+            key={mock ? `mock-${mock.id}-${!!mock.simulation}` : "live"}
+            snapshot={mock?.snapshot ?? akg}
+            currentNode={state.currentNode}
+            selectedMethod={state.selectedMethod}
+            akgPath={state.akgPath}
+            confirmedVulns={state.confirmedVulns}
+            achievedOutcomes={state.achievedOutcomes}
+            viableMethods={state.viableMethods}
+            onLayoutReady={mock?.simulation ? layoutReady : undefined}
+          />
+        </section>
+        <aside className="runtime-sidebar">
+          <section aria-label="Coordinate">
+            <CoordinatePanel state={state} />
+          </section>
+          <section aria-label="Conversation">
+            <ConversationPanel state={state} />
+          </section>
+          <section aria-label="Outcomes">
+            <OutcomePanel state={state} />
+          </section>
+        </aside>
+      </div>
+      {!activeId && !mock && (
+        <details className="shrink-0 border-t border-graphite-700 px-4 py-2 text-xs text-graphite-400">
+          <summary>Waiting for a live run · {runs.length} recent runs</summary>
+          <WaitingState
+            runs={runs}
+            onPick={(run) => adopt(run.executionId, run)}
+          />
+        </details>
       )}
     </div>
   );
 }
-
-function Quadrant({
-  title,
-  id,
-  children,
-}: {
-  title: string;
-  id: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Card className="flex min-h-0 flex-col min-w-0 overflow-hidden" data-quadrant={id}>
-      <CardHeader className="shrink-0">
-        <CardTitle>{title}</CardTitle>
-        <span className="font-mono text-[9px] uppercase tracking-wider text-graphite-600">{id}</span>
-      </CardHeader>
-      <CardContent className="min-h-0 flex-1 overflow-hidden p-0">{children}</CardContent>
-    </Card>
-  );
-}
-
 function WaitingState({
   runs,
   onPick,
@@ -308,18 +448,25 @@ function WaitingState({
           </h2>
           <p className="max-w-md font-mono text-[11px] leading-relaxed text-graphite-500">
             Start an experiment from the TESIS repo with{" "}
-            <span className="rounded-sm bg-graphite-800 px-1 py-0.5 text-signal-300">python -m tesis run --config config.yaml</span>{" "}
+            <span className="rounded-sm bg-graphite-800 px-1 py-0.5 text-signal-300">
+              python -m tesis run --config config.yaml
+            </span>{" "}
             or the headless CLI. This observer will auto-adopt the newest active
             run and tail its redacted journal.
           </p>
-          <Badge variant="outline" className="mt-1">TESIS_ROOT={process.env.NEXT_PUBLIC_TESIS_ROOT ?? "/home/kevin/coding/tesis"}</Badge>
+          <Badge variant="outline" className="mt-1">
+            TESIS_ROOT=
+            {process.env.NEXT_PUBLIC_TESIS_ROOT ?? "/home/kevin/coding/tesis"}
+          </Badge>
         </div>
 
         {runs.length > 0 && (
           <div className="mt-8">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-label">recent runs on this machine</span>
-              <span className="font-mono text-[10px] text-graphite-500">{runs.length}</span>
+              <span className="font-mono text-[10px] text-graphite-500">
+                {runs.length}
+              </span>
             </div>
             <ScrollArea className="max-h-64">
               <div className="flex flex-col gap-1.5">
@@ -331,9 +478,16 @@ function WaitingState({
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <Badge variant={r.connection === "active" ? "cyan" : "outline"}>{r.connection ?? r.status}</Badge>
+                        <Badge
+                          variant={
+                            r.connection === "active" ? "cyan" : "outline"
+                          }
+                        >
+                          {r.connection ?? r.status}
+                        </Badge>
                         <span className="truncate font-mono text-[11px] text-graphite-200">
-                          {r.mode} · {r.surface ?? "—"} · {r.securityLevel ?? "—"}
+                          {r.mode} · {r.surface ?? "—"} ·{" "}
+                          {r.securityLevel ?? "—"}
                         </span>
                       </div>
                       <div className="mt-1 truncate font-mono text-[9px] text-graphite-500">
@@ -341,9 +495,17 @@ function WaitingState({
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      <span className="font-mono text-[9px] text-graphite-500">{fmtClock(r.startedAt ? Date.parse(r.startedAt) / 1000 : null)}</span>
+                      <span className="font-mono text-[9px] text-graphite-500">
+                        {fmtClock(
+                          r.startedAt ? Date.parse(r.startedAt) / 1000 : null,
+                        )}
+                      </span>
                       {r.connection === "completed" && (
-                        <Link href={`/results/${r.executionId}`} className="text-signal-400 hover:text-signal-300" onClick={(e) => e.stopPropagation()}>
+                        <Link
+                          href={`/results/${r.executionId}`}
+                          className="text-signal-400 hover:text-signal-300"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <ExternalLink size={13} />
                         </Link>
                       )}

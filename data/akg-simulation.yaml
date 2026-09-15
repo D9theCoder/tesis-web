@@ -1,0 +1,181 @@
+schema_version: akg-simulation.v1
+name: chained-authentication-to-exfiltration
+description: Replays a seeded AKG path through brute force, authentication, IDOR, and exfiltration.
+interval_ms: 420
+
+run:
+  mode: mock
+  surface: brute_force
+  security_level: high
+  provider: mock-provider
+  model: akg-fixture
+  payload_mode: hybrid
+  experiment_condition: akg_guided_hybrid
+  target_method: bf_dictionary
+  target_url: http://dvwa.local/mock
+  candidate_budget: 4
+  max_iterations: 4
+
+assertions:
+  expected_path:
+    - unauthenticated
+    - brute_force
+    - bf_dictionary
+    - bf_dictionary_confirmed
+    - brute_force_confirmed
+    - authenticated_session
+    - ac_idor
+    - ac_idor_confirmed
+    - access_control_confirmed
+    - data_exfiltrated
+  expected_confirmed:
+    - bf_dictionary_confirmed
+    - ac_idor_confirmed
+  expected_outcomes:
+    - authenticated_session
+    - data_exfiltrated
+
+events:
+  - event_type: run.started
+    node: unauthenticated
+    message: Mock traversal started from the unauthenticated entry node.
+    data:
+      akg_path: [unauthenticated]
+      viable_methods: [brute_force]
+      generation_budget: 4
+      generation_remaining: 4
+      max_iterations: 4
+
+  - event_type: graph.state
+    node: unauthenticated
+    data:
+      akg_path: [unauthenticated]
+      viable_methods: [brute_force]
+      iteration_count: 0
+
+  - event_type: graph.state
+    node: brute_force
+    data:
+      akg_path: [unauthenticated, brute_force]
+      viable_methods: [bf_dictionary, bf_spray]
+      iteration_count: 1
+
+  - event_type: method.selected
+    node: bf_dictionary
+    method: bf_dictionary
+    message: AKG selected the dictionary credential path.
+    data:
+      akg_path: [unauthenticated, brute_force, bf_dictionary]
+
+  - event_type: llm.response
+    node: bf_dictionary
+    method: bf_dictionary
+    message: Seed payload selected for the dictionary probe.
+    data:
+      response_text: "Use the seeded credential pair and verify the login signal."
+      total_tokens: 18
+
+  - event_type: probe.attempt
+    node: bf_dictionary
+    method: bf_dictionary
+    candidate: fixture-credential-pair
+    data:
+      akg_path: [unauthenticated, brute_force, bf_dictionary]
+      generated_candidates: 1
+      tried_candidates: 1
+      accepted_candidates: 1
+
+  - event_type: probe.success
+    node: bf_dictionary
+    method: bf_dictionary
+    message: Mock verifier observed a valid login signal.
+    data:
+      success: true
+      signal: valid_login
+
+  - event_type: vuln.confirmed
+    node: bf_dictionary_confirmed
+    method: bf_dictionary
+    message: Dictionary method confirmed.
+    data:
+      confirmed_vulns: [bf_dictionary_confirmed]
+      akg_path: [unauthenticated, brute_force, bf_dictionary, bf_dictionary_confirmed]
+
+  - event_type: graph.state
+    node: brute_force_confirmed
+    data:
+      akg_path: [unauthenticated, brute_force, bf_dictionary, bf_dictionary_confirmed, brute_force_confirmed]
+      confirmed_vulns: [bf_dictionary_confirmed]
+      achieved_outcomes: []
+      iteration_count: 2
+
+  - event_type: chain.transition
+    node: authenticated_session
+    method: ac_idor
+    message: Chain edge enabled after authentication.
+    data:
+      akg_path: [unauthenticated, brute_force, bf_dictionary, bf_dictionary_confirmed, brute_force_confirmed, authenticated_session]
+      achieved_outcomes: [authenticated_session]
+
+  - event_type: graph.state
+    node: ac_idor
+    data:
+      akg_path: [unauthenticated, brute_force, bf_dictionary, bf_dictionary_confirmed, brute_force_confirmed, authenticated_session, ac_idor]
+      viable_methods: [ac_idor, ac_vertical_escalation, ac_force_browse]
+      achieved_outcomes: [authenticated_session]
+      iteration_count: 3
+
+  - event_type: method.selected
+    node: ac_idor
+    method: ac_idor
+    message: AKG selected the authenticated object-access path.
+    data:
+      akg_path: [unauthenticated, brute_force, bf_dictionary, bf_dictionary_confirmed, brute_force_confirmed, authenticated_session, ac_idor]
+
+  - event_type: probe.attempt
+    node: ac_idor
+    method: ac_idor
+    candidate: fixture-object-id
+    data:
+      generated_candidates: 2
+      tried_candidates: 2
+      accepted_candidates: 2
+
+  - event_type: probe.success
+    node: ac_idor
+    method: ac_idor
+    message: Mock verifier observed unauthorized object access.
+    data:
+      success: true
+      signal: unauthorized_object_access
+
+  - event_type: vuln.confirmed
+    node: ac_idor_confirmed
+    method: ac_idor
+    message: IDOR method confirmed.
+    data:
+      confirmed_vulns: [bf_dictionary_confirmed, ac_idor_confirmed]
+      akg_path: [unauthenticated, brute_force, bf_dictionary, bf_dictionary_confirmed, brute_force_confirmed, authenticated_session, ac_idor, ac_idor_confirmed]
+
+  - event_type: graph.state
+    node: access_control_confirmed
+    data:
+      akg_path: [unauthenticated, brute_force, bf_dictionary, bf_dictionary_confirmed, brute_force_confirmed, authenticated_session, ac_idor, ac_idor_confirmed, access_control_confirmed]
+      confirmed_vulns: [bf_dictionary_confirmed, ac_idor_confirmed]
+      achieved_outcomes: [authenticated_session]
+      iteration_count: 4
+
+  - event_type: outcome.achieved
+    node: data_exfiltrated
+    message: Seeded chain reached the data exfiltration outcome.
+    data:
+      achieved_outcomes: [authenticated_session, data_exfiltrated]
+      akg_path: [unauthenticated, brute_force, bf_dictionary, bf_dictionary_confirmed, brute_force_confirmed, authenticated_session, ac_idor, ac_idor_confirmed, access_control_confirmed, data_exfiltrated]
+
+  - event_type: run.completed
+    node: data_exfiltrated
+    message: Mock AKG traversal completed.
+    data:
+      success: true
+      final_node: data_exfiltrated
+      final_path: [unauthenticated, brute_force, bf_dictionary, bf_dictionary_confirmed, brute_force_confirmed, authenticated_session, ac_idor, ac_idor_confirmed, access_control_confirmed, data_exfiltrated]

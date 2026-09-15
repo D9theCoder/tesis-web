@@ -52,7 +52,7 @@ function asStrArray(value: unknown): string[] {
   return value.filter((v): v is string => typeof v === "string").filter(Boolean);
 }
 
-function firstKey(obj: Record<string, unknown> | undefined | null, keys: string[]): any {
+function firstKey(obj: Record<string, unknown> | undefined | null, keys: string[]): unknown {
   if (!obj) return undefined;
   for (const k of keys) {
     if (k in obj) return obj[k];
