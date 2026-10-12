@@ -5,6 +5,7 @@ import type {
   RunSummary,
 } from "@/lib/schemas";
 import type { AkgMockSimulation } from "@/lib/akg-mock";
+import { runListResponseSchema, runSummarySchema, eventCursorResponseSchema } from "@/lib/schemas";
 import { normalizeResult } from "@/lib/result-normalizer";
 
 /** Browser-safe read-only client for the observer route handlers. */
@@ -30,8 +31,8 @@ async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
 }
 
 /** Register of observed runs plus the newest active descriptor, if any. */
-export async function fetchRuns(signal?: AbortSignal): Promise<RunListResponse> {
-  return getJson<RunListResponse>("/api/runtime/runs", signal);
+export async function fetchRuns(signal?: AbortSignal, cursor = 0): Promise<RunListResponse> {
+  return runListResponseSchema.parse(await getJson(`/api/runtime/runs?cursor=${cursor}`, signal));
 }
 
 export async function fetchRunSummary(
@@ -39,7 +40,7 @@ export async function fetchRunSummary(
   signal?: AbortSignal,
 ): Promise<RunSummary | null> {
   try {
-    return await getJson<RunSummary>(`/api/runtime/runs/${encodeURIComponent(executionId)}`, signal);
+    return runSummarySchema.parse(await getJson(`/api/runtime/runs/${encodeURIComponent(executionId)}`, signal));
   } catch {
     return null;
   }
@@ -49,11 +50,12 @@ export async function fetchEvents(
   executionId: string,
   cursor: number,
   signal?: AbortSignal,
+  journalIdentity?: string | null,
 ): Promise<EventCursorResponse> {
-  return getJson<EventCursorResponse>(
-    `/api/runtime/runs/${encodeURIComponent(executionId)}/events?cursor=${cursor}`,
+  return eventCursorResponseSchema.parse(await getJson(
+    `/api/runtime/runs/${encodeURIComponent(executionId)}/events?cursor=${cursor}${journalIdentity ? `&journal=${encodeURIComponent(journalIdentity)}` : ""}`,
     signal,
-  );
+  ));
 }
 
 export async function fetchResult(
@@ -87,8 +89,8 @@ export async function fetchCoordinateResult(
   }
 }
 
-export async function fetchAkg(signal?: AbortSignal): Promise<Record<string, unknown>> {
-  return getJson<Record<string, unknown>>("/api/akg", signal);
+export async function fetchAkg(signal?: AbortSignal, executionId?: string): Promise<Record<string, unknown>> {
+  return getJson<Record<string, unknown>>(`/api/akg${executionId ? `?executionId=${encodeURIComponent(executionId)}` : ""}`, signal);
 }
 
 /** Load the checked-in YAML fixture used by the dashboard's mock traversal. */

@@ -251,9 +251,36 @@ export function Drawer({
   children: React.ReactNode;
   side?: "right" | "bottom";
 }) {
+  const dialog = React.useRef<HTMLDivElement>(null);
+  const titleId = React.useId();
+  React.useEffect(() => {
+    if (!open) return;
+    const origin = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialog.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    return () => origin?.focus();
+  }, [open]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true">
+    <div ref={dialog} className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-labelledby={titleId}
+      onKeyDown={event => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+        } else if (event.key === "Tab") {
+          const controls = event.currentTarget.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          );
+          const first = controls[0], last = controls[controls.length - 1];
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+          }
+        }
+      }}>
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-[1px]"
         onClick={onClose}
@@ -267,7 +294,7 @@ export function Drawer({
         )}
       >
         <div className="flex items-center justify-between border-b border-graphite-700 px-4 py-3">
-          <div className="font-display text-[13px] font-semibold uppercase tracking-wider text-graphite-200">
+          <div id={titleId} className="font-display text-[13px] font-semibold uppercase tracking-wider text-graphite-200">
             {title}
           </div>
           <button

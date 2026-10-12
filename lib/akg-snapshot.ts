@@ -52,6 +52,10 @@ export function normalizeAkgSnapshot(
       nodes,
       edges,
       source: typeof raw.source === "string" ? raw.source : undefined,
+      executionId: typeof raw.executionId === "string" ? raw.executionId : undefined,
+      ownerExecutionId: typeof raw.ownerExecutionId === "string" ? raw.ownerExecutionId : undefined,
+      sha256: typeof raw.sha256 === "string" ? raw.sha256 : undefined,
+      sourcePath: typeof raw.sourcePath === "string" ? raw.sourcePath : undefined,
     };
   }
   return AKG_SNAPSHOT;

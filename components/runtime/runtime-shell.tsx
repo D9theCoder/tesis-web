@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Activity, ExternalLink, FlaskConical, Radio } from "lucide-react";
 import type { AkgSnapshot, LiveRunState, RunSummary } from "@/lib/schemas";
 import { Badge, Button, ScrollArea } from "@/components/ui/primitives";
+import { canonicalStatus } from "@/lib/artifact-contract";
 import { initialState, reduceEvents } from "@/lib/event-reducer";
 import {
   fetchAkg,
@@ -48,6 +49,12 @@ type MockSession = {
 function stateForRun(run: RunSummary) {
   const state = initialState(run.executionId);
   Object.assign(state, {
+    ...canonicalStatus({ execution_status: run.executionStatus, security_outcome: run.securityOutcome,
+      execution_reason: run.executionReason, security_outcome_reason: run.securityOutcomeReason }),
+    status: run.status, connection: run.connection ?? "waiting",
+    startedAt: run.startedAt ? Date.parse(run.startedAt) / 1000 : null,
+    endedAt: run.endedAt ? Date.parse(run.endedAt) / 1000 : null,
+    hasArtifact: !!run.hasArtifact,
     runId: run.runId ?? null,
     mode: run.mode,
     surface: run.surface ?? null,
@@ -82,12 +89,18 @@ export function RuntimeShell() {
   const following = useRef<string | null>(null);
   const cursor = useRef(0);
   const artifact = useRef(false);
+  const activeRunRef = useRef<RunSummary | null>(null);
+  const journalIdentity = useRef<string | null>(null);
+  const [nextRunCursor, setNextRunCursor] = useState<number | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const loadedThrough = useRef(0);
 
   const invalidate = useCallback(() => {
     epoch.current += 1;
     for (const request of requests.current) request.abort();
     requests.current.clear();
     clearTimeout(replayTimer.current);
+    setLoadingOlder(false);
     return epoch.current;
   }, []);
   useEffect(
@@ -101,10 +114,13 @@ export function RuntimeShell() {
     if (mockRef.current || following.current === executionId) return;
     following.current = executionId;
     cursor.current = 0;
+    journalIdentity.current = null;
     artifact.current = false;
+    activeRunRef.current = run;
     setActiveRun(run);
     setLiveState(stateForRun(run));
-    setHasArtifact(false);
+    setHasArtifact(!!run.hasArtifact);
+    setAkg({ ...AKG_SNAPSHOT, source: "static" });
   }, []);
 
   // Both loops serialize their own requests. Every continuation checks the epoch,
@@ -123,7 +139,10 @@ export function RuntimeShell() {
       try {
         const result = await fetchRuns(controller.signal);
         if (!valid()) return;
-        setRuns(result.runs);
+        const incomingIds = new Set(result.runs.map(run => run.executionId));
+        setRuns(previous => [...result.runs, ...previous.filter(run => !incomingIds.has(run.executionId))]);
+        loadedThrough.current = Math.max(loadedThrough.current, result.runs.length);
+        setNextRunCursor(result.total !== undefined && result.total > loadedThrough.current ? loadedThrough.current : null);
         const candidate =
           result.active?.[0] ??
           (!following.current
@@ -139,6 +158,7 @@ export function RuntimeShell() {
       }
     };
     const poll = async () => {
+      let pollDelay = POLL_MS;
       const executionId = following.current;
       try {
         if (!executionId || !valid()) return;
@@ -146,13 +166,18 @@ export function RuntimeShell() {
           executionId,
           cursor.current,
           controller.signal,
+          journalIdentity.current,
         );
         if (!valid() || following.current !== executionId) return;
+        pollDelay = result.hasMore ? 0 : POLL_MS;
+        journalIdentity.current = result.journalIdentity ?? null;
         cursor.current = result.nextCursor;
         const status = normalizeRunStatus(result.status);
         setLiveState((previous) =>
-          reduceEvents(previous, result.events, {
+          ({ ...reduceEvents(result.reset ? stateForRun(activeRunRef.current ?? { executionId, mode: "single-run", directory: "", status: result.status }) : previous, result.events, {
             status,
+            canonical: canonicalStatus({ execution_status: result.executionStatus, security_outcome: result.securityOutcome,
+              execution_reason: result.executionReason, security_outcome_reason: result.securityOutcomeReason }),
             connection:
               status === "active" ||
               status === "completed" ||
@@ -161,7 +186,7 @@ export function RuntimeShell() {
               status === "stale"
                 ? status
                 : "waiting",
-          }),
+          }), cursor: result.nextCursor, journalIdentity: result.journalIdentity ?? null, diagnostics: result.diagnostics ?? [] }),
         );
         if (
           ["completed", "cancelled", "error"].includes(status) &&
@@ -175,21 +200,22 @@ export function RuntimeShell() {
           if (resultArtifact) {
             artifact.current = true;
             setHasArtifact(true);
+            setLiveState(previous => ({ ...previous,
+              executionStatus: resultArtifact.executionStatus, securityOutcome: resultArtifact.securityOutcome,
+              executionReason: resultArtifact.executionReason, securityOutcomeReason: resultArtifact.securityOutcomeReason,
+              confirmedVulns: [...new Set([...previous.confirmedVulns, ...resultArtifact.confirmedVulns])],
+              achievedOutcomes: [...new Set([...previous.achievedOutcomes, ...resultArtifact.achievedOutcomes])],
+            }));
           }
         }
-      } catch {
-        /* Retry transient journal errors on the next poll. */
+      } catch (cause) {
+        if (valid() && following.current === executionId) setError(cause instanceof Error ? cause.message : "Journal retrieval failed");
       } finally {
-        if (valid()) pollTimer = setTimeout(poll, POLL_MS);
+        if (valid()) pollTimer = setTimeout(poll, pollDelay);
       }
     };
     void discover();
     void poll();
-    void fetchAkg(controller.signal)
-      .then((raw) => {
-        if (valid()) setAkg(normalizeAkgSnapshot(raw));
-      })
-      .catch(() => undefined);
     return () => {
       stopped = true;
       controller.abort();
@@ -198,6 +224,38 @@ export function RuntimeShell() {
       clearTimeout(pollTimer);
     };
   }, [generation, adopt]);
+
+  useEffect(() => {
+    if (mock) return;
+    const controller = new AbortController();
+    let stopped = false;
+    fetchAkg(controller.signal, activeRun?.executionId).then(raw => {
+      if (!stopped && !mockRef.current) setAkg(normalizeAkgSnapshot(raw));
+    }).catch(() => undefined);
+    return () => { stopped = true; controller.abort(); };
+  }, [activeRun?.executionId, mock]);
+  const loadOlder = async () => {
+    if (nextRunCursor === null || loadingOlder) return;
+    const id = epoch.current;
+    const controller = new AbortController();
+    requests.current.add(controller);
+    setLoadingOlder(true);
+    try {
+      const page = await fetchRuns(controller.signal, nextRunCursor);
+      if (epoch.current !== id || mockRef.current) return;
+      setRuns(previous => {
+        const existingIds = new Set(previous.map(run => run.executionId));
+        return [...previous, ...page.runs.filter(run => !existingIds.has(run.executionId))];
+      });
+      loadedThrough.current = nextRunCursor + page.runs.length;
+      setNextRunCursor(page.nextCursor ?? null);
+    } catch (cause) { if (epoch.current === id) setError(cause instanceof Error ? cause.message : "Catalog page failed"); }
+    finally {
+      controller.abort();
+      requests.current.delete(controller);
+      if (epoch.current === id) setLoadingOlder(false);
+    }
+  };
 
   const publishMock = useCallback((session: MockSession) => {
     mockRef.current = session;
@@ -392,6 +450,13 @@ export function RuntimeShell() {
       )}
       <div className="runtime-dashboard">
         <section className="akg-panel" aria-label="AKG Traversal">
+          <div className="px-3 py-1 text-xs text-graphite-500">Snapshot: {mock ? "mock capture" : akg.source ?? "static fallback"} {activeRun?.executionId}</div>
+          {state.mode === "matrix" && Object.keys(state.children).length > 0 && <div className="flex flex-wrap gap-2 p-2 text-xs">
+            {Object.values(state.children).map(child => <button key={child.executionId} className="text-signal-300 underline" onClick={() => {
+              const run = runs.find(r => r.executionId === child.executionId);
+              if (run) adopt(run.executionId,run);
+            }}>{child.executionId} · {child.executionStatus ?? child.status}</button>)}
+          </div>}
           <AkgGraph
             key={mock ? `mock-${mock.id}-${!!mock.simulation}` : "live"}
             snapshot={mock?.snapshot ?? akg}
@@ -416,6 +481,12 @@ export function RuntimeShell() {
           </section>
         </aside>
       </div>
+      {!mock && (
+        <details className="px-4 py-2 text-xs text-graphite-400"><summary>Run catalog · {runs.length} loaded</summary>
+          <WaitingState runs={runs} onPick={run => adopt(run.executionId,run)} />
+          {nextRunCursor !== null && <Button onClick={loadOlder} disabled={loadingOlder}>Load older runs</Button>}
+        </details>
+      )}
       {!activeId && !mock && (
         <details className="shrink-0 border-t border-graphite-700 px-4 py-2 text-xs text-graphite-400">
           <summary>Waiting for a live run · {runs.length} recent runs</summary>
@@ -470,7 +541,7 @@ function WaitingState({
             </div>
             <ScrollArea className="max-h-64">
               <div className="flex flex-col gap-1.5">
-                {runs.slice(0, 30).map((r) => (
+                {runs.map((r) => (
                   <button
                     key={r.executionId}
                     onClick={() => onPick(r)}
@@ -483,7 +554,7 @@ function WaitingState({
                             r.connection === "active" ? "cyan" : "outline"
                           }
                         >
-                          {r.connection ?? r.status}
+                          {r.connection ?? r.status} · Execution {r.executionStatus ?? "unknown"} · Outcome {r.securityOutcome ?? "unknown"}
                         </Badge>
                         <span className="truncate font-mono text-[11px] text-graphite-200">
                           {r.mode} · {r.surface ?? "—"} ·{" "}
@@ -500,7 +571,7 @@ function WaitingState({
                           r.startedAt ? Date.parse(r.startedAt) / 1000 : null,
                         )}
                       </span>
-                      {r.connection === "completed" && (
+                      {r.hasArtifact && (
                         <Link
                           href={`/results/${r.executionId}`}
                           className="text-signal-400 hover:text-signal-300"

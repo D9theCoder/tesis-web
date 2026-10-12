@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -29,14 +29,19 @@ import { CoordinateIndex } from "@/components/results/coordinate-index";
 import { EvidenceDrawer } from "@/components/results/evidence-drawer";
 import { fmtDuration, fmtIsoFromStr, prettyJson } from "@/lib/formatters";
 import { normalizeRunStatus } from "@/lib/formatters";
-import { selectedCoordinate } from "@/lib/result-normalizer";
+import { StatusDetails } from "@/components/results/status-details";
+import { normalizeResult } from "@/lib/result-normalizer";
+import { evidenceForReference } from "@/lib/evidence-ref";
 
 type Tab = "detail" | "scoring" | "matrix" | "json";
 
 export default function ResultsPage() {
   const params = useParams<{ executionId: string }>();
-  const executionId = decodeURIComponent(params.executionId);
+  const executionId = params.executionId;
+  return <ResultsExplorer key={executionId} executionId={executionId} />;
+}
 
+function ResultsExplorer({ executionId }: { executionId: string }) {
   const [aggregate, setAggregate] = useState<NormalizedResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,60 +53,39 @@ export default function ResultsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
+    const controller = new AbortController();
     let stopped = false;
-    // Reset loading when subscribing to another result request.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoading(true);
-    fetchResult(executionId)
-      .then((r) => {
-        if (stopped) return;
-        if (r) {
-          setAggregate(r);
-          const matrixExecId = r.isMatrix ? r.coordinates[0]?.executionId : null;
-          if (r.coordinates.length === 1 && r.isMatrix) {
-            setCoordRunId(r.coordinates[0].runId ?? r.coordinates[0].executionId);
-            const childId = r.coordinates[0].executionId;
-            fetchCoordinateResult(executionId, matrixExecId ?? childId).then((cr) => {
-              if (!stopped && cr) setCoordResult(cr);
-            });
-          }
-        } else {
-          setError("No normalized result was produced for this execution.");
-        }
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load result"))
-      .finally(() => !stopped && setLoading(false));
-    return () => {
-      stopped = true;
-    };
+    fetchResult(executionId, controller.signal).then(result => {
+      if (stopped) return;
+      if (result) setAggregate(result);
+      else setError("No readable result was produced for this execution.");
+    }).catch(cause => { if (!stopped) setError(cause instanceof Error ? cause.message : "Failed to load result"); })
+      .finally(() => { if (!stopped) setLoading(false); });
+    return () => { stopped = true; controller.abort(); };
   }, [executionId]);
-
-  const pickCoordinate = useCallback(
-    (coord: CoordinateSummary) => {
-      setCoordRunId(coord.runId ?? coord.executionId);
-      setCoordLoading(true);
-      const target = coord.executionId;
-      fetchCoordinateResult(executionId, target)
-        .then((cr) => {
-          if (cr) setCoordResult(cr);
-          else setCoordResult(null);
-        })
-        .catch(() => setCoordResult(null))
-        .finally(() => setCoordLoading(false));
-    },
-    [executionId],
-  );
-
+  useEffect(() => {
+    if (!coordRunId) return;
+    const controller = new AbortController();
+    let stopped = false;
+    fetchCoordinateResult(executionId, coordRunId, controller.signal).then(result => {
+      if (!stopped) setCoordResult(result);
+    }).finally(() => { if (!stopped) setCoordLoading(false); });
+    return () => { stopped = true; controller.abort(); };
+  }, [executionId, coordRunId]);
+  const pickCoordinate = useCallback((coord: CoordinateSummary) => {
+    if (coord.executionId === coordRunId) return;
+    setCoordRunId(coord.executionId); setCoordResult(null); setCoordLoading(true);
+    setEvidence(null); setDrawerOpen(false);
+  }, [coordRunId]);
   const backToAggregate = useCallback(() => {
-    setCoordRunId(null);
-    setCoordResult(null);
+    setCoordRunId(null); setCoordResult(null); setCoordLoading(false); setEvidence(null); setDrawerOpen(false);
   }, []);
-
-  // The result used by the detail/scoring tables: coordinate when selected.
-  const viewResult = useMemo(
-    () => coordResult ?? (coordRunId && aggregate ? selectedCoordinate(aggregate, coordRunId) : aggregate),
-    [coordResult, coordRunId, aggregate],
-  );
+  const viewResult = coordRunId ? coordResult : aggregate;
+  const openReference = (ref: string) => {
+    if (!viewResult) return;
+    const row = evidenceForReference(viewResult, ref);
+    if (row) { setEvidence(row); setDrawerOpen(true); }
+  };
 
   if (loading) {
     return <Loading />;
@@ -110,12 +94,21 @@ export default function ResultsPage() {
     return <ErrorState message={error ?? "Result unavailable"} executionId={executionId} />;
   }
 
-  const header = aggregate;
+  const selectedSummary = aggregate.coordinates.find(c => c.executionId === coordRunId);
+  const header = viewResult ?? (selectedSummary ? normalizeResult({
+    execution_id: selectedSummary.executionId, run_id: selectedSummary.runId, status: selectedSummary.status,
+    execution_status: selectedSummary.executionStatus, security_outcome: selectedSummary.securityOutcome,
+    execution_reason: selectedSummary.executionReason, security_outcome_reason: selectedSummary.securityOutcomeReason,
+    selected_method: selectedSummary.selectedMethod, target_method: selectedSummary.targetMethod,
+    surface: selectedSummary.surface, security_level: selectedSummary.securityLevel, provider: selectedSummary.provider,
+    model: selectedSummary.model, payload_mode: selectedSummary.payloadMode, repeat_index: selectedSummary.repeatIndex,
+    experiment_condition: selectedSummary.experimentCondition,
+  }) : aggregate);
   const tabs: Array<{ value: Tab; label: string; badge?: number }> = [
     { value: "detail", label: "Detailed", badge: viewResult?.evidenceRows.length },
     { value: "scoring", label: "Scoring" },
   ];
-  if (header.isMatrix) tabs.push({ value: "matrix", label: "Matrix"} );
+  if (aggregate.isMatrix) tabs.push({ value: "matrix", label: "Matrix"} );
   tabs.push({ value: "json", label: "JSON" });
 
   return (
@@ -135,9 +128,9 @@ export default function ResultsPage() {
               <h1 className="font-display text-xl font-bold uppercase tracking-[0.12em] text-graphite-100">
                 Experiment Results
               </h1>
-              <StatusBadge status={header.status} />
+              <StatusBadge status={header.executionStatus ?? "unknown"} />
               {header.isMatrix && <Badge variant="violet">matrix · {header.coordinates.length} coords</Badge>}
-              {header.taskResult && <Badge variant={header.taskResult === "SUCCESS" ? "lime" : "outline"}>{header.taskResult}</Badge>}
+              {header.taskResult && <Badge variant="outline">Legacy task: {header.taskResult}</Badge>}
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] text-graphite-500">
               <span>{header.experimentCondition}</span>
@@ -148,7 +141,7 @@ export default function ResultsPage() {
               <span>·</span>
               <span>method: {header.selectedMethod ?? header.targetMethod ?? "—"}</span>
             </div>
-            <div className="mt-1 font-mono text-[9px] text-graphite-600">execution {header.executionId}</div>
+            <div className="mt-1 break-all font-mono text-[9px] text-graphite-600">execution {header.executionId}</div>
           </div>
           <div className="shrink-0 text-right">
             <div className="font-mono text-[10px] text-graphite-500">
@@ -162,6 +155,8 @@ export default function ResultsPage() {
             </div>
           </div>
         </div>
+
+        <StatusDetails result={header} onEvidenceRef={openReference} />
 
         {/* Findings strip */}
         {(header.confirmedVulns.length > 0 || header.achievedOutcomes.length > 0) && (
@@ -180,11 +175,11 @@ export default function ResultsPage() {
       </div>
 
       {/* Matrix coordinate bar */}
-      {header.isMatrix && (
-        <div className="flex items-center gap-2 border-b border-graphite-700/60 bg-graphite-900/40 px-4 py-1.5">
+      {aggregate.isMatrix && (
+        <div className="flex max-h-44 shrink-0 items-start gap-2 overflow-y-auto border-b border-graphite-700/60 bg-graphite-900/40 px-4 py-1.5">
           <span className="text-label shrink-0">coordinate</span>
           <CoordinateIndex
-            result={header}
+            result={aggregate}
             selected={coordRunId}
             onSelect={pickCoordinate}
           />
@@ -198,7 +193,7 @@ export default function ResultsPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex items-center justify-between gap-2 border-b border-graphite-700/60 px-4 py-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-graphite-700/60 px-4 py-1.5">
         <Tabs
           tabs={tabs.map((t) => ({ value: t.value, label: t.label, badge: t.badge }))}
           value={tab}
@@ -206,35 +201,26 @@ export default function ResultsPage() {
         />
         {coordRunId && (
           <span className="font-mono text-[9px] text-graphite-500">
-            viewing coordinate #{(header.coordinates.find((c) => c.runId === coordRunId || c.executionId === coordRunId)?.index ?? 0) + 1}
+            viewing coordinate #{(aggregate.coordinates.find((c) => c.executionId === coordRunId)?.index ?? 0) + 1}
           </span>
         )}
       </div>
 
       {/* Body */}
       <div className="min-h-0 flex-1 overflow-hidden">
-        {tab === "detail" && (
-          <DetailTab
-            result={viewResult ?? aggregate}
-            onOpenEvidence={(row) => {
-              setEvidence(row);
-              setDrawerOpen(true);
-            }}
-          />
-        )}
-        {tab === "scoring" && header.isMatrix && coordRunId && (
-          <ScoringTab result={viewResult ?? header} />
-        )}
-        {tab === "scoring" && (!header.isMatrix || !coordRunId) && (
-          <ScoringTab result={header} />
-        )}
-        {tab === "matrix" && header.isMatrix && (
-          <MatrixTab result={header} onPick={(c) => pickCoordinate(c)} />
-        )}
-        {tab === "json" && <JsonTab result={viewResult ?? header} />}
+        {coordRunId && !viewResult && (tab !== "matrix") ? (
+          <div role="status" className="p-4 text-sm">{coordLoading ? `Loading ${coordRunId}…` : `Detail unavailable for ${coordRunId}. Select another coordinate or return to the aggregate.`}</div>
+        ) : <>
+          {tab === "detail" && viewResult && <DetailTab result={viewResult} onOpenEvidence={row => { setEvidence(row); setDrawerOpen(true); }} />}
+          {tab === "scoring" && viewResult && <ScoringTab result={viewResult} onEvidenceRef={openReference} />}
+          {tab === "json" && viewResult && <JsonTab result={viewResult} />}
+        </>}
+        {tab === "matrix" && aggregate.isMatrix && <MatrixTab result={aggregate} onPick={pickCoordinate} />}
+
       </div>
 
-      <EvidenceDrawer row={evidence} open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      <EvidenceDrawer row={evidence} open={drawerOpen} onClose={() => setDrawerOpen(false)}
+        onSelectRelated={id => { const row = viewResult?.evidenceRows.find(r => r.id === id); if (row) setEvidence(row); }} />
     </div>
   );
 }
@@ -250,7 +236,7 @@ function DetailTab({
     result.evidenceRows.length > 0
       ? result.evidenceRows
       : combinedEvidence(result);
-  return <DetailTable rows={evidenceRows} onOpen={onOpenEvidence} />;
+  return <DetailTable key={result.executionId} rows={evidenceRows} onOpen={onOpenEvidence} />;
 }
 
 function combinedEvidence(result: NormalizedResult): EvidenceRow[] {
@@ -259,7 +245,7 @@ function combinedEvidence(result: NormalizedResult): EvidenceRow[] {
   return result.evidenceRows;
 }
 
-function ScoringTab({ result }: { result: NormalizedResult }) {
+function ScoringTab({ result, onEvidenceRef }: { result: NormalizedResult; onEvidenceRef: (ref: string)=>void }) {
   return (
     <div className="grid h-full grid-cols-1 gap-3 xl:grid-cols-[1fr_340px]">
       <Card className="min-h-0 overflow-hidden">
@@ -268,7 +254,7 @@ function ScoringTab({ result }: { result: NormalizedResult }) {
           <Gauge size={14} className="text-graphite-500" />
         </CardHeader>
         <CardContent className="h-full min-h-0 p-0">
-          <ScoringTable result={result} />
+          <ScoringTable key={result.executionId} result={result} onEvidenceRef={onEvidenceRef} />
         </CardContent>
       </Card>
       <Card className="min-h-0 overflow-hidden">
@@ -334,7 +320,10 @@ function JsonTab({ result }: { result: NormalizedResult }) {
       `# TESIS evidence export`,
       ``,
       `- Execution: ${result.executionId}`,
-      `- Status: ${result.status}`,
+      `- Execution: ${result.executionStatus ?? "unknown"}`,
+      `- Security outcome: ${result.securityOutcome ?? "unknown"}`,
+      `- Legacy status: ${result.status}`,
+      `- Source SHA-256: ${result.source?.sha256 ?? "unavailable"}`,
       `- Surface: ${result.surface ?? "—"}`,
       `- Selected method: ${result.selectedMethod ?? "—"}`,
       ``,

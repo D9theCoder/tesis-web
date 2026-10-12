@@ -5,6 +5,7 @@ import type {
   RunConnectionStatus,
   RunEvent,
 } from "@/lib/schemas";
+import { canonicalStatus } from "@/lib/artifact-contract";
 import { asNum, asStr, extractText, normalizeRunStatus } from "@/lib/formatters";
 
 /**
@@ -108,13 +109,14 @@ function emptyMetrics(): OutcomeMetrics {
     generationBudget: 0,
     remainingIterations: 0,
     maxIterations: 0,
-    tokenCount: 0,
-    tokenCost: 0,
+    tokenCount: null,
+    tokenCost: null,
   };
 }
 
 export function initialState(executionId?: string | null): LiveRunState {
   return {
+    children: {}, executionStatus: null, securityOutcome: null, executionReason: null, securityOutcomeReason: null, journalIdentity: null, diagnostics: [],
     cursor: 0,
     lastPolledAt: 0,
     status: "waiting",
@@ -198,10 +200,16 @@ function updateSnapshotCounters(
   return next;
 }
 
+export function eventExecutionId(event: RunEvent): string | null {
+  if (event.event_type.startsWith("matrix.run.")) return asStr(event.data ?? {}, "coordinate_execution_id") ?? null;
+  return event.execution_id ?? asStr(event.data ?? {}, "execution_id") ?? null;
+}
+const TERMINAL_EVENTS = new Set(["run.finished", "run.completed", "run.failed", "run.error", "run.cancelled", "run.interrupted", "run.cancellation", "matrix.finished", "matrix.completed", "matrix.failed", "matrix.cancelled", "matrix.interrupted"]);
 export interface ReduceOptions {
   nowEpochSec?: number;
   connection?: RunConnectionStatus;
   status?: string;
+  canonical?: ReturnType<typeof canonicalStatus>;
 }
 
 /**
@@ -218,6 +226,7 @@ export function reduceEvents(
     const status = normalizeRunStatus(options.status ?? prev.status);
     return {
       ...prev,
+      ...options.canonical,
       lastPolledAt: polledAt,
       status,
       connection: options.connection ?? prev.connection,
@@ -233,6 +242,8 @@ export function reduceEvents(
 
   const next: LiveRunState = {
     ...prev,
+    ...options.canonical,
+    children: { ...prev.children },
     events: [...prev.events, ...events],
     conversation: [...prev.conversation],
     confirmedVulns: [...prev.confirmedVulns],
@@ -247,12 +258,22 @@ export function reduceEvents(
   };
 
   for (const event of events) {
+    const owner = eventExecutionId(event);
+    if (owner && next.executionId && owner !== next.executionId) {
+      if (next.mode === "matrix" || event.event_type.startsWith("matrix.run.")) {
+        const childEvent = event.event_type.startsWith("matrix.run.") ? { ...event, execution_id: owner, event_type: event.event_type.replace("matrix.run.", "run.") } : event;
+        next.children[owner] = reduceEvents(next.children[owner] ?? initialState(owner), [childEvent], { nowEpochSec: next.lastPolledAt });
+      }
+      continue;
+    }
+    if (event.event_type.startsWith("matrix.run.") && !owner) { next.diagnostics = [...next.diagnostics, "child_event_identity_missing"]; continue; }
     const data = event.data ?? {};
-    const type = event.event_type;
+    const type = event.event_type.startsWith("matrix.run.") ? event.event_type.replace("matrix.run.", "run.") : event.event_type;
     const ts = event.timestamp ?? 0;
 
     // --- node / method / graph traversal ---
-    if (type === "run.started") {
+    if (type === "run.started" || type === "matrix.started") {
+      if (type === "matrix.started") next.mode = "matrix";
       next.surface = next.surface ?? asStr(data, "surface");
       next.securityLevel = next.securityLevel ?? asStr(data, "security_level");
       next.provider = next.provider ?? asStr(data, "provider");
@@ -266,7 +287,7 @@ export function reduceEvents(
       next.mode = asStr(data, "mode") ?? next.mode;
       next.runId = next.runId ?? event.run_id ?? null;
       next.executionId = next.executionId ?? event.execution_id ?? null;
-      if (next.startedAt == null) next.startedAt = ts || Date.now() / 1000;
+      if (next.startedAt == null) next.startedAt = ts || next.lastPolledAt;
     } else if (type.startsWith("graph.node.")) {
       if (event.node) next.currentNode = event.node;
     } else if (type === "graph.state") {
@@ -313,12 +334,12 @@ export function reduceEvents(
     }
 
     // --- outcomes (only ever add) ---
-    if (type.includes("confirmed") || type.includes("vuln.confirmed")) {
+    if (["method.confirmed", "vuln.confirmed", "verifier.confirmed", "exploit.confirmed"].includes(type)) {
       next.confirmedVulns = pushUnique(next.confirmedVulns, event.method);
       next.confirmedVulns = pushManyUnique(next.confirmedVulns, data["confirmed_vulns"]);
       if (event.node) next.confirmedVulns = pushUnique(next.confirmedVulns, event.node);
     }
-    if (type.includes("outcome") || type.includes("achieved")) {
+    if (type === "outcome.achieved") {
       next.achievedOutcomes = pushUnique(next.achievedOutcomes, event.method);
       next.achievedOutcomes = pushManyUnique(next.achievedOutcomes, data["achieved_outcomes"]);
       if (event.node) next.achievedOutcomes = pushUnique(next.achievedOutcomes, event.node);
@@ -369,15 +390,15 @@ export function reduceEvents(
     // token usage
     if (type.includes("token") || type.includes("usage")) {
       const used = asNum(data, "total_tokens") ?? asNum(data, "tokens");
-      if (used != null) next.metrics.tokenCount += used;
+      if (used != null) next.metrics.tokenCount = (next.metrics.tokenCount ?? 0) + used;
     }
     const usage = data["provider_usage"];
     if (usage && typeof usage === "object") {
       const used = asNum(usage as Record<string, unknown>, "total_tokens");
-      if (used != null) next.metrics.tokenCount += used;
+      if (used != null) next.metrics.tokenCount = (next.metrics.tokenCount ?? 0) + used;
     }
     const cost = asNum(data, "cost") ?? asNum(data, "token_cost");
-    if (cost != null) next.metrics.tokenCost += cost;
+    if (cost != null) next.metrics.tokenCost = (next.metrics.tokenCost ?? 0) + cost;
 
     // --- conversation / LLM trace ---
     if (
@@ -391,10 +412,16 @@ export function reduceEvents(
 
     // --- timing ---
     if (next.startedAt == null) {
-      next.startedAt = ts || Date.now() / 1000;
+      next.startedAt = ts || next.lastPolledAt;
     }
-    if (next.endedAt == null && (type.includes("finished") || type.includes("completed") || type.includes("terminated"))) {
-      next.endedAt = ts || Date.now() / 1000;
+    if (TERMINAL_EVENTS.has(type) && (!owner || owner === next.executionId)) {
+      next.endedAt = ts || next.lastPolledAt;
+      const canonical = canonicalStatus(data);
+      if (canonical.executionStatus) next.executionStatus = canonical.executionStatus;
+      if (canonical.securityOutcome) next.securityOutcome = canonical.securityOutcome;
+      next.executionReason = canonical.executionReason;
+      next.securityOutcomeReason = canonical.securityOutcomeReason;
+      if (!options.status) next.status = type.includes("cancel") || type.includes("interrupt") ? "cancelled" : type.includes("fail") || type.includes("error") ? "error" : "completed";
     }
   }
 
@@ -421,7 +448,7 @@ export function reduceEvents(
 function computeElapsed(state: LiveRunState): number {
   const start = state.startedAt;
   if (start == null) return 0;
-  const upper = state.endedAt ?? Date.now() / 1000;
+  const upper = state.endedAt ?? state.lastPolledAt;
   return Math.max(0, Math.round((upper - start) * 1000));
 }
 
