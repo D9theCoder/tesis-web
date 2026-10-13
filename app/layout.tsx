@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
 const geist = localFont({
@@ -20,7 +21,8 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={geist.variable}>
+    <html lang="en" className={geist.variable} suppressHydrationWarning>
+      <head><script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} /></head>
       <body><AppShell>{children}</AppShell></body>
     </html>
   );

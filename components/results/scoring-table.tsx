@@ -320,12 +320,12 @@ export function MetricsSummary({ result }: { result: NormalizedResult }) {
             {Object.entries(result.metricReadings).map(([key, reading]) => (
               <div key={key}>
                 <dt>{readable(key)}</dt>
-                <dd className="numeric-value">
-                  {reading.available ? key.includes("cost") ? fmtCost(reading.value) : fmtNumber(reading.value, 4) : "Unavailable"}
+                <dd>
+                  <span className="numeric-value">{reading.available ? key.includes("cost") ? fmtCost(reading.value) : fmtNumber(reading.value, 4) : "Unavailable"}</span>
+                  {!reading.available && reading.reason && <p>{reading.reason}</p>}
+                  {reading.nAvailable !== undefined && <p>Available {reading.nAvailable} · unavailable {reading.nUnavailable ?? "—"}</p>}
+                  {Object.entries(reading.unavailableReasons ?? {}).map(([reason, count]) => <p key={reason}>{readable(reason)} · {count}</p>)}
                 </dd>
-                {!reading.available && reading.reason && <p>{reading.reason}</p>}
-                {reading.nAvailable !== undefined && <p>Available {reading.nAvailable} · unavailable {reading.nUnavailable ?? "—"}</p>}
-                {Object.entries(reading.unavailableReasons ?? {}).map(([reason, count]) => <p key={reason}>{readable(reason)} · {count}</p>)}
               </div>
             ))}
           </dl>

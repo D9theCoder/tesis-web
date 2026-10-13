@@ -1,4 +1,5 @@
-import ELK, { type ElkNode, type ElkPoint } from "elkjs/lib/elk.bundled.js";
+import type { ElkNode, ElkPoint } from "elkjs/lib/elk-api.js";
+import { layoutElkGraph } from "@/lib/elk-layout";
 import type { AkgSnapshot, AkgNode, AkgEdge } from "./schemas";
 
 export const LAYOUT_SETTINGS = {
@@ -190,7 +191,7 @@ async function computeLayout(snapshot: AkgSnapshot): Promise<AkgLayout> {
       targets: [`port-${i}-target`],
     })),
   };
-  const resolved = await new ELK().layout(graph);
+  const resolved = await layoutElkGraph(graph);
   const result: AkgLayout = { nodes: [], edges: [], groups: [] };
   const nodeByLayoutId = new Map(
     snapshot.nodes.map((node) => [layoutIds.get(node.id), node]),

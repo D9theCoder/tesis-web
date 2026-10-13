@@ -1,7 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { normalizeAkgSnapshot } from "@/lib/akg-snapshot";
 import { AKG_SNAPSHOT } from "@/lib/akg-static";
 import { layoutAkg } from "@/lib/akg-layout";
+
+vi.mock("@/lib/elk-layout", async () => {
+  const { default: ELK } = await import("elkjs/lib/elk.bundled.js");
+  return { layoutElkGraph: (graph: import("elkjs/lib/elk-api.js").ElkNode) => new ELK().layout(graph) };
+});
 
 describe("resolved snapshot identity", () => {
   it("enriches Python generic kinds while preserving every supplied node and directed edge", async () => {

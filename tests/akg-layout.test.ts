@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   layoutAkg,
   surfaceGroups,
@@ -10,6 +10,13 @@ import {
 } from "@/lib/akg-layout";
 import { AKG_SNAPSHOT } from "@/lib/akg-static";
 import type { AkgSnapshot } from "@/lib/schemas";
+
+// Geometry runs with the same ELK engine in jsdom, which has no native workers.
+// Browser acceptance separately exercises the emitted worker and its protocol.
+vi.mock("@/lib/elk-layout", async () => {
+  const { default: ELK } = await import("elkjs/lib/elk.bundled.js");
+  return { layoutElkGraph: (graph: import("elkjs/lib/elk-api.js").ElkNode) => new ELK().layout(graph) };
+});
 
 function checkGeometry(layout: AkgLayout) {
   for (const a of layout.nodes)

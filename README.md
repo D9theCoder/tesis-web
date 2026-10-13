@@ -61,7 +61,10 @@ Live dashboard:
 
 The application uses a compact persistent sidebar on desktop and a keyboard-accessible
 navigation drawer on mobile. Light is the default theme; the header theme control
-switches to dark and retains the local preference. The current-run live monitor
+switches to dark and retains the local preference. A fixed head script applies
+that preference before paint; blocked storage falls back to light. Phone and
+coarse-pointer controls use 44px targets, including graph traversal and catalog
+identity actions. The current-run live monitor
 remains the primary entry point. All catalog counts describe loaded data, not
 unloaded catalog pages.
 
@@ -179,7 +182,11 @@ The right sidebar divides its height between Coordinate (30%), Conversation
 show compact execution context before the graph and stack the supporting panels.
 The run catalog and the local Demonstration replay remain available below the live workspace.
 
-The client graph boundary loads React Flow and ELK. The deterministic layered
+The client graph boundary loads React Flow and a lightweight ELK client. The
+generated ELK engine runs in a same-origin browser Web Worker, emitted by the
+webpack build. Each uncached layout terminates its worker when complete; worker
+load failures and a 30-second timeout preserve the error and Retry layout flow.
+Browsers must support Web Workers to arrange the graph. The deterministic layered
 layout uses explicit ports, orthogonal routes, rounded bends, and restrained
 surface groups. Shared entry/outcome nodes remain singular. Group rectangles
 are presentation only; the original node IDs and directed topology remain intact.

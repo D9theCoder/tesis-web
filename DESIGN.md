@@ -11,6 +11,7 @@ colors:
   muted: "var(--muted)"
   border: "var(--border)"
   border-strong: "var(--border-strong)"
+  control-border: "var(--control-border)"
   accent: "var(--accent)"
   accent-soft: "var(--accent-soft)"
   success: "var(--success)"
@@ -19,7 +20,24 @@ colors:
   review: "var(--review)"
   graph-edge: "var(--akg-edge)"
   brand-mark: "#f58220"
+  brand-ink: "#281a09"
+  drawer-scrim: "rgb(12 22 40 / .45)"
 typography:
+  headline-mobile:
+    fontFamily: "var(--font-sans)"
+    fontSize: "22px"
+    fontWeight: 650
+    lineHeight: 1.25
+  brand:
+    fontFamily: "var(--font-sans)"
+    fontSize: "18px"
+    fontWeight: 700
+    lineHeight: 1.5
+  technical-meta:
+    fontFamily: "var(--font-sans)"
+    fontSize: "10px"
+    fontWeight: 400
+    lineHeight: 1.2
   headline:
     fontFamily: "var(--font-sans)"
     fontSize: "24px"
@@ -184,7 +202,8 @@ The palette pairs cool neutrals with one blue interaction color and restrained s
 - **Secondary Ink** (`colors.secondary`): Supporting copy and neutral controls.
 - **Muted Ink** (`colors.muted`): Metadata, hints, and secondary labels.
 - **Soft Border** (`colors.border`): Dividers and standard component outlines.
-- **Strong Border** (`colors.border-strong`): Form controls and elements needing a clearer edge.
+- **Strong Border** (`colors.border-strong`): Panel outlines and secondary button edges.
+- **Control Boundary** (`colors.control-border`): Editable field boundaries, with at least 3:1 contrast against their adjacent surfaces in both themes.
 - **Graph Edge** (`colors.graph-edge`): AKG connectors.
 
 ### Status and Identity
@@ -193,6 +212,8 @@ The palette pairs cool neutrals with one blue interaction color and restrained s
 - **Failure Red** (`colors.danger`): Failed states, errors, and blocked violations.
 - **Review Violet** (`colors.review`): Independent review provenance.
 - **TESIS Mark Orange** (`colors.brand-mark`): The compact brand mark in the sidebar.
+- **Brand Ink** (`colors.brand-ink`): Dark lettering inside the orange mark; it stays fixed across themes.
+- **Drawer Scrim** (`colors.drawer-scrim`): The translucent neutral overlay behind a protected inspection or navigation task.
 
 **The Signal Separation Rule.** Blue marks interaction and traversal. Green, ochre, red, and violet keep their status and review meanings.
 
@@ -206,6 +227,8 @@ The palette pairs cool neutrals with one blue interaction color and restrained s
 
 ### Hierarchy
 - **Headline** (650, 24px, 1.25 line-height, -0.025em tracking): Page titles.
+- **Phone Headline** (650, 22px, 1.25 line-height): The smaller page-title step at 600px and below.
+- **Brand** (700, 18px): The TESIS wordmark; the compact mark uses the same size.
 - **Title** (600, 16px, 1.4 line-height): Card and major panel headings.
 - **Section** (600, 14px, 1.5 line-height): Subsection headings.
 - **Body** (400, 14px, 1.5 line-height): General interface copy; descriptive text stays near 75ch where space allows.
@@ -213,6 +236,9 @@ The palette pairs cool neutrals with one blue interaction color and restrained s
 - **Label** (500, 12px, 1.5 line-height): Field labels and metadata.
 - **Status** (500, 11px, 1.35 line-height): Compact status badges.
 - **Mono** (400, 12px, 1.6 line-height): Code, hashes, and structured values.
+- **Technical Metadata** (400, 10px): Secondary graph-kind labels and compact canonical status codes; never body copy or controls.
+
+Panel titles use the 16px title level consistently. Links within guide prose retain an underline, independent of hover or theme.
 
 **The One Sans Rule.** Use Geist through `--font-sans`, with its system fallback stack, for interface text; reserve monospace for technical values.
 
@@ -221,6 +247,8 @@ The palette pairs cool neutrals with one blue interaction color and restrained s
 The desktop workspace uses a fixed 216px sidebar, a sticky 56px top bar, and a flexible content area with 28px page gutters. A 4px-based rhythm supports compact spacing; common gaps and padding step through 8px, 12px, 16px, 20px, and 24px. The current-run view places the AKG in the main column and status, coordinate, and conversation panels in a 330px rail. On wide screens, that rail shares the monitor height; at 1200px and below the runtime layout stacks. Completed results use a main inspection area with a 300px detail rail and collapse to one column at 1100px.
 
 At 900px and below, the fixed sidebar becomes a menu drawer. At 600px and below, page gutters tighten, summary grids and runtime panels stack, and interactive controls reach a 44px minimum height. The run catalog keeps all seven fields in a labeled two-column row layout without horizontal scrolling; execution identity, start time, and actions span the row. Wide evidence and matrix tables keep their columns and scroll within their own container; comfortable and compact density remain available for evidence review.
+
+Coarse-pointer devices use 44px controls even above the phone breakpoint. Numbered traversal steps and catalog identity controls follow the same target size. Fine-pointer desktop controls retain compact density. The saved theme is applied by a fixed head script before the initial styled paint.
 
 **The Evidence Context Rule.** Keep the selected execution, coordinate, score origin, and supporting evidence visibly connected as the layout narrows.
 
@@ -242,8 +270,8 @@ Cards and primary panels use gently rounded corners (8px). Navigation and AKG no
 - **Primary:** Accent blue surface with a contrasting surface-colored label; hover deepens the accent.
 - **Ghost:** Transparent at rest with secondary text; hover uses the surface-hover color.
 - **Focus / Disabled:** Focus uses a 2px accent outline with a 3px offset. Disabled controls use reduced opacity and a not-allowed cursor. Buttons have no transition in the current stylesheet.
-- **Sizing:** 34px minimum height on larger screens and 44px on small screens.
-- **Icon controls:** Use square 34px controls on larger screens and 44px touch targets on small screens. Preserve an accessible action name.
+- **Sizing:** 34px minimum height for fine-pointer desktop use and 44px for small screens or coarse pointers.
+- **Icon controls:** Use square 34px controls for fine-pointer desktop use and 44px touch targets for small screens or coarse pointers. Preserve an accessible action name.
 
 ### Chips
 - **Style:** Compact 24px status labels with a 4px radius and short internal padding.
@@ -256,7 +284,7 @@ Cards and primary panels use gently rounded corners (8px). Navigation and AKG no
 - **Internal Padding:** Card content uses 18px on desktop and 14px on small screens. Headers use a compact inset and a bottom divider.
 
 ### Inputs / Fields
-- **Style:** Surface background, 1px strong border, 5px radius, and 7px by 10px padding.
+- **Style:** Surface background, a 1px Control Boundary border, 5px radius, and 7px by 10px padding.
 - **Focus:** The shared 2px accent outline with a 3px offset.
 - **Sizing:** 36px minimum height on larger screens and 44px on small screens.
 

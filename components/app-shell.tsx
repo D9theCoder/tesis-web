@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Activity, ArrowUpRight, BookOpen, ChevronRight, Eye, LayoutDashboard, ListFilter, Menu, Moon, Sun } from "lucide-react";
 import { Badge, Button, Drawer } from "@/components/ui/primitives";
+import { THEME_KEY } from "@/lib/theme";
 
 const navigation = [
   { href: "/", label: "Live monitor", icon: Activity },
@@ -13,7 +14,6 @@ const navigation = [
   { href: "/help", label: "Guide", icon: BookOpen },
 ];
 let sessionTheme: string | null = null;
-const THEME_KEY = "tesis-theme:v1";
 const subscribeTheme = (callback: () => void) => {
   const changed = () => { sessionTheme = null; callback(); };
   window.addEventListener("storage", changed);
@@ -30,7 +30,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const theme = useSyncExternalStore(subscribeTheme, getTheme, serverTheme);
-  useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
+  useEffect(() => { document.documentElement.dataset.theme = getTheme(); }, [theme]);
   const selected = navigation.find(item => item.href === "/" ? pathname === "/" : pathname.startsWith(item.href));
   const nav = <nav className="app-navigation" aria-label="Main navigation">{navigation.map(item => {
     const Icon = item.icon;
