@@ -29,3 +29,8 @@ next-env.d.ts
 # browser acceptance output
 /test-results/
 /playwright-report/
+
+# impeccable
+.agents
+.codex
+.impeccable
