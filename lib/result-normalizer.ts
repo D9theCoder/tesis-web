@@ -1,639 +1,191 @@
-import type {
-  CoordinateSummary,
-  EvidenceRow,
-  NormalizedResult,
-  ScoreDimension,
-  ScoreRow,
+import {
+  resultBundleSchema, artifactSchema, historicalAnalysisSchema, normalizedResultSchema,
+  type CoordinateSummary, type EvidenceRow, type NormalizedResult, type ScoreDimension, type ScoreRow,
 } from "@/lib/schemas";
+import { canonicalStatus, coverage, finite, mergeArtifact, metricReading, record, text } from "@/lib/artifact-contract";
 import { extractText, truncate } from "@/lib/formatters";
 
-/**
- * Normalize a raw TESIS artifact (single run JSON or matrix aggregate) into a
- * stable frontend contract. Handles both the modern layout and legacy fields
- * defensively: a missing field degrades to a safe default rather than
- * throwing. Never invents scores from LLM claims — dimensions map to real
- * artifact fields only.
- */
-
-const COMPOSITE_WEIGHTS: Array<[ScoreDimension, number]> = [
-  ["Smethod", 0.2],
-  ["Spayload", 0.2],
-  ["Sexploit", 0.3],
-  ["Schain", 0.1],
-  ["Soutput", 0.2],
-];
-
-export function compositeFormula(): string {
-  return "Srun = 0.20·Smethod + 0.20·Spayload + 0.30·Sexploit + 0.10·Schain + 0.20·Soutput";
-}
-
-function asInt(value: unknown): number {
-  const n = typeof value === "number" ? value : NaN;
-  return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
-}
-
-function asFloat(value: unknown): number | undefined {
-  const n = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(n) ? n : undefined;
-}
-
-function asStr(value: unknown): string | undefined {
-  if (value == null || typeof value === "object") return undefined;
-  const s = String(value).trim();
-  return s || undefined;
-}
-
-function asBool(value: unknown): boolean {
-  return value === true || value === "true" || value === "True" || value === 1;
-}
-
-function asStrArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((v): v is string => typeof v === "string").filter(Boolean);
-}
-
-function firstKey(obj: Record<string, unknown> | undefined | null, keys: string[]): unknown {
-  if (!obj) return undefined;
-  for (const k of keys) {
-    if (k in obj) return obj[k];
-  }
-  return undefined;
-}
-
-function mergeStateish(raw: Record<string, unknown>): Record<string, unknown> {
-  // The modern runner repeats scalar fields at the top level and also below
-  // `final_state`. We read top-level first, then final_state as fallback so
-  // both generations render.
-  const fs = firstKey(raw, ["final_state", "state"]);
-  const fsm = fs && typeof fs === "object" ? (fs as Record<string, unknown>) : {};
-  const merged: Record<string, unknown> = { ...fsm };
-  for (const [k, v] of Object.entries(raw)) {
-    if (k === "final_state" || k === "state") continue;
-    merged[k] = v;
-  }
-  return merged;
-}
-
-function deriveDimensions(m: Record<string, unknown>): Partial<Record<ScoreDimension, number>> {
+export function compositeFormula() { return "Srun = 0.20·Smethod + 0.20·Spayload + 0.30·Sexploit + 0.10·Schain + 0.20·Soutput"; }
+const strings = (v: unknown) => Array.isArray(v) ? v.filter((s): s is string => typeof s === "string") : [];
+const dimensions: ScoreDimension[] = ["Smethod", "Spayload", "Sexploit", "Schain", "Soutput", "Srun"];
+function deriveDimensions(m: Record<string, unknown>) {
   const scores: Partial<Record<ScoreDimension, number>> = {};
-
-  // Smethod: top-level `method_score` or final_state.method_scores[selected].
-  const selected = asStr(m["selected_method"]);
-  const methodScores = firstKey(m, ["method_scores"]);
-  if (typeof m["method_score"] === "number") {
-    scores.Smethod = asInt(m["method_score"]);
-  } else if (
-    selected &&
-    methodScores &&
-    typeof methodScores === "object"
-  ) {
-    const ms = methodScores as Record<string, unknown>;
-    if (typeof ms[selected] === "number") scores.Smethod = asInt(ms[selected]);
+  const projected = record(record(m.observer_runtime_scores).components);
+  for (const dimension of dimensions) { const value = finite(projected[dimension]); if (value !== null) scores[dimension] = value; }
+  const selected = text(m.selected_method);
+  for (const [dim, scalar, map] of [["Smethod", "method_score", "method_scores"], ["Sexploit", "exploitation_score", "exploitation_scores"],
+    ["Schain", "chain_score", "chain_scores"], ["Soutput", "output_score", "output_scores"]] as const) {
+    const value = finite(m[scalar]) ?? (selected ? finite(record(m[map])[selected]) : null);
+    if (value !== null) scores[dim] = value;
   }
-
-  // Spayload: max of candidate payload scores (mirrors the Python scorer).
-  const payloadScores = firstKey(m, ["payload_scores"]);
-  if (payloadScores && typeof payloadScores === "object") {
-    const values = Object.values(payloadScores as Record<string, unknown>).map(asInt);
-    if (values.length) scores.Spayload = Math.max(...values);
-  }
-
-  // Sexploit, Schain, Soutput
-  if (typeof m["exploitation_score"] === "number") {
-    scores.Sexploit = asInt(m["exploitation_score"]);
-  } else if (m["exploitation_scores"] && typeof m["exploitation_scores"] === "object") {
-    const es = m["exploitation_scores"] as Record<string, unknown>;
-    const sel = selected;
-    if (sel && typeof es[sel] === "number") scores.Sexploit = asInt(es[sel]);
-  }
-
-  if (typeof m["chain_score"] === "number") {
-    scores.Schain = asInt(m["chain_score"]);
-  } else if (m["chain_scores"] && typeof m["chain_scores"] === "object") {
-    const cs = m["chain_scores"] as Record<string, unknown>;
-    if (selected && typeof cs[selected] === "number") scores.Schain = asInt(cs[selected]);
-  }
-
-  if (typeof m["output_score"] === "number") {
-    scores.Soutput = asInt(m["output_score"]);
-  } else if (m["output_scores"] && typeof m["output_scores"] === "object") {
-    const os = m["output_scores"] as Record<string, unknown>;
-    if (selected && typeof os[selected] === "number") scores.Soutput = asInt(os[selected]);
-  }
-
-  // Srun: prefer explicit composite, otherwise recompute from the six dims.
-  if (typeof m["composite_score"] === "number") {
-    scores.Srun = asFloat(m["composite_score"]);
-  } else {
-    let total = 0;
-    let any = false;
-    for (const [dim, w] of COMPOSITE_WEIGHTS) {
-      if (scores[dim] != null) {
-        total += w * (scores[dim] as number);
-        any = true;
-      }
-    }
-    if (any) scores.Srun = Math.round(total * 10000) / 10000;
-  }
+  const payloads = Object.values(record(m.payload_scores)).map(finite).filter((n): n is number => n !== null);
+  if (payloads.length) scores.Spayload = Math.max(...payloads);
+  const stored = finite(m.composite_score);
+  if (stored !== null) scores.Srun = stored;
+  // A partial vector cannot yield a composite. Finals are accepted only by the server receipt adapter.
   return scores;
 }
-
-function buildScoreRows(
-  scores: Partial<Record<ScoreDimension, number>>,
-  m: Record<string, unknown>,
-): ScoreRow[] {
-  const interpretations: Record<ScoreDimension, string> = {
-    Smethod: "Method selection accuracy: how well the orchestrator chose the correct static method agent for the surface.",
-    Spayload: "Payload effectiveness: best score among executed candidate payloads for the selected method.",
-    Sexploit: "Exploitation success: whether the target was actually exploited with verifier-backed evidence.",
-    Schain: "Chain utilization: whether the AKG routed to a higher-impact chained outcome.",
-    Soutput: "Output integrity: penalty for containment, guardrail, invalid-JSON or fallback activity degrading report quality.",
-    Srun: "Composite run score: the weighted thesis metric combining all five dimensions.",
+export function buildScoreRows(scores: Partial<Record<ScoreDimension, number>>, final = false, refs: Record<string, string[]> = {}): ScoreRow[] {
+  const interpretations = {
+    Smethod: "Method fit and selection under the frozen rubric.",
+    Spayload: final ? "Mean over distinct eligible executed validated exploit/bypass candidates for the final method." : "Stored runtime maximum candidate score; provisional scoring.v2.",
+    Sexploit: "Independent verifier proof of exploitation; signals alone do not confirm a finding.",
+    Schain: "Evidence of a causal dependency and destination outcome.",
+    Soutput: "Evidence-backed output validity and required context calls.",
+    Srun: compositeFormula(),
   };
-  const evidence: Record<ScoreDimension, string> = {
-    Smethod: "method_scores / selected_method / viable_methods",
-    Spayload: "payload_scores (max over candidate scores)",
-    Sexploit: "exploitation_scores / response_evidence / verifier_decision",
-    Schain: "chain_scores / achieved_outcomes / akg_path",
-    Soutput: "output_scores / guardrail_activations / invalid_json_events / containment_events",
-    Srun: "composite_score or Srun = 0.20·Smethod + 0.20·Spayload + 0.30·Sexploit + 0.10·Schain + 0.20·Soutput",
-  };
-  const dimensions: ScoreDimension[] = [
-    "Smethod",
-    "Spayload",
-    "Sexploit",
-    "Schain",
-    "Soutput",
-    "Srun",
-  ];
-  return dimensions.map((dim) => ({
-    dimension: dim,
-    score: scores[dim] ?? 0,
-    max: 4,
-    evidenceBasis: evidence[dim],
-    interpretation:
-      dim === "Srun"
-        ? compositeFormula()
-        : interpretations[dim],
-  }));
+  return dimensions.map(dimension => ({ dimension, score: scores[dimension] ?? null, max: 4,
+    evidenceBasis: final ? refs[dimension]?.join(", ") || "source-bound receipt" : `stored runtime ${dimension}; scoring.v2 provisional`,
+    interpretation: interpretations[dimension] }));
 }
-
-interface CoalescedEvidence {
-  rows: EvidenceRow[];
-  seen: Set<string>;
+function historical(value: unknown) {
+  const parsed = historicalAnalysisSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
-
-function addRow(
-  acc: CoalescedEvidence,
-  row: EvidenceRow,
-): void {
-  const key = row.id;
-  if (acc.seen.has(key)) return;
-  acc.seen.add(key);
-  acc.rows.push(row);
+function coordinate(raw: Record<string, unknown>, index: number, parentId: string | null): CoordinateSummary {
+  const m = mergeArtifact(raw), config = record(m.config);
+  return { executionId: text(m.execution_id) ?? `unavailable-${index}`, runId: text(m.run_id),
+    index: finite(m.coordinate_index) ?? (finite(m.index) !== null ? Math.max(0, Number(m.index) - 1) : index),
+    status: text(m.status) ?? "unknown", ...canonicalStatus(m), matrixExecutionId: text(m.matrix_execution_id) ?? parentId,
+    repeatIndex: finite(m.repeat_index ?? config.repeat_index), provider: text(m.provider ?? config.provider) ?? undefined,
+    model: text(m.model ?? config.model) ?? undefined, surface: text(m.surface ?? config.surface) ?? undefined,
+    securityLevel: text(m.security_level ?? config.security_level) ?? undefined, payloadMode: text(m.payload_mode ?? config.payload_mode) ?? undefined,
+    experimentCondition: text(m.experiment_condition ?? config.experiment_condition) ?? undefined, targetMethod: text(m.target_method ?? config.target_method) ?? undefined,
+    selectedMethod: text(m.selected_method), confirmedVulns: strings(m.confirmed_vulns), achievedOutcomes: strings(m.achieved_outcomes),
+    scores: deriveDimensions(m), artifactPath: text(m.artifact ?? m.artifact_path) ?? undefined,
+    hasArtifact: typeof m.has_artifact === "boolean" ? m.has_artifact : !!m.final_state || !!m.execution_log,
+    historicalAnalysis: historical(m.historical_analysis) };
 }
-
-export function buildEvidenceRows(m: Record<string, unknown>): EvidenceRow[] {
-  const acc: CoalescedEvidence = { rows: [], seen: new Set() };
-
-  // 1. execution_log entries (RunEvent.as_dict)
-  const log = m["execution_log"];
-  if (Array.isArray(log)) {
-    log.forEach((entry, i) => {
-      if (!entry || typeof entry !== "object") return;
-      const e = entry as Record<string, unknown>;
-      const timestampEpoch =
-        typeof e["timestamp"] === "number" ? (e["timestamp"] as number) : 0;
-      const phase = typeof e["event_type"] === "string" ? (e["event_type"] as string) : "event";
-      const candidate = e["candidate"];
-      const message = typeof e["message"] === "string" ? (e["message"] as string) : "";
-      addRow(acc, {
-        id: `log-${i}-${phase}`,
-        timestamp: new Date(timestampEpoch * 1000).toISOString(),
-        timestampEpoch,
-        node: typeof e["node"] === "string" ? (e["node"] as string) : null,
-        phase,
-        method: typeof e["method"] === "string" ? (e["method"] as string) : null,
-        route: null,
-        action: message || phase,
-        candidate: candidate ?? null,
-        result: message || phase,
-        status: classifyEvent(phase),
-        signal: extractSignal(phase),
-        safety: safetyFor(phase),
-        details: {
-          data: e["data"] ?? {},
-          candidate,
-        },
-        relatedEventIds: [],
-      });
-    });
-  }
-
-  // 2. response_evidence entries
-  const responses = m["response_evidence"];
-  if (Array.isArray(responses)) {
-    responses.forEach((entry, i) => {
-      if (!entry || typeof entry !== "object") return;
-      const e = entry as Record<string, unknown>;
-      const agentId = asStr(e["agent_id"]) ?? "unknown";
-      const stage = asStr(e["stage"]) ?? "probe";
-      const statusCode = e["status_code"];
-      const signal = asBool(e["signal_detected"]);
-      const transportOk = asBool(e["transport_ok"]);
-      const safe = transportOk && !signal;
-      const raw = e["response_snippet"];
-      const snippet =
-        typeof raw === "string" ? truncate(raw.replace(/\s+/g, " ").trim(), 220) : null;
-      addRow(acc, {
-        id: `resp-${i}`,
-        timestamp: "",
-        timestampEpoch: 0,
-        node: agentId,
-        phase: `response_evidence:${stage}`,
-        method: agentId,
-        route: asStr(e["endpoint"]) ?? null,
-        action: `HTTP ${String(statusCode ?? "?")} · ${stage}`,
-        candidate: asStr(e["payload"]) ?? null,
-        result: signal ? "signal detected" : transportOk ? "no signal" : "transport error",
-        status: signal ? "success" : transportOk ? "info" : "failure",
-        signal: signal ? "signal" : safe ? "known-safe" : "none",
-        safety: signal ? "low" : "medium",
-        details: {
-          ...e,
-          raw,
-        },
-        relatedEventIds: [],
-      });
-    });
-  }
-
-  // 3. llm_performance entries
-  const perf = m["llm_performance"];
-  if (Array.isArray(perf)) {
-    perf.forEach((entry, i) => {
-      if (!entry || typeof entry !== "object") return;
-      const e = entry as Record<string, unknown>;
-      const role = asStr(e["role"]) ?? "unknown";
-      const parse = asStr(e["parse_status"]) ?? "unknown";
-      const duration = asNum(e["call_duration_ms"]);
-      const usage = e["provider_usage"] as Record<string, unknown> | undefined;
-      const totalTokens =
-        usage && typeof usage["total_tokens"] === "number"
-          ? (usage["total_tokens"] as number)
-          : null;
-      addRow(acc, {
-        id: `llm-${i}`,
-        timestamp: "",
-        timestampEpoch: 0,
-        node: "llm",
-        phase: "llm_call",
-        method: role,
-        route: asStr(e["provider"]) ?? null,
-        action: `LLM ${role} · parse=${parse}`,
-        candidate: null,
-        result: parse === "ok" ? "parsed" : `parse:${parse}`,
-        status: parse === "ok" ? "info" : "failure",
-        signal: asStr(e["model_fingerprint"])?.slice(0, 12) ?? null,
-        safety: "low",
-        details: {
-          call_id: e["call_id"],
-          call_duration_ms: duration,
-          cache_hit: e["cache_hit"],
-          provider_usage: usage,
-          structured_output_mode: e["structured_output_mode"],
-          prompt_hash: e["prompt_hash"],
-        },
-        relatedEventIds: [],
-      });
-    });
-  }
-
-  // 4. recon_events
-  const recon = m["recon_events"];
-  if (Array.isArray(recon)) {
-    recon.forEach((entry, i) => {
-      if (!entry || typeof entry !== "object") return;
-      const e = entry as Record<string, unknown>;
-      const kind = asStr(e["event_type"]) ?? asStr(e["kind"]) ?? "recon";
-      addRow(acc, {
-        id: `recon-${i}`,
-        timestamp: "",
-        timestampEpoch: asNum(e["timestamp"]) ?? 0,
-        node: "recon",
-        phase: kind,
-        method: null,
-        route: asStr(e["url"]) ?? asStr(e["endpoint"]) ?? null,
-        action: asStr(e["message"]) ?? kind,
-        candidate: null,
-        result: asStr(e["status"]) ?? asStr(e["result"]) ?? "done",
-        status: "info",
-        signal: null,
-        safety: "low",
-        details: { data: e },
-        relatedEventIds: [],
-      });
-    });
-  }
-
-  // 5. safety events (guardrail / containment / invalid / fallback)
-  for (const [field, phase] of [
-    ["guardrail_activations", "guardrail"],
-    ["containment_events", "containment"],
-    ["invalid_json_events", "invalid_json"],
-    ["fallback_events", "fallback"],
-    ["payload_guardrail_activations", "payload_guardrail"],
-  ] as const) {
-    const list = m[field];
-    if (Array.isArray(list)) {
-      list.forEach((entry, i) => {
-        if (!entry || typeof entry !== "object") return;
-        const e = entry as Record<string, unknown>;
-        addRow(acc, {
-          id: `${phase}-${i}`,
-          timestamp: "",
-          timestampEpoch: asNum(e["timestamp"]) ?? 0,
-          node: asStr(e["agent_id"]) ?? asStr(e["node"]) ?? "safety",
-          phase,
-          method: asStr(e["agent_id"]) ?? null,
-          route: asStr(e["url"]) ?? asStr(e["endpoint"]) ?? null,
-          action: asStr(e["reason"]) ?? asStr(e["message"]) ?? phase,
-          candidate: asStr(e["candidate"]) ?? null,
-          result: asStr(e["status"]) ?? "blocked",
-          status: "safety",
-          signal: asStr(e["type"]) ?? phase,
-          safety: phase === "containment" ? "danger" : "high",
-          details: { data: e },
-          relatedEventIds: [],
-        });
-      });
-    }
-  }
-
-  acc.rows.sort((a, b) => (a.timestampEpoch - b.timestampEpoch) || a.id.localeCompare(b.id));
-  return acc.rows;
+function stableId(value: unknown): string {
+  // Browser-safe content fingerprint for legacy records lacking persistent IDs.
+  const s = JSON.stringify(value), source = s ?? "null";
+  let hash = 2166136261;
+  for (let i = 0; i < source.length; i++) hash = Math.imul(hash ^ source.charCodeAt(i), 16777619);
+  return (hash >>> 0).toString(16);
 }
-
-function classifyEvent(phase: string): EvidenceRow["status"] {
-  const p = phase.toLowerCase();
-  if (p.includes("confirmed") || p.includes("success") || p.includes("achieved") || p.includes("accepted")) {
-    return "success";
-  }
-  if (p.includes("fail") || p.includes("reject") || p.includes("error") || p.includes("invalid")) {
-    return "failure";
-  }
-  if (p.includes("guardrail") || p.includes("containment") || p.includes("blocked")) {
-    return "safety";
-  }
-  if (p.includes("llm") || p.includes("chat") || p.includes("prompt") || p.includes("model")) {
-    return "model";
-  }
-  return "info";
+function epoch(value: unknown): number {
+  const n = finite(value);
+  if (n !== null) return n > 1e12 ? n / 1000 : n;
+  return typeof value === "string" && Number.isFinite(Date.parse(value)) ? Date.parse(value) / 1000 : 0;
 }
-
-function extractSignal(phase: string): string {
-  const p = phase.toLowerCase();
-  if (p.includes("confirmed")) return "confirmed";
-  if (p.includes("containment")) return "containment";
-  if (p.includes("guardrail")) return "guardrail";
-  if (p.includes("fallback")) return "fallback";
-  return "—";
-}
-
-function safetyFor(phase: string): EvidenceRow["safety"] {
-  const p = phase.toLowerCase();
-  if (p.includes("containment")) return "danger";
-  if (p.includes("guardrail") || p.includes("blocked")) return "high";
-  if (p.includes("confirmed") || p.includes("achieved")) return "medium";
-  return "low";
-}
-
-function extractModelName(value: unknown): string | undefined {
-  if (value == null) return undefined;
-  if (typeof value === "string") return value || undefined;
-  if (typeof value === "object") {
-    const cfg = value as Record<string, unknown>;
-    const name = cfg["model_name"] ?? cfg["modelName"] ?? cfg["name"];
-    if (typeof name === "string" && name) return name;
-  }
-  return undefined;
-}
-
-function asNum(value: unknown): number | null {
-  if (value == null) return null;
-  const n = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(n) ? n : null;
-}
-
-function buildMetrics(m: Record<string, unknown>, raw: Record<string, unknown>) {
-  const containment =
-    Array.isArray(m["containment_events"]) ? m["containment_events"].length :
-    typeof m["containment_events"] === "number" ? (m["containment_events"] as number) : 0;
-  const guardrail =
-    Array.isArray(m["guardrail_activations"]) ? m["guardrail_activations"].length :
-    typeof m["guardrail_activations"] === "number" ? (m["guardrail_activations"] as number) : 0;
-  const invalidJson =
-    Array.isArray(m["invalid_json_events"]) ? (m["invalid_json_events"] as unknown[]).length :
-    typeof m["invalid_json_events"] === "number" ? (m["invalid_json_events"] as number) : 0;
-  const fallbacks =
-    Array.isArray(m["fallback_events"]) ? (m["fallback_events"] as unknown[]).length :
-    typeof m["fallback_events"] === "number" ? (m["fallback_events"] as number) : 0;
-
-  const perfSummary =
-    firstKey(m, ["llm_performance_summary"]) as Record<string, unknown> | undefined;
-
-  return {
-    payloadValidityRate: asFloat(m["payload_validity_rate"]) ?? asFloat(perfSummary?.["payload_validity_rate"]),
-    payloadExecutionSuccessRate: asFloat(m["payload_execution_success_rate"]),
-    payloadImprovementRate: asFloat(m["payload_improvement_rate"]),
-    methodSelectionAccuracy: asFloat(perfSummary?.["method_selection_accuracy"]),
-    adaptationRate: asFloat(perfSummary?.["adaptation_rate"]),
-    guardrailActivationRate: asFloat(perfSummary?.["guardrail_activation_rate"]),
-    containmentCount: containment,
-    guardrailActivations: guardrail,
-    invalidJson,
-    fallbacks,
-    attemptsToSuccess: asNum(m["attempts_to_success"]) ?? undefined,
-    tokenCost: asFloat(m["token_cost"]),
-    tokenCount: asNum(m["tokens"]) ?? asNum(perfSummary?.["total_tokens"]) ?? undefined,
-    llmCalls: asNum(perfSummary?.["calls"]) ?? undefined,
-  };
-}
-
-function buildCoordinates(
-  raw: Record<string, unknown>,
-  m: Record<string, unknown>,
-  mergedStateWrapper: Record<string, unknown>,
-): CoordinateSummary[] {
-  const children = firstKey(raw, ["runs", "artifacts", "children", "entries", "records", "results"]);
-  if (!Array.isArray(children)) {
-    // Single run is its own single coordinate.
-    const dims = deriveDimensions(m);
-    const confirmed = asStrArray(m["confirmed_vulns"]);
-    const achieved = asStrArray(m["achieved_outcomes"]);
-    return [
-      {
-        runId: asStr(m["run_id"]) ?? null,
-        executionId: asStr(m["execution_id"]) ?? "unknown",
-        index: 0,
-        status: asStr(m["status"]) ?? "unknown",
-        provider: asStr(m["provider"]),
-        surface: asStr(m["surface"]),
-        securityLevel: asStr(m["security_level"]),
-        payloadMode: asStr(m["payload_mode"]),
-        experimentCondition: asStr(m["experiment_condition"]),
-        targetMethod: asStr(m["target_method"]),
-        selectedMethod: asStr(m["selected_method"]) ?? null,
-        confirmedVulns: confirmed,
-        achievedOutcomes: achieved,
-        scores: dims,
-        artifactPath: undefined,
-      },
-    ];
-  }
-
-  return children.map((child, index) => {
-    if (!child || typeof child !== "object") {
-      return {
-        runId: null,
-        executionId: `run-${index + 1}`,
-        index,
-        status: "unknown",
-        selectedMethod: null,
-        confirmedVulns: [],
-        achievedOutcomes: [],
-        scores: {},
-      };
-    }
-    const c = child as Record<string, unknown>;
-    const childConfig =
-      c["config"] && typeof c["config"] === "object"
-        ? (c["config"] as Record<string, unknown>)
-        : {};
-    const dims = deriveDimensions(c);
-    return {
-      runId: asStr(c["run_id"]) ?? null,
-      executionId: asStr(c["execution_id"]) ?? `run-${index + 1}`,
-      index: Math.max(0, (asNum(c["index"]) ?? index + 1) - 1),
-      status: asStr(c["status"]) ?? "unknown",
-      provider: asStr(c["provider"]) ?? asStr(childConfig["provider"]),
-      surface: asStr(c["surface"]) ?? asStr(childConfig["surface"]),
-      securityLevel: asStr(c["security_level"]) ?? asStr(childConfig["security_level"]),
-      payloadMode: asStr(c["payload_mode"]) ?? asStr(childConfig["payload_mode"]),
-      experimentCondition:
-        asStr(c["experiment_condition"]) ?? asStr(childConfig["experiment_condition"]),
-      targetMethod: asStr(c["target_method"]) ?? asStr(childConfig["target_method"]),
-      selectedMethod: asStr(c["selected_method"]) ?? null,
-      confirmedVulns: asStrArray(c["confirmed_vulns"]),
-      achievedOutcomes: asStrArray(c["achieved_outcomes"]),
-      scores: dims,
-      artifactPath: asStr(c["artifact"]) ?? asStr(c["artifact_path"]),
-    };
+function entries(value: unknown, prefix: string): { entry: Record<string, unknown>; ref: string }[] {
+  if (Array.isArray(value)) return value.flatMap((v,i) => Object.keys(record(v)).length ? [{ entry: record(v), ref: `${prefix}/${i}` }] : []);
+  const m = record(value);
+  if (m.event_type || m.evidence_id || m.verifier_id || m.decision || m.candidate_id) return [{ entry: m, ref: prefix }];
+  return Object.entries(m).flatMap(([key,v]) => {
+    const ref = `${prefix}/${key.replace(/~/g,"~0").replace(/\//g,"~1")}`;
+    if (Array.isArray(v)) return entries(v, ref);
+    const entry = record(v);
+    return Object.keys(entry).length ? [{ entry, ref }] : [];
   });
 }
-
+const ID_FIELDS = ["evidence_id", "event_id", "request_id", "validation_id", "verifier_id", "candidate_id", "visit_id", "call_id", "decision_id", "response_id", "timing_id", "control_id", "source_candidate_id"];
+function references(value: unknown, out = new Set<string>()): Set<string> {
+  if (Array.isArray(value)) value.forEach(v => references(v,out));
+  else if (value && typeof value === "object") for (const [k,v] of Object.entries(value)) {
+    if ((ID_FIELDS.includes(k) || /(?:evidence|event|request|response|validation|dependency)_refs?$/.test(k)) && typeof v === "string") out.add(v);
+    if (k.endsWith("_refs") && Array.isArray(v)) v.forEach(item => { if (typeof item === "string") out.add(item); });
+    if (v && typeof v === "object") references(v,out);
+  }
+  return out;
+}
+export function buildEvidenceRows(m: Record<string, unknown>): EvidenceRow[] {
+  const rows: EvidenceRow[] = [], joins = new Map<string, Set<string>>(), rowRefs = new Map<string, Set<string>>();
+  const fields = ["execution_log", "request_evidence", "method_execution_inputs", "payload_validation_results", "response_evidence", "timing_evidence",
+    "verifier_history", "verifier_decision", "candidate_dispositions", "payload_candidates", "chain_history", "scoring_decisions", "llm_performance", "recon_events",
+    "guardrail_activations", "containment_events", "invalid_json_events", "fallback_events", "payload_guardrail_activations"];
+  const identityOccurrences = new Map<string, number>();
+  for (const field of fields) for (const { entry: e, ref } of entries(m[field], `#/${field}`)) {
+    const data = record(e.data), persistent = text(e.evidence_id ?? e.event_id ?? e.verifier_id ?? e.validation_id ?? e.request_id ?? e.call_id ?? e.decision_id);
+    const base = persistent ?? `${field}:${stableId(e)}`;
+    const occurrence = identityOccurrences.get(base) ?? 0;
+    identityOccurrences.set(base, occurrence + 1);
+    const id = occurrence ? `${base}:${occurrence}` : base;
+    const ts = epoch(e.timestamp ?? e.created_at ?? e.started_at ?? data.timestamp);
+    const phase = text(e.event_type) ?? field;
+    const decision = text(e.decision ?? e.verification_reason ?? record(e.verifier_decision).decision);
+    const isResponse = field === "response_evidence", isSafety = /guardrail|containment|invalid_json|fallback/.test(field);
+    const transport = e.transport_ok === true ? "ok" : e.transport_ok === false ? "error" : "unknown";
+    const signal = e.signal_detected === true ? "detected" : e.signal_detected === false ? "absent" : "unknown";
+    const result = isResponse ? `transport: ${transport} · signal: ${signal} · verifier: ${decision ?? "unknown"}` :
+      text(e.message ?? e.reason ?? e.status ?? e.result ?? e.decision) ?? phase;
+    const refs = references(e);
+    refs.add(ref); refs.add(ref.replace(/^#\//,"#/final_state/"));
+    if (persistent) refs.add(persistent);
+    rowRefs.set(id,refs);
+    for (const reference of refs) { const matches = joins.get(reference) ?? new Set(); matches.add(id); joins.set(reference,matches); }
+    rows.push({ id, timestamp: ts ? new Date(ts*1000).toISOString() : "", timestampEpoch: ts,
+      node: text(e.node ?? e.agent_id), phase, method: text(e.method ?? e.agent_id), route: text(e.endpoint ?? e.url),
+      action: text(e.message ?? e.action) ?? (isResponse ? `HTTP ${e.status_code ?? "?"} · ${e.stage ?? "response"}` : phase),
+      candidate: e.candidate ?? e.payload ?? e.candidate_id ?? null, result,
+      status: isSafety ? "safety" : decision === "confirmed" ? "success" : isResponse && e.transport_ok === false ? "failure" : field === "llm_performance" ? "model" : "info",
+      signal: isResponse ? signal : decision, safety: isSafety ? "high" : "low",
+      details: { ...e, sourceRef: ref, responseExcerpt: e.response_excerpt ?? e.response_snippet ?? null,
+        transportStatus: isResponse ? transport : null, verifierOutcome: decision }, relatedEventIds: [] });
+  }
+  for (const row of rows) row.relatedEventIds = [...new Set([...rowRefs.get(row.id) ?? []].flatMap(ref => [...joins.get(ref) ?? []]))].filter(id => id !== row.id);
+  return rows.sort((a,b) => a.timestampEpoch-b.timestampEpoch || a.id.localeCompare(b.id));
+}
+function buildMetrics(m: Record<string, unknown>) {
+  const summary = record(record(m.report).summary), perf = record(m.llm_performance_summary);
+  const rate = (key: string) => finite(key in summary ? summary[key] : m[key]) ?? undefined;
+  const count = (key: string) => Array.isArray(m[key]) ? m[key].length : finite(m[key]) ?? undefined;
+  return { payloadValidityRate: rate("payload_validity_rate"), payloadExecutionSuccessRate: rate("payload_execution_success_rate"),
+    payloadImprovementRate: rate("payload_improvement_rate"), methodSelectionAccuracy: rate("method_selection_accuracy"),
+    adaptationRate: rate("adaptation_rate"), guardrailActivationRate: rate("guardrail_activation_rate"),
+    containmentCount: count("containment_events"), guardrailActivations: count("guardrail_activations"), invalidJson: count("invalid_json_events"), fallbacks: count("fallback_events"),
+    attemptsToSuccess: finite(m.attempts_to_success) ?? undefined, tokenCost: metricReading(m,"token_cost").value ?? undefined,
+    tokenCount: finite(m.tokens) ?? finite(perf.total_tokens) ?? undefined, llmCalls: finite(perf.calls) ?? undefined };
+}
 export function normalizeResult(rawJson: unknown, sourceMode?: string): NormalizedResult {
-  const raw = rawJson && typeof rawJson === "object" ? (rawJson as Record<string, unknown>) : {};
-  const m = mergeStateish(raw);
-
-  const isMatrix =
-    sourceMode === "matrix" ||
-    (Array.isArray(raw["runs"]) && raw["runs"].length > 0) ||
-    !!raw["matrix"];
-  const mode: "single-run" | "matrix" = isMatrix ? "matrix" : "single-run";
-
-  const stateWrapper =
-    firstKey(raw, ["final_state", "state"]) &&
-    typeof firstKey(raw, ["final_state", "state"]) === "object"
-      ? (firstKey(raw, ["final_state", "state"]) as Record<string, unknown>)
-      : {};
-
-  const scores = deriveDimensions(m);
-  const scoringRows = buildScoreRows(scores, m);
-  const evidenceRows = buildEvidenceRows(m);
-  const coordinates = buildCoordinates(raw, m, stateWrapper);
-
-  const config = (m["config"] && typeof m["config"] === "object"
-    ? (m["config"] as Record<string, unknown>)
-    : {}) as Record<string, unknown>;
-
-  const timing =
-    m["timing"] && typeof m["timing"] === "object"
-      ? (m["timing"] as Record<string, unknown>)
-      : {};
-
-  const totals =
-    m["totals"] && typeof m["totals"] === "object"
-      ? (m["totals"] as Record<string, unknown>)
-      : {};
-
-  return {
-    executionId: asStr(m["execution_id"]) ?? asStr(raw["execution_id"]) ?? "unknown",
-    runId: asStr(m["run_id"]) ?? null,
-    mode,
-    status: asStr(m["status"]) ?? "unknown",
-    taskResult: asStr(m["task_result"]) ?? asStr(m["experiment_outcome"]) ?? null,
-    experimentOutcome: asStr(m["experiment_outcome"]) ?? null,
-    provider: asStr(m["provider"]) ?? asStr(config["provider"]),
-    model: asStr(m["model"]) ?? extractModelName(config["model"]),
-    surface: asStr(m["surface"]) ?? asStr(config["surface"]),
-    securityLevel: asStr(m["security_level"]) ?? asStr(config["security_level"]),
-    payloadMode: asStr(m["payload_mode"]) ?? asStr(config["payload_mode"]),
-    experimentCondition: asStr(m["experiment_condition"]) ?? asStr(config["experiment_condition"]),
-    targetMethod: asStr(m["target_method"]) ?? asStr(config["target_method"]),
-    targetUrl: asStr(m["target_url"]) ?? asStr(config["target_url"]),
-    startedAt: asStr(timing["started_at"]) ?? asStr(m["started_at"]),
-    endedAt: asStr(timing["ended_at"]) ?? asStr(m["ended_at"]),
-    durationMs: asNum(timing["duration_ms"]) ?? asNum(m["duration_ms"]) ?? undefined,
-    configFingerprint: asStr(m["config_fingerprint"]),
-    schemaVersion: asStr(m["schema_version"]),
-    isMatrix,
-    selectedMethod: asStr(m["selected_method"]) ?? null,
-    viableMethods: asStrArray(m["viable_methods"]),
-    akgPath: asStrArray(m["akg_path"]),
-    confirmedVulns: asStrArray(m["confirmed_vulns"]),
-    achievedOutcomes: asStrArray(m["achieved_outcomes"]),
-    scores,
-    scoringRows,
-    evidenceRows,
-    coordinates,
-    totalRuns: asNum(totals["total_runs"]) ?? undefined,
-    successfulRuns: asNum(totals["successful_runs"]) ?? undefined,
-    errorRuns: asNum(totals["error_runs"]) ?? undefined,
-    cancelledRuns: asNum(totals["cancelled_runs"]) ?? undefined,
-    skippedRuns: asNum(totals["skipped_runs"]) ?? undefined,
-    metrics: buildMetrics(m, raw),
-    raw,
+  const container = record(rawJson);
+  const bundle = container.schema_version === "observer-result.v1" ? resultBundleSchema.parse(container) : null;
+  const raw = artifactSchema.parse(bundle?.artifact ?? container), m = mergeArtifact(raw), config = record(m.config);
+  const isMatrix = sourceMode === "matrix" || Array.isArray(raw.runs) || raw.matrix === true;
+  const executionId = raw.execution_id, scores = deriveDimensions(m), timing = record(m.timing), totals = record(m.totals);
+  const cov = coverage(raw), reads: NormalizedResult["metricReadings"] = {};
+  for (const key of ["consistency_score", "token_cost", "token_cost_per_success"]) {
+    reads[key] = record(m.observer_metrics)[key] ? metricReading({ [key]: record(m.observer_metrics)[key] },key) : isMatrix && record(totals.metrics)[key] ? metricReading({ [key]: record(totals.metrics)[key] },key) : metricReading(m,key);
+  }
+  const groupCoverages: NormalizedResult["groupCoverages"] = {};
+  if (isMatrix && Array.isArray(raw.runs)) {
+    for (const [label,keys] of [["Provider",["provider"]],["Provider / level",["provider","security_level"]],["Provider / surface / level",["provider","surface","security_level"]]] as const) {
+      const grouped = new Map<string, Record<string,unknown>[]>();
+      for (const child of raw.runs) {
+        const m = mergeArtifact(child), config = record(m.config);
+        const key = `${label}: ${keys.map(key => text(m[key] ?? config[key]) ?? "unknown").join(" / ")}`;
+        grouped.set(key,[...grouped.get(key) ?? [],child]);
+      }
+      for (const [key,children] of grouped) { const c = coverage({ runs: children }); if (c) groupCoverages[key] = { ...c, legacyTotals: null }; }
+    }
+  }
+  const result: NormalizedResult = {
+    executionId, runId: text(m.run_id), mode: isMatrix ? "matrix" : "single-run", status: text(m.status) ?? "unknown", ...canonicalStatus(m),
+    matrixExecutionId: bundle?.matrixExecutionId ?? text(m.matrix_execution_id), repeatIndex: finite(m.repeat_index ?? config.repeat_index),
+    source: bundle?.source ?? null, reviews: bundle?.reviews ?? null, diagnostics: bundle?.diagnostics ?? [],
+    historicalAnalysis: bundle?.historicalAnalysis ?? historical(m.historical_analysis), coverage: cov, groupCoverages, metricReadings: reads,
+    scoreOrigin: "scoring.v2 · provisional runtime artifact", taskResult: text(m.task_result), experimentOutcome: text(m.experiment_outcome),
+    provider: text(m.provider ?? config.provider) ?? undefined, model: text(m.model ?? config.model) ?? text(record(config.model).model_name) ?? undefined,
+    modelProfile: text(m.model_profile ?? config.model_profile) ?? undefined, surface: text(m.surface ?? config.surface) ?? undefined,
+    securityLevel: text(m.security_level ?? config.security_level) ?? undefined, payloadMode: text(m.payload_mode ?? config.payload_mode) ?? undefined,
+    experimentCondition: text(m.experiment_condition ?? config.experiment_condition) ?? undefined, targetMethod: text(m.target_method ?? config.target_method) ?? undefined,
+    targetUrl: text(m.target_url ?? config.target_url) ?? undefined, startedAt: text(timing.started_at ?? m.started_at) ?? undefined,
+    endedAt: text(timing.ended_at ?? m.ended_at) ?? undefined, durationMs: finite(timing.duration_ms ?? m.duration_ms) ?? undefined,
+    configFingerprint: text(m.config_fingerprint) ?? undefined, schemaVersion: text(m.schema_version) ?? undefined,
+    isMatrix, selectedMethod: text(m.selected_method), viableMethods: strings(m.viable_methods), akgPath: strings(m.akg_path),
+    confirmedVulns: strings(m.confirmed_vulns), achievedOutcomes: strings(m.achieved_outcomes), scores, scoringRows: buildScoreRows(scores), evidenceRows: buildEvidenceRows(m),
+    coordinates: Array.isArray(raw.runs) ? raw.runs.map((child,index) => coordinate(record(child), index, executionId)) : [coordinate(raw,0,null)],
+    totalRuns: cov?.represented, successfulRuns: cov?.completed, errorRuns: cov?.failed, cancelledRuns: cov?.interrupted, skippedRuns: cov?.skipped,
+    metrics: buildMetrics(m), raw: bundle ? container : raw,
   };
+  normalizedResultSchema.parse(result);
+  return result;
 }
-
-export function selectedCoordinate(
-  result: NormalizedResult,
-  runId: string | null,
-): NormalizedResult {
-  if (!result.isMatrix || !runId) return result;
-  const coord = result.coordinates.find(
-    (c) => c.runId === runId || c.executionId === runId,
-  );
-  if (!coord) return result;
-  return {
-    ...result,
-    selectedMethod: coord.selectedMethod,
-    confirmedVulns: coord.confirmedVulns,
-    achievedOutcomes: coord.achievedOutcomes,
-    scores: coord.scores,
-    scoringRows: buildScoreRows(coord.scores, {
-      ...coord,
-      containment_events: [],
-      guardrail_activations: [],
-      invalid_json_events: [],
-    }),
-    surface: coord.surface ?? result.surface,
-    securityLevel: coord.securityLevel ?? result.securityLevel,
-    payloadMode: coord.payloadMode ?? result.payloadMode,
-    experimentCondition: coord.experimentCondition ?? result.experimentCondition,
-    targetMethod: coord.targetMethod ?? result.targetMethod,
-  };
+/** Embedded fallback is source-specific; metadata-only coordinates have no detail. */
+export function selectedCoordinate(result: NormalizedResult, executionId: string | null): NormalizedResult | null {
+  if (!result.isMatrix || !executionId) return result;
+  const raw = record(result.raw.artifact ?? result.raw);
+  const child = Array.isArray(raw.runs) ? raw.runs.map(record).find(c => c.execution_id === executionId) : undefined;
+  return child && (child.final_state || child.execution_log || child.config) ? normalizeResult(child,"single-run") : null;
 }
-
 export { extractText, truncate };

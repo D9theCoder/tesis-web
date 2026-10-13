@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { load } from "js-yaml";
 import { StrictMode, useEffect } from "react";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RuntimeShell } from "@/components/runtime/runtime-shell";
 import * as api from "@/lib/api-client";
@@ -101,6 +101,38 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 describe("isolated mock sessions", () => {
+  it.each(["resolve", "reject"] as const)("resumes pagination after invalidation and ignores a stale page %s", async action => {
+    const live = { ...simulation().run, executionId: "live-run" };
+    const firstPage = { runs: [live], active: [], total: 3, nextCursor: 1, tesisRoot: "/fixture" };
+    const stale = deferred<RunListResponse>();
+    const current = deferred<RunListResponse>();
+    vi.mocked(api.fetchRuns).mockResolvedValue(firstPage).mockReturnValueOnce(Promise.resolve(firstPage))
+      .mockReturnValueOnce(stale.promise).mockReturnValueOnce(Promise.resolve(firstPage)).mockReturnValueOnce(current.promise);
+    render(<RuntimeShell />);
+    await flush();
+    fireEvent.click(screen.getByText(/Run catalog/));
+    fireEvent.click(screen.getByRole("button", { name: "Load older runs" }));
+    expect(screen.getByRole("button", { name: "Load older runs" })).toBeDisabled();
+    const staleSignal = vi.mocked(api.fetchRuns).mock.calls[1][0];
+    await start();
+    expect(staleSignal?.aborted).toBe(true);
+    fireEvent.click(screen.getByText("Return to live"));
+    await flush();
+    const button = screen.getByRole("button", { name: "Load older runs" });
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    if (action === "resolve") stale.resolve({ ...firstPage, runs: [{ ...live, executionId: "stale-run" }], nextCursor: null });
+    else stale.reject(new Error("stale pagination error"));
+    await flush();
+    expect(button).toBeDisabled();
+    expect(screen.queryByText(/stale-run|stale pagination error/)).toBeNull();
+    current.resolve({ ...firstPage, runs: [{ ...live, executionId: "older-run" }], nextCursor: 2 });
+    await flush();
+    expect(button).toBeEnabled();
+    const catalog = screen.getByText(/Run catalog/).closest("details")!;
+    expect(within(catalog).getByText("older-run")).toBeInTheDocument();
+    expect(api.fetchRuns).toHaveBeenCalledTimes(4);
+  });
   it("ignores a pending live event response after entering mock mode", async () => {
     const run = { ...simulation().run, executionId: "live" };
     vi.mocked(api.fetchRuns).mockResolvedValue({

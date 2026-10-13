@@ -14,10 +14,12 @@ export function EvidenceDrawer({
   row,
   open,
   onClose,
+  onSelectRelated,
 }: {
   row: EvidenceRow | null;
   open: boolean;
   onClose: () => void;
+  onSelectRelated?: (id:string)=>void;
 }) {
   return (
     <Drawer open={open} onClose={onClose} title="Evidence Detail" side="right">
@@ -70,7 +72,7 @@ export function EvidenceDrawer({
               <SectionTitle>Related event IDs</SectionTitle>
               <div className="flex flex-wrap gap-1">
                 {row.relatedEventIds.map((id) => (
-                  <code key={id} className="rounded-sm bg-graphite-800 px-1 py-0.5 font-mono text-[9px] text-graphite-400">{id}</code>
+                  <button key={id} onClick={() => onSelectRelated?.(id)} className="rounded-sm bg-graphite-800 px-1 py-0.5 font-mono text-[9px] text-signal-300 underline">{id}</button>
                 ))}
               </div>
             </section>

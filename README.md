@@ -55,22 +55,86 @@ Live dashboard:
 - `/` — graph-first runtime monitor with Coordinate, Conversation, and Outcomes sidebar
 - `/results/[executionId]` — detailed + thesis scoring explorer
 
-Read-only API (served by the local Next.js process, path-contained under
-`TESIS_ROOT`, response-redacted):
+Read-only API (served by the local Next.js process, contained under configured
+source/review roots and response-redacted):
 
-- `GET /api/runtime/runs` — scan active/recent descriptors and manifests
+- `GET /api/runtime/runs?cursor=0&limit=100` — merged execution catalog; limit 1–200, `nextCursor` and `total`
 - `GET /api/runtime/runs/[executionId]` — resolve one run
-- `GET /api/runtime/runs/[executionId]/events?cursor=N` — tail the journal
-- `GET /api/results/[executionId]` — load a single or matrix result
-- `GET /api/results/[executionId]/coordinates/[runId]` — load one coordinate
-- `GET /api/akg` — deterministic AKG snapshot
+- `GET /api/runtime/runs/[executionId]/events?cursor=N&journal=IDENTITY` — bounded journal pages (512 KiB / 500 lines), byte cursor and replacement/reset diagnostics
+- `GET /api/results/[executionId]` — validated `observer-result.v1` bundle; matrix responses contain coordinate metadata
+- `GET /api/results/[executionId]/coordinates/[runId]` — load one exact child execution ID; the retained parameter name does not permit nonunique run-ID lookup
+- `GET /api/akg?executionId=ID` — selected invocation snapshot, owner/path/hash; explicitly labeled static fallback
 - `GET /api/mock/akg` — validated YAML fixture events and assertions (verification runs in the browser)
 
 The browser poll interval is configured with `NEXT_PUBLIC_TESIS_POLL_MS`.
 
+## Artifact roots and contracts
+
+`TESIS_ARTIFACT_ROOTS` and `TESIS_REVIEW_ROOTS` are JSON objects mapping safe root
+identifiers to absolute paths. Artifact roots replace the default
+`TESIS_ROOT/results/runs`; include that root explicitly alongside research roots
+when both are wanted. Roots can be flat directories, experiment directories or
+individual JSON files. Source-local `reviews/` remains supported. External review
+outputs require explicit review roots. See `.env.example` for the epoch7 setup.
+
+Discovery uses content discriminators and exact execution IDs. Descriptor and
+manifest metadata fill gaps in the primary source; the primary's own config,
+identity and canonical status take precedence. Sidecars, reviews and audits do
+not become executions. Ambiguous IDs return 409 rather than selecting a copy.
+Missing primaries stay unavailable. Stored start/generated/manifest timestamps
+sort the catalog; missing timestamps sort last, with execution ID as the stable
+tie-breaker. Use **Load older runs** to retrieve another bounded page.
+
+Result bundles contain `artifact`, original-byte `source` binding, independent
+`reviews.human` / `reviews.ai`, historical analysis and diagnostics. The browser
+validates the shared schemas. Matrix evidence is fetched only on selection;
+embedded-only children retain their own full data and the aggregate hash.
+Downloads contain the redacted bundle for the displayed execution. A download's
+bytes are different from the original source whose SHA-256 is retained.
+
+The optional `TESIS_PROJECTION_FILES` JSON array selects already generated
+`observer-projection.v1` files. This consumer matches the producer contract in
+`evaluation/observer_export.py`: named roots, original sources, code epoch,
+identity, execution, security, scores, reviews, metrics and matrix coverage.
+Root identifiers must match the export. Referenced file hashes are checked
+before applying a projection; rejected projections leave source interpretation
+unchanged and report diagnostics. The web process never invokes the exporter,
+classifier, runner or review evaluator.
+
+Without a projection, `TESIS_COMPATIBILITY_FILES` can select the saved hash-bound
+historical compatibility view. Joins require both canonical source path and
+original SHA-256. Historical incomplete audits remain separately attributed
+analysis. Original matrix totals remain inspectable. Unclassified legacy errors
+stay unknown; `INCOMPLETE`, HTTP status or an absent signal cannot classify an
+execution or security outcome.
+
+`TESIS_REVIEW_INDEX_FILES` selects explicit source-bound epoch associations for
+old pending review statuses without IDs/timestamps. Supported indexes include
+batch summaries with `sources[].review_status` and the epoch7 audit with
+`source_path`, `source_sha256`, `execution_id` and `review_output_epoch`.
+The source association and contained decision ledger must validate. A producer
+projection can supply those associations instead. New status files use direct
+ID/path/hash/timestamp metadata. Finals require a source-bound scoring.v4 receipt,
+correct method/config/workflow, finite components, distinct candidate grades,
+and valid mean/composite arithmetic. Eligible finals are ordered by stored
+timestamp with a deterministic path tie-breaker. Stale receipts remain inspectable.
+
+The UI separates execution from security outcome, planned/represented/completed/
+confirmed coverage, and provisional scoring.v2 from Human/AI finals. Missing
+scores and unavailable metrics display N/A or a dash with reasons. Fractional
+components and four-decimal final scores are preserved. Provider performance
+summaries supply provider usage, not experiment rates. Child graphs/findings
+remain partitioned during parent-journal replay. Evidence drawers keep keyboard
+focus inside, close with Escape, and return focus to the opening control.
+Switching sources aborts and
+rejects old responses; journal identity and cursor checkpoints reset replay when
+a file is replaced, truncated or rewritten. Oversized journal lines are reported:
+complete records are skipped with bounded memory so later events remain reachable;
+unterminated records retain their byte cursor until the writer completes them.
+
 ## Safety
 
-- Every route resolves strict paths under `TESIS_ROOT` and rejects traversal.
+- Source and review roots are configured on the server. Canonical real paths reject traversal and escaped symlinks; root configuration is never accepted from a request.
 - Responses pass through a secret-key redaction allowlist and mask known
   credential values; no API keys, cookies, passwords, or session tokens are
   returned or rendered.
@@ -163,3 +227,38 @@ node rectangle and routed segment, including cycles and unfamiliar nodes.
 
 Layout integration references: [React Flow ELK multiple handles](https://reactflow.dev/examples/layout/elkjs-multiple-handles)
 and [ELK layered layout](https://eclipse.dev/elk/reference/algorithms/org-eclipse-elk-layered.html).
+
+
+## Saved-artifact acceptance
+
+The opt-in cohort test reads existing files only and records original source hashes.
+It runs no TESIS experiments, evaluators, provider calls or DVWA requests:
+
+```bash
+TESIS_ACCEPTANCE_EPOCH_ROOT=/home/kevin/coding/tesis/results/validation/scoring-v4-remediation-2026-10-12-matrix-epoch7 \
+TESIS_ACCEPTANCE_PROJECTION=/home/kevin/coding/tesis/results/validation/artifact-export-2026-10-12/observer-epoch7-accepted.json \
+TESIS_ACCEPTANCE_REPORT=results/validation/artifact-retrieval-2026-10-12/epoch7-projection.json \
+npx vitest run tests/artifact-cohort.test.ts
+```
+
+For separately authorized local browser acceptance, prepare sanitized fixtures
+and start a fixture-only server. Browser binaries and fixture files can stay in `/tmp`:
+
+```bash
+node scripts/prepare-browser-artifacts.mjs
+TESIS_ROOT=/tmp/tesis-web-browser-artifacts \
+TESIS_ARTIFACT_ROOTS='{"browser":"/tmp/tesis-web-browser-artifacts"}' \
+TESIS_REVIEW_ROOTS='{"reviews":"/tmp/tesis-web-browser-artifacts/reviews"}' \
+TESIS_PROJECTION_FILES='[]' TESIS_COMPATIBILITY_FILES='[]' TESIS_REVIEW_INDEX_FILES='[]' \
+npx next dev --webpack --hostname 127.0.0.1 --port 3100
+
+# Another terminal, after installing the matching Chromium when needed:
+TESIS_WEB_BROWSER_FIXTURES=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3100 npm run test:browser
+```
+
+The artifact browser checks cover API pagination, exact IDs, review origins,
+redaction, child selection races, JSON download identity, evidence references,
+snapshot ownership and mobile layout. They skip unless fixture acceptance is
+explicitly enabled. Browser acceptance for the 2026-10-12 implementation was
+deferred at the user's request; the non-browser results and gates are recorded in
+`results/validation/artifact-retrieval-2026-10-12/implementation.md`.

@@ -8,7 +8,7 @@ test("long labels and unfamiliar nodes remain inspectable without changing topol
   const longLabel = "An unfamiliar method with a deliberately long label that remains available in full through inspection";
   snapshot.nodes.push({ id: "unfamiliar-browser-node", type: "method", kind: "method", label: longLabel });
   await page.route("**/api/akg", (route) => route.fulfill({ json: snapshot }));
-  await page.route("**/api/runtime/runs", (route) => route.fulfill({ json: { runs: [], active: [] } }));
+  await page.route("**/api/runtime/runs*", (route) => route.fulfill({ json: { runs: [], active: [], tesisRoot: "fixture" } }));
   await page.goto("/");
   const node = page.locator('.react-flow__node[data-id="unfamiliar-browser-node"]');
   await expect(node).toBeAttached();
@@ -42,8 +42,8 @@ for (const [width, height] of [
     expect(fixture.events).toHaveLength(18);
     expect(fixture.assertions.expected_path).toHaveLength(10);
     expect(fixture).not.toHaveProperty("verification");
-    await page.route("**/api/runtime/runs", (route) =>
-      route.fulfill({ json: { runs: [], active: [] } }),
+    await page.route("**/api/runtime/runs*", (route) =>
+      route.fulfill({ json: { runs: [], active: [], tesisRoot: "fixture" } }),
     );
     await page.goto("/");
     await expect(page.locator(".react-flow__node-card")).toHaveCount(29);
@@ -195,8 +195,8 @@ test("viewport, resize, scrolling, edge inspection and reduced motion during rep
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.route("**/api/runtime/runs", (route) =>
-    route.fulfill({ json: { runs: [], active: [] } }),
+  await page.route("**/api/runtime/runs*", (route) =>
+    route.fulfill({ json: { runs: [], active: [], tesisRoot: "fixture" } }),
   );
   await page.goto("/");
   await page

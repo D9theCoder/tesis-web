@@ -6,7 +6,7 @@ import type { ConversationEntry, LiveRunState } from "@/lib/schemas";
 import { Badge, Button, ScrollArea } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import { coalesceConversation } from "@/lib/event-reducer";
-import { fmtClock, prettyJson } from "@/lib/formatters";
+import { fmtNumber, fmtClock, prettyJson } from "@/lib/formatters";
 
 const ROLE_STYLE: Record<ConversationEntry["role"], { label: string; cls: string }> = {
   system: { label: "system", cls: "border-violet-500/40 bg-violet-500/10 text-violet-300" },
@@ -63,7 +63,7 @@ export function ConversationPanel({ state }: { state: LiveRunState }) {
           <Cpu size={10} className="text-signal-400" />
           {traceMode ? `${state.events.length} events` : `${chatEntries.length} entries`}
           <span className="ml-1 text-graphite-600">·</span>
-          <span className="text-graphite-500">{state.metrics.tokenCount.toLocaleString()} tokens</span>
+          <span className="text-graphite-500">{fmtNumber(state.metrics.tokenCount)} tokens</span>
           <Badge variant="cyan" className="ml-1">{bufUsed}/{state.metrics.generationBudget || "∞"}</Badge>
         </span>
       </div>

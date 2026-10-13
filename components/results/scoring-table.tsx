@@ -1,203 +1,78 @@
 "use client";
 
+import { useState } from "react";
 import type { NormalizedResult, ScoreRow } from "@/lib/schemas";
-import { Badge, Progress } from "@/components/ui/primitives";
-import { cn } from "@/lib/utils";
-import {
-  compositeFormula,
-} from "@/lib/result-normalizer";
+import { Badge } from "@/components/ui/primitives";
+import { buildScoreRows, compositeFormula } from "@/lib/result-normalizer";
 import { fmtCost, fmtNumber, fmtPercent, fmtScore } from "@/lib/formatters";
 
-function DimensionTone(value: number) {
-  if (value >= 4) return "text-confirm-400";
-  if (value >= 2) return "text-ember-300";
-  if (value > 0) return "text-graphite-300";
-  return "text-graphite-600";
-}
-
-export function ScoringTable({
-  result,
-  coordinateMode = false,
-  onPickCoordinate,
-}: {
-  result: NormalizedResult;
-  coordinateMode?: boolean;
-  onPickCoordinate?: (executionId: string, runId: string) => void;
+export function ScoringTable({ result, coordinateMode = false, onPickCoordinate, onEvidenceRef }: {
+  result: NormalizedResult; coordinateMode?: boolean; onPickCoordinate?: (executionId: string, runId: string) => void;
+  onEvidenceRef?: (ref: string) => void;
 }) {
+  const [origin, setOrigin] = useState<"runtime" | "human" | "ai">("runtime");
+  const workflow = origin === "runtime" ? null : result.reviews?.[origin];
+  const scores = workflow?.components ? { ...workflow.components, Srun: workflow.SrunFinal ?? undefined } : {};
+  const rows = origin === "runtime" ? result.scoringRows : buildScoreRows(scores, true, workflow?.evidenceRefs);
+  if (coordinateMode) return (
+    <div className="h-full overflow-auto">
+      <p className="p-2 font-mono text-[10px] text-graphite-400">Provisional runtime scores. Select a coordinate to retrieve its final reviews and evidence.</p>
+      <table className="w-full text-left text-xs">
+        <thead><tr><th className="p-2">Coordinate</th><th>Execution</th><th>Security outcome</th><th>Repeat</th><th>Runtime Srun</th><th>Method</th></tr></thead>
+        <tbody>{result.coordinates.map(c => <tr key={c.executionId} className="border-t border-graphite-700/40">
+          <td className="p-2"><button className="text-signal-300 underline" onClick={() => onPickCoordinate?.(c.executionId,c.executionId)}>#{c.index+1} · {c.surface} · {c.securityLevel}</button></td>
+          <td>{c.executionStatus ?? "unknown"}</td><td>{c.securityOutcome ?? "unknown"}</td><td>{c.repeatIndex ?? "—"}</td>
+          <td>{fmtScore(c.scores.Srun,4)}</td><td>{c.selectedMethod ?? c.targetMethod ?? "—"}</td>
+        </tr>)}</tbody>
+      </table>
+    </div>
+  );
   return (
-    <div className="flex h-full flex-col gap-2 overflow-hidden">
-      {coordinateMode ? (
-        <CoordinateScoring result={result} onPick={onPickCoordinate} />
-      ) : (
-        <DimensionScoring rows={result.scoringRows} />
-      )}
+    <div className="h-full space-y-2 overflow-auto">
+      <div className="flex flex-wrap gap-2 p-2" role="group" aria-label="Score origin">
+        {(["runtime", "human", "ai"] as const).map(mode => <button key={mode} aria-pressed={origin===mode} onClick={() => setOrigin(mode)} className="rounded border border-graphite-600 px-2 py-1 text-xs">
+          {mode === "runtime" ? "Provisional runtime" : `${mode === "human" ? "Human" : "AI"} review`}
+        </button>)}
+      </div>
+      <div className="px-3 text-xs text-graphite-400">
+        <Badge variant="outline">{origin === "runtime" ? result.scoreOrigin : `${workflow?.rubric ?? "scoring.v4"} · ${workflow?.status ?? "missing"}`}</Badge>
+        {workflow?.reason && <p className="mt-2">{workflow.reason}</p>}
+        {workflow && <><p>Candidate numerator / denominator: {fmtNumber(workflow.numerator,4)} / {fmtNumber(workflow.denominator)}</p>
+          {Object.entries(workflow.componentPendingReasons).map(([key,reason]) => <p key={key}>{key}: {String(reason)}</p>)}
+          {workflow.source && <p className="break-all">Receipt: {workflow.source.rootId}/{workflow.source.path} · SHA-256 {workflow.source.sha256}</p>}
+        </>}
+        <code className="block break-words py-2 text-[10px]">{compositeFormula()}</code>
+      </div>
+      <DimensionScoring rows={rows} refs={workflow?.evidenceRefs} onEvidenceRef={onEvidenceRef} />
+      {workflow?.candidateGrades.length ? <details className="p-3 text-xs"><summary>Candidate grades and denominator</summary>
+        <pre className="overflow-auto text-[10px]">{JSON.stringify(workflow.candidateGrades,null,2)}</pre></details> : null}
+      {!!result.reviews?.history.length && <details className="p-3 text-xs"><summary>Saved review receipts ({result.reviews.history.length})</summary>
+        {result.reviews.history.map(receipt => <details key={receipt.sha256+receipt.path} className="py-2"><summary>{receipt.workflow} · {receipt.accepted ? "eligible" : receipt.reason} · {receipt.path}</summary>
+          <pre className="overflow-auto text-[10px]">{JSON.stringify(receipt.receipt,null,2)}</pre></details>)}
+      </details>}
     </div>
   );
 }
-
-function DimensionScoring({ rows }: { rows: ScoreRow[] }) {
-  return (
-    <div className="flex min-h-0 flex-col overflow-hidden">
-      <div className="space-y-0 border-b border-graphite-700/70 p-2">
-        <div className="flex items-center gap-2">
-          <span className="text-label">Composite formula</span>
-          <code className="rounded-sm bg-graphite-900 px-2 py-0.5 font-mono text-[10px] text-ember-300">
-            {compositeFormula()}
-          </code>
-        </div>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <table className="w-full border-collapse text-left">
-          <thead className="sticky top-0 z-10 bg-graphite-850">
-            <tr className="text-label">
-              <th className="px-3 py-2">Dimension</th>
-              <th className="px-3 py-2">Score</th>
-              <th className="px-3 py-2">Max</th>
-              <th className="hidden px-3 py-2 lg:table-cell">Evidence basis</th>
-              <th className="hidden px-3 py-2 xl:table-cell">Interpretation</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.dimension} className="border-t border-graphite-700/40">
-                <td className="px-3 py-2 font-display text-[13px] font-semibold tracking-wider text-graphite-100">
-                  {row.dimension}
-                </td>
-                <td className="px-3 py-2">
-                  <span className={cn("font-mono text-[15px] font-bold", DimensionTone(row.score))}>
-                    {fmtScore(row.score, row.dimension === "Srun" ? 2 : 0)}
-                  </span>
-                </td>
-                <td className="px-3 py-2 font-mono text-[12px] text-graphite-500">/ {row.max}</td>
-                <td className="hidden px-3 py-2 lg:table-cell">
-                  <span className="font-mono text-[10px] text-graphite-400">{row.evidenceBasis}</span>
-                </td>
-                <td className="hidden px-3 py-2 xl:table-cell">
-                  <span className="text-[11px] leading-snug text-graphite-400">{row.interpretation}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+function DimensionScoring({ rows, refs, onEvidenceRef }: { rows: ScoreRow[]; refs?: Record<string,string[]>; onEvidenceRef?: (ref:string)=>void }) {
+  return <table className="w-full text-left"><thead className="text-label"><tr><th className="p-3">Dimension</th><th>Score / 4</th><th className="hidden p-3 md:table-cell">Evidence / interpretation</th></tr></thead>
+    <tbody>{rows.map(row => <tr key={row.dimension} className="border-t border-graphite-700/40">
+      <td className="p-3 font-semibold">{row.dimension}</td><td className="font-mono">{fmtScore(row.score,4)}</td>
+      <td className="hidden p-3 text-[10px] text-graphite-400 md:table-cell"><p>{row.interpretation}</p>
+        {refs?.[row.dimension]?.length ? refs[row.dimension].map(ref => <button key={ref} className="mr-2 text-signal-300 underline" onClick={() => onEvidenceRef?.(ref)}>{ref}</button>) : <p>{row.evidenceBasis}</p>}
+      </td></tr>)}</tbody></table>;
 }
-
-function CoordinateScoring({
-  result,
-  onPick,
-}: {
-  result: NormalizedResult;
-  onPick?: (executionId: string, runId: string) => void;
-}) {
-  const dims = ["Smethod", "Spayload", "Sexploit", "Schain", "Soutput", "Srun"] as const;
-  return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-graphite-700/70 p-2">
-        <span className="text-label">Matrix coordinates · {result.coordinates.length} runs</span>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <table className="w-full border-collapse text-left">
-          <thead className="sticky top-0 z-10 bg-graphite-850">
-            <tr className="text-label">
-              <th className="px-2 py-1.5">Run</th>
-              <th className="px-2 py-1.5">Status</th>
-              {dims.map((d) => (
-                <th key={d} className="px-2 py-1.5 text-right">{d}</th>
-              ))}
-              <th className="hidden px-2 py-1.5 xl:table-cell">Method</th>
-              <th className="px-2 py-1.5" />
-            </tr>
-          </thead>
-          <tbody>
-            {result.coordinates.map((c) => (
-              <tr
-                key={c.executionId}
-                className="cursor-pointer border-t border-graphite-700/40 transition-colors hover:bg-graphite-800/50"
-                onClick={() => onPick?.(result.executionId, c.runId ?? c.executionId)}
-              >
-                <td className="px-2 py-1.5 font-mono text-[10px] text-graphite-200">#{c.index + 1}</td>
-                <td className="px-2 py-1.5">
-                  <StatusBadge status={c.status} />
-                </td>
-                {dims.map((d) => {
-                  const v = c.scores[d];
-                  return (
-                    <td key={d} className={cn("px-2 py-1.5 text-right font-mono text-[11px]", v != null ? DimensionTone(v) : "text-graphite-600")}>
-                      {v != null ? fmtScore(v, d === "Srun" ? 2 : 0) : "—"}
-                    </td>
-                  );
-                })}
-                <td className="hidden max-w-[140px] truncate px-2 py-1.5 font-mono text-[10px] text-graphite-400 xl:table-cell">
-                  {c.selectedMethod ?? "—"}
-                </td>
-                <td className="px-2 py-1.5 text-signal-400">›</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const s = status.toLowerCase();
-  if (s === "success") return <Badge variant="lime">{status}</Badge>;
-  if (s === "error" || s === "failed") return <Badge variant="red">{status}</Badge>;
-  if (s === "cancelled") return <Badge variant="amber">{status}</Badge>;
-  return <Badge variant="outline">{status}</Badge>;
-}
-
 export function MetricsSummary({ result }: { result: NormalizedResult }) {
   const m = result.metrics;
-  const items: Array<[string, string]> = [
-    ["Payload validity rate", fmtPercent(m.payloadValidityRate)],
-    ["Payload execution rate", fmtPercent(m.payloadExecutionSuccessRate)],
-    ["Payload improvement rate", fmtPercent(m.payloadImprovementRate)],
-    ["Method selection accuracy", fmtPercent(m.methodSelectionAccuracy)],
-    ["Adaptation rate", fmtPercent(m.adaptationRate)],
-    ["Guardrail activation rate", fmtPercent(m.guardrailActivationRate)],
-    ["Containment events", fmtNumber(m.containmentCount)],
-    ["Invalid JSON events", fmtNumber(m.invalidJson)],
-    ["Fallback events", fmtNumber(m.fallbacks)],
-    ["Attempts to success", fmtNumber(m.attemptsToSuccess)],
-    ["Token cost", fmtCost(m.tokenCost)],
-    ["LLM calls", fmtNumber(m.llmCalls)],
-  ];
-  return (
-    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-      {items.map(([label, value]) => (
-        <div key={label} className="rounded-sm border border-graphite-700/60 bg-graphite-900/50 px-2 py-1.5">
-          <div className="text-[9px] font-mono uppercase tracking-wider text-graphite-500">{label}</div>
-          <div className="mt-0.5 font-mono text-[13px] font-semibold text-graphite-200">{value}</div>
-        </div>
-      ))}
-      <Gauge label="Containment pressure" value={m.containmentCount ?? 0} max={12} color="red" />
-      <Gauge label="Guardrail rate" value={m.guardrailActivationRate ?? 0} max={1} color="amber" />
-    </div>
-  );
-}
-
-function Gauge({
-  label,
-  value,
-  max,
-  color,
-}: {
-  label: string;
-  value: number;
-  max: number;
-  color: "red" | "amber";
-}) {
-  return (
-    <div className="rounded-sm border border-graphite-700/60 bg-graphite-900/50 px-2 py-1.5">
-      <div className="mb-1 text-[9px] font-mono uppercase tracking-wider text-graphite-500">{label}</div>
-      <Progress value={value} max={max} color={color} />
-      <div className="mt-1 text-right font-mono text-[10px] text-graphite-400">
-        {color === "red" ? `${value}/${max}` : fmtPercent(value, 1)}
-      </div>
-    </div>
-  );
+  const items: [string,string][] = [["Payload validity",fmtPercent(m.payloadValidityRate)], ["Payload execution",fmtPercent(m.payloadExecutionSuccessRate)],
+    ["Payload improvement",fmtPercent(m.payloadImprovementRate)],["Method selection",fmtPercent(m.methodSelectionAccuracy)],
+    ["Adaptation",fmtPercent(m.adaptationRate)],["Guardrail rate",fmtPercent(m.guardrailActivationRate)],
+    ["Containment events",fmtNumber(m.containmentCount)],["Invalid JSON",fmtNumber(m.invalidJson)],["Fallbacks",fmtNumber(m.fallbacks)],
+    ["Attempts to success",fmtNumber(m.attemptsToSuccess)],["Tokens",fmtNumber(m.tokenCount)],["LLM calls",fmtNumber(m.llmCalls)]];
+  return <div className="space-y-3 text-xs"><div className="grid grid-cols-2 gap-2">{items.map(([label,value]) => <div key={label} className="rounded border border-graphite-700 p-2"><p className="text-graphite-500">{label}</p><p>{value}</p></div>)}</div>
+    {Object.entries(result.metricReadings).map(([key,reading]) => <div key={key} className="rounded border border-graphite-700 p-2">
+      <p>{key.replace(/_/g," ")}</p><p>{reading.available ? key.includes("cost") ? fmtCost(reading.value) : fmtNumber(reading.value,4) : `N/A · ${reading.reason}`}</p>
+      {reading.nAvailable !== undefined && <p>Available {reading.nAvailable} · unavailable {reading.nUnavailable ?? "—"}</p>}
+      {Object.entries(reading.unavailableReasons ?? {}).map(([reason,n]) => <p key={reason}>{reason}: {n}</p>)}
+    </div>)}
+  </div>;
 }

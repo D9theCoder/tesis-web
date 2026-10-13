@@ -11,6 +11,7 @@ import {
   XCircle,
 } from "lucide-react";
 import type { LiveRunState } from "@/lib/schemas";
+import { Reason } from "@/components/results/status-details";
 import { Progress } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import { fmtCost, fmtNumber, fmtPercent } from "@/lib/formatters";
@@ -67,6 +68,10 @@ export function OutcomePanel({ state }: { state: LiveRunState }) {
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto p-3">
+        <div className="space-y-1 text-xs"><p>Execution: {state.executionStatus ?? "unknown"}</p><p>Security outcome: {state.securityOutcome ?? "unknown"}</p>
+          <Reason label="Execution reason" reason={state.executionReason} /><Reason label="Security reason" reason={state.securityOutcomeReason} />
+          {state.diagnostics.map((d,i) => <p key={i}>{d}</p>)}
+        </div>
         {/* Safety strip */}
         <div className={cn("flex items-center gap-2 rounded-sm border px-2 py-1.5", m.containmentCount > 0 ? "border-danger-500/50 bg-danger-500/10" : "border-graphite-700/60 bg-graphite-900/50")}>
           <ShieldAlert size={14} className={m.containmentCount > 0 ? "text-danger-400" : "text-graphite-500"} />
@@ -89,8 +94,8 @@ export function OutcomePanel({ state }: { state: LiveRunState }) {
 
         {/* Success / failure / signal */}
         <div className="grid grid-cols-2 gap-2">
-          <MetricCard label="successes" value={m.successes} icon={<CheckCircle2 size={10} className="text-confirm-400" />} tone="good" />
-          <MetricCard label="failures" value={m.failures} icon={<XCircle size={10} className="text-danger-400" />} tone="bad" />
+          <MetricCard label="positive events" value={m.successes} icon={<CheckCircle2 size={10} className="text-confirm-400" />} tone="good" />
+          <MetricCard label="negative events" value={m.failures} icon={<XCircle size={10} className="text-danger-400" />} tone="bad" />
           <MetricCard label="guardrails" value={m.guardrailCount} icon={<ShieldAlert size={10} className="text-ember-300" />} tone="warn" />
           <MetricCard label="invalid json" value={m.invalidJson} icon={<FileWarning size={10} className="text-ember-300" />} tone="warn" />
           <MetricCard label="fallbacks" value={m.fallbacks} icon={<Repeat size={10} className="text-graphite-400" />} />
@@ -118,7 +123,7 @@ export function OutcomePanel({ state }: { state: LiveRunState }) {
 
         {/* Tokens */}
         <div className="grid grid-cols-2 gap-2">
-          <MetricCard label="tokens" value={m.tokenCount.toLocaleString()} icon={<Sparkles size={10} className="text-signal-400" />} />
+          <MetricCard label="tokens" value={fmtNumber(m.tokenCount)} icon={<Sparkles size={10} className="text-signal-400" />} />
           <MetricCard label="cost" value={fmtCost(m.tokenCost)} icon={<Sparkles size={10} className="text-graphite-400" />} />
         </div>
 
