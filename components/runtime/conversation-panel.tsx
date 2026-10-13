@@ -1,86 +1,119 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Bot, ChevronDown, ChevronRight, Cpu, MessageSquare, ShieldAlert } from "lucide-react";
+import {
+  Bot,
+  ChevronDown,
+  ChevronRight,
+  Cpu,
+  MessageSquare,
+  ShieldAlert,
+} from "lucide-react";
 import type { ConversationEntry, LiveRunState } from "@/lib/schemas";
 import { Badge, Button, ScrollArea } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import { coalesceConversation } from "@/lib/event-reducer";
-import { fmtNumber, fmtClock, prettyJson } from "@/lib/formatters";
+import { fmtClock, fmtNumber, prettyJson } from "@/lib/formatters";
 
-const ROLE_STYLE: Record<ConversationEntry["role"], { label: string; cls: string }> = {
-  system: { label: "system", cls: "border-violet-500/40 bg-violet-500/10 text-violet-300" },
-  user: { label: "user", cls: "border-signal-500/40 bg-signal-500/10 text-signal-300" },
-  assistant: { label: "model", cls: "border-confirm-500/40 bg-confirm-500/10 text-confirm-400" },
-  tool: { label: "tool", cls: "border-amber-500/40 bg-amber-500/10 text-amber-300" },
-  trace: { label: "trace", cls: "border-graphite-600 bg-graphite-800 text-graphite-400" },
+const ROLE_STYLE: Record<ConversationEntry["role"], { label: string; variant: "default" | "amber" | "cyan" | "lime" | "violet" }> = {
+  system: { label: "System", variant: "violet" },
+  user: { label: "User", variant: "cyan" },
+  assistant: { label: "Model", variant: "lime" },
+  tool: { label: "Tool", variant: "amber" },
+  trace: { label: "Trace", variant: "default" },
 };
 
 export function ConversationPanel({ state }: { state: LiveRunState }) {
   const [traceMode, setTraceMode] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
-  const chatEntries = useMemo(() => coalesceConversation(state.conversation), [state.conversation]);
-
+  const chatEntries = useMemo(
+    () => coalesceConversation(state.conversation),
+    [state.conversation],
+  );
   const traceEntries = useMemo<ConversationEntry[]>(
     () =>
-      state.events.map((e, i) => ({
-        id: `evt-${i}`,
+      state.events.map((event, index) => ({
+        id: `evt-${index}`,
         role: "trace" as const,
-        eventType: e.event_type,
-        node: e.node ?? null,
-        method: e.method ?? null,
-        message: e.message ?? "",
-        timestamp: e.timestamp ?? 0,
-        data: e.data ?? {},
+        eventType: event.event_type,
+        node: event.node ?? null,
+        method: event.method ?? null,
+        message: event.message ?? "",
+        timestamp: event.timestamp ?? 0,
+        data: event.data ?? {},
       })),
     [state.events],
   );
 
-  const visible = traceMode ? traceEntries : chatEntries.filter((e) => e.role !== "trace" && e.eventType !== "graph.state");
+  const visibleEntries = traceMode
+    ? traceEntries
+    : chatEntries.filter(
+        (entry) => entry.role !== "trace" && entry.eventType !== "graph.state",
+      );
+  const bufferUsed =
+    state.metrics.generationBudget > 0
+      ? state.metrics.generatedCandidates
+      : state.metrics.attempts;
 
-  const toggle = (id: string) => setOpen((o) => ({ ...o, [id]: !o[id] }));
-
-  const bufUsed = state.metrics.generationBudget > 0
-    ? state.metrics.generatedCandidates
-    : state.metrics.attempts;
+  const toggle = (id: string) => setOpen((previous) => ({ ...previous, [id]: !previous[id] }));
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-center justify-between gap-2 border-b border-graphite-700/70 px-3 py-2">
-        <div className="flex items-center gap-1.5 font-display text-[13px] font-semibold uppercase tracking-[0.12em] text-cyan-300">
-          <MessageSquare size={13} /> LLM Conversation &amp; Trace
+    <div className="runtime-panel">
+      <header className="runtime-panel-header conversation-panel-header">
+        <div className="runtime-panel-title">
+          <MessageSquare aria-hidden="true" size={17} />
+          <h2>Conversation</h2>
         </div>
-        <div className="flex items-center gap-1">
-          <Button variant={traceMode ? "amber" : "ghost"} onClick={() => setTraceMode((t) => !t)} className="px-2 py-0.5 text-[10px]">
-            {traceMode ? "Trace" : "Chat"}
+        <div className="conversation-view-switch" role="group" aria-label="Conversation view">
+          <Button
+            type="button"
+            variant={traceMode ? "ghost" : "default"}
+            aria-pressed={!traceMode}
+            onClick={() => setTraceMode(false)}
+          >
+            Chat
+          </Button>
+          <Button
+            type="button"
+            variant={traceMode ? "default" : "ghost"}
+            aria-pressed={traceMode}
+            onClick={() => setTraceMode(true)}
+          >
+            Trace
           </Button>
         </div>
-      </div>
+      </header>
 
-      <div className="flex items-center justify-between gap-2 border-b border-graphite-700/50 px-3 py-1">
-        <span className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-wider text-graphite-500">
-          <Cpu size={10} className="text-signal-400" />
+      <div className="conversation-activity-bar" aria-live="polite">
+        <span className="conversation-entry-count">
+          <Cpu aria-hidden="true" size={14} />
           {traceMode ? `${state.events.length} events` : `${chatEntries.length} entries`}
-          <span className="ml-1 text-graphite-600">·</span>
-          <span className="text-graphite-500">{fmtNumber(state.metrics.tokenCount)} tokens</span>
-          <Badge variant="cyan" className="ml-1">{bufUsed}/{state.metrics.generationBudget || "∞"}</Badge>
         </span>
+        <span className="conversation-activity-separator" aria-hidden="true" />
+        <span>{fmtNumber(state.metrics.tokenCount)} tokens</span>
+        <Badge variant="outline" className="conversation-budget">
+          {bufferUsed} / {state.metrics.generationBudget || "Unlimited"} generation budget
+        </Badge>
       </div>
 
-      <ScrollArea className="flex-1">
-        <div className="space-y-2 p-2">
-          {visible.length === 0 && (
-            <div className="flex h-24 items-center justify-center gap-2 rounded-sm border border-dashed border-graphite-700 p-3 text-center font-mono text-[10px] text-graphite-500">
-              <span className="h-1.5 w-1.5 animate-blink rounded-full bg-ember-400" />
-              awaiting model activity…
+      <ScrollArea className="runtime-panel-body conversation-scroll">
+        <div className="conversation-list">
+          {visibleEntries.length === 0 && (
+            <div className="empty-state conversation-empty-state" role="status">
+              <MessageSquare aria-hidden="true" size={18} />
+              <p>{traceMode ? "No runtime events recorded" : "No conversation entries recorded"}</p>
+              <span>
+                {traceMode
+                  ? "Runtime events will appear in this trace when available."
+                  : "Switch to Trace to inspect the run event journal."}
+              </span>
             </div>
           )}
-          {visible.slice(-300).map((entry, i) => (
+          {visibleEntries.slice(-300).map((entry) => (
             <TraceItem
-              key={traceMode ? `evt-${i}` : entry.id}
+              key={entry.id}
               entry={entry}
-              isEvent={traceMode}
               open={!!open[entry.id]}
               onToggle={() => toggle(entry.id)}
             />
@@ -93,59 +126,86 @@ export function ConversationPanel({ state }: { state: LiveRunState }) {
 
 function TraceItem({
   entry,
-  isEvent,
   open,
   onToggle,
 }: {
   entry: ConversationEntry;
-  isEvent: boolean;
   open: boolean;
   onToggle: () => void;
 }) {
   const style = ROLE_STYLE[entry.role] ?? ROLE_STYLE.trace;
-  const hasData = entry.data && Object.keys(entry.data).length > 0;
-  const isSafety = /containment|guardrail|blocked|invalid_json|fallback/i.test(entry.eventType);
+  const hasData = Boolean(entry.data && Object.keys(entry.data).length > 0);
+  const canExpand = hasData || Boolean(entry.message);
+  const isSafety = /containment|guardrail|blocked|invalid_json|fallback/i.test(
+    entry.eventType,
+  );
+  const date = Number.isFinite(entry.timestamp)
+    ? new Date(entry.timestamp * 1000)
+    : null;
+  const dateTime = date && Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
+  const detailsId = `conversation-details-${encodeURIComponent(entry.id)}`;
+
   return (
-    <div className={cn("rounded-sm border border-graphite-700/60 bg-graphite-900/50", isSafety && "border-danger-500/40")}>
+    <article className={cn("conversation-entry", isSafety && "is-safety-event")}>
       <button
+        type="button"
         onClick={onToggle}
-        className="flex w-full items-start gap-2 p-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-signal-500/50"
+        className="conversation-entry-toggle"
+        aria-expanded={canExpand ? open : undefined}
+        aria-controls={hasData ? detailsId : undefined}
+        disabled={!canExpand}
       >
-        <div>
-          {open ? <ChevronDown size={12} className="mt-0.5 text-graphite-500" /> : <ChevronRight size={12} className="mt-0.5 text-graphite-500" />}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {isSafety ? <ShieldAlert size={11} className="text-danger-400" /> : <Bot size={11} className="text-graphite-500" />}
-            <span className={cn("rounded-sm border px-1 py-px font-mono text-[9px] uppercase", style.cls)}>
-              {entry.role}
-            </span>
-            <span className="font-mono text-[10px] text-graphite-400">{entry.eventType}</span>
-            {entry.tokens != null && (
-              <Badge variant="violet" className="ml-auto">{entry.tokens} tok</Badge>
+        <span className="conversation-entry-disclosure" aria-hidden="true">
+          {canExpand && (open ? <ChevronDown size={15} /> : <ChevronRight size={15} />)}
+        </span>
+        <span className="conversation-entry-content">
+          <span className="conversation-entry-heading">
+            {isSafety ? (
+              <ShieldAlert aria-hidden="true" size={15} className="conversation-safety-icon" />
+            ) : (
+              <Bot aria-hidden="true" size={15} className="conversation-role-icon" />
             )}
-          </div>
+            <Badge variant={style.variant}>{style.label}</Badge>
+            <span className="conversation-event-type" title={entry.eventType}>
+              {entry.eventType}
+            </span>
+            {entry.tokens != null && (
+              <Badge variant="outline" className="conversation-token-count">
+                {fmtNumber(entry.tokens)} tokens
+              </Badge>
+            )}
+          </span>
           {entry.message ? (
-            <p className="mt-1 line-clamp-3 whitespace-pre-wrap break-words font-mono text-[11px] leading-snug text-graphite-200">
+            <span className={cn("conversation-message", !open && "line-clamp-4")}>
               {entry.message}
-            </p>
+            </span>
           ) : (
-            <p className="mt-1 font-mono text-[11px] text-graphite-400">
+            <span className="conversation-message conversation-message-fallback">
               {entry.node ?? entry.method ?? entry.eventType}
-            </p>
+            </span>
           )}
-          <div className="mt-1 flex items-center gap-2 font-mono text-[9px] text-graphite-500">
-            <span>{fmtClock(entry.timestamp)}</span>
-            {entry.node && <span>· node {entry.node}</span>}
-            {entry.method && <span>· {entry.method}</span>}
-          </div>
-        </div>
+          <span className="conversation-entry-meta">
+            <time dateTime={dateTime}>
+              {fmtClock(entry.timestamp)}
+            </time>
+            {entry.node && (
+              <span className="conversation-entry-detail" title={entry.node}>
+                Node: {entry.node}
+              </span>
+            )}
+            {entry.method && (
+              <span className="conversation-entry-detail" title={entry.method}>
+                Method: {entry.method}
+              </span>
+            )}
+          </span>
+        </span>
       </button>
       {open && hasData && (
-        <pre className="max-h-64 overflow-auto border-t border-graphite-700/50 p-2 font-mono text-[10px] leading-snug text-graphite-300">
+        <pre id={detailsId} className="conversation-entry-data">
           {prettyJson(entry.data)}
         </pre>
       )}
-    </div>
+    </article>
   );
 }

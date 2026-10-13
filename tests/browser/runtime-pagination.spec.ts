@@ -28,6 +28,7 @@ test("pagination resumes after mock replay cancels a pending page", async ({ pag
     await button.click();
     await expect(button).toBeDisabled();
     await expect.poll(() => olderRequests).toBe(1);
+    await page.getByText("Demonstration replay", { exact: true }).click();
     await page.getByRole("button", { name: "Run seeded AKG traversal test" }).click();
     await page.getByRole("button", { name: "Return to live" }).click();
     await catalog.locator("summary").click();

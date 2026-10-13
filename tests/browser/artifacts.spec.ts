@@ -27,25 +27,31 @@ test.describe("saved artifact retrieval", () => {
       await new Promise(resolve=>setTimeout(resolve,700)); await route.fulfill({ json:a }).catch(()=>undefined);
     });
     await page.goto("/results/browser-matrix");
-    await expect(page.getByText("Represented/collected: 3")).toBeVisible(); await expect(page.getByText("Unstarted: 1")).toBeVisible();
-    await page.getByRole("button",{ name:/Coordinate 1:/ }).click(); await page.getByRole("button",{ name:/Coordinate 2:/ }).click();
+    const counts = page.locator(".coverage-counts");
+    await expect(counts.getByText("Represented", { exact:true })).toBeVisible();
+    expect(await counts.getByText("Represented", { exact:true }).evaluate(element => element.nextElementSibling?.textContent)).toBe("3");
+    expect(await counts.getByText("Unstarted", { exact:true }).evaluate(element => element.nextElementSibling?.textContent)).toBe("1");
+    await page.getByText("Browse coordinates", { exact:true }).click();
+    await page.getByRole("button",{ name:/Coordinate 1:/ }).click(); await page.getByText("Browse coordinates", { exact:true }).click(); await page.getByRole("button",{ name:/Coordinate 2:/ }).click();
     await expect(page.getByText("execution browser-child-b")).toBeVisible();
-    await expect(page.getByText("Security outcome: confirmed",{ exact:true })).toBeVisible();
+    await expect(page.getByRole("heading", { name:"Security outcome",exact:true }).locator("..").getByText("confirmed", { exact:true })).toBeVisible();
     await page.waitForTimeout(800); await expect(page.getByText("execution browser-child-b")).toBeVisible();
-    await page.getByRole("button",{ name:"JSON",exact:true }).click(); await page.getByRole("button",{ name:"Raw",exact:true }).click();
+    await page.getByRole("tab",{ name:"JSON",exact:true }).click(); await page.getByRole("button",{ name:"Raw",exact:true }).click();
     await expect(page.locator("pre").first()).toContainText("Saved response b"); await expect(page.locator("pre").first()).not.toContainText("Saved response a");
+    await page.getByRole("tab", { name:"JSON", exact:true }).click();
     const download = page.waitForEvent("download"); await page.getByRole("button",{ name:"JSON",exact:true }).last().click();
     expect((await download).suggestedFilename()).toBe("browser-child-b.redacted.json"); expect(errors).toEqual([]);
   });
   test("score origins, evidence links, filters and responsive selection", async ({ page }) => {
     await page.setViewportSize({ width:390,height:844 });
     await page.goto("/results/browser-matrix");
-    await page.getByRole("combobox",{ name:"Filter security outcome" }).selectOption("no_finding");
+    await page.getByText("Browse coordinates", { exact:true }).click();
+    await page.getByRole("combobox",{ name:"Security outcome", exact:true }).selectOption("no_finding");
     await expect(page.getByRole("button",{ name:/Coordinate 2:/ })).toHaveCount(0);
     await page.getByRole("button",{ name:/Coordinate 1:/ }).click(); await expect(page.getByText("execution browser-child-a")).toBeVisible();
-    await page.getByRole("button",{ name:"Scoring",exact:true }).click();
+    await page.getByRole("tab",{ name:"Scoring",exact:true }).click();
     await page.getByRole("button",{ name:"AI review",exact:true }).click();
-    await expect(page.getByText("scoring.v4 · final",{ exact:true })).toBeVisible(); await expect(page.getByText("2.5000",{ exact:true })).toBeVisible();
+    await expect(page.getByText("scoring.v4 · Final",{ exact:true })).toBeVisible(); await expect(page.getByText("2.5000",{ exact:true })).toBeVisible();
     // Evidence references are visible at desktop width.
     await page.setViewportSize({ width:1440,height:900 });
     await page.getByRole("button",{ name:"#/response_evidence/0",exact:true }).last().click();

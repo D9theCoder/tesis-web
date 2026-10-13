@@ -1,4 +1,7 @@
+"use client";
+
 import * as React from "react";
+import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /* Card */
@@ -10,7 +13,7 @@ export function Card({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-md border border-graphite-700/80 bg-panel shadow-sm backdrop-blur-sm",
+        "ui-card",
         className,
       )}
       {...props}
@@ -25,7 +28,7 @@ export function CardHeader({
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-2 border-b border-graphite-700/70 px-3 py-2",
+        "ui-card-header",
         className,
       )}
       {...props}
@@ -38,9 +41,9 @@ export function CardTitle({
   ...props
 }: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
-    <h3
+    <h2
       className={cn(
-        "font-display text-[13px] font-semibold uppercase tracking-[0.12em] text-graphite-500",
+        "ui-card-title",
         className,
       )}
       {...props}
@@ -52,7 +55,7 @@ export function CardContent({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("p-3", className)} {...props} />;
+  return <div className={cn("ui-card-content", className)} {...props} />;
 }
 
 /* Badge */
@@ -66,18 +69,18 @@ export function Badge({
 }: React.HTMLAttributes<HTMLSpanElement> & { variant?: BadgeVariant }) {
   const variants: Record<BadgeVariant, string> = {
     default:
-      "border-graphite-600 bg-graphite-800 text-graphite-400",
-    amber: "border-ember-500/40 bg-ember-500/15 text-ember-300",
-    cyan: "border-signal-500/40 bg-signal-500/15 text-signal-300",
-    lime: "border-confirm-500/40 bg-confirm-500/15 text-confirm-400",
-    red: "border-danger-500/40 bg-danger-500/15 text-danger-400",
-    outline: "border-graphite-600 bg-transparent text-graphite-400",
-    violet: "border-violet-500/40 bg-violet-500/15 text-violet-300",
+      "ui-badge-default",
+    amber: "ui-badge-amber",
+    cyan: "ui-badge-cyan",
+    lime: "ui-badge-lime",
+    red: "ui-badge-red",
+    outline: "ui-badge-outline",
+    violet: "ui-badge-violet",
   };
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 whitespace-nowrap rounded-sm border px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase leading-none tracking-wide",
+        "ui-badge",
         variants[variant],
         className,
       )}
@@ -88,7 +91,7 @@ export function Badge({
 
 /* Button */
 
-type ButtonVariant = "default" | "outline" | "ghost" | "amber" | "danger";
+type ButtonVariant = "default" | "outline" | "ghost" | "amber" | "danger" | "primary";
 
 export function Button({
   className,
@@ -96,20 +99,22 @@ export function Button({
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant }) {
   const variants: Record<ButtonVariant, string> = {
+    primary: "ui-button-primary",
     default:
-      "border-graphite-600 bg-graphite-800 text-graphite-200 hover:border-graphite-500 hover:bg-graphite-700",
+      "ui-button-default",
     outline:
-      "border-graphite-700 bg-transparent text-graphite-300 hover:border-graphite-500 hover:bg-graphite-800",
-    ghost: "border-transparent bg-transparent text-graphite-400 hover:bg-graphite-800 hover:text-graphite-200",
+      "ui-button-outline",
+    ghost: "ui-button-ghost",
     amber:
-      "border-ember-500/50 bg-ember-500/15 text-ember-300 hover:bg-ember-500/25",
+      "ui-button-amber",
     danger:
-      "border-danger-500/50 bg-danger-500/15 text-danger-400 hover:bg-danger-500/25",
+      "ui-button-danger",
   };
   return (
     <button
+      type="button"
       className={cn(
-        "inline-flex items-center justify-center gap-1.5 rounded-sm border px-2.5 py-1 font-display text-[12px] font-semibold uppercase tracking-wider transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-signal-500/60 disabled:cursor-not-allowed disabled:opacity-50",
+        "ui-button",
         variants[variant],
         className,
       )}
@@ -125,33 +130,52 @@ export function Tabs({
   value,
   onValueChange,
   className,
+  idPrefix,
+  panelId,
 }: {
   tabs: Array<{ value: string; label: string; badge?: number }>;
   value: string;
   onValueChange: (value: string) => void;
   className?: string;
+  idPrefix?: string;
+  panelId?: string;
 }) {
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-1 rounded-sm border border-graphite-700 bg-graphite-900/60 p-0.5",
+        "ui-tabs",
         className,
       )}
+      role="tablist"
+      aria-label="View"
     >
-      {tabs.map((tab) => (
+      {tabs.map((tab, index) => (
         <button
           key={tab.value}
+          type="button"
+          role="tab"
+          id={idPrefix ? `${idPrefix}-${tab.value}` : undefined}
+          aria-controls={panelId}
+          aria-selected={value === tab.value}
+          tabIndex={value === tab.value ? 0 : -1}
           onClick={() => onValueChange(tab.value)}
+          onKeyDown={event => {
+            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+            event.preventDefault();
+            const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+            onValueChange(tabs[next].value);
+            event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+          }}
           className={cn(
-            "rounded-[3px] px-2.5 py-1 font-display text-[11px] font-semibold uppercase tracking-wider transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-signal-500/50",
+            "ui-tab",
             value === tab.value
-              ? "bg-graphite-700 text-graphite-100 shadow-sm"
-              : "text-graphite-500 hover:text-graphite-300",
+              ? "ui-tab-active"
+              : "",
           )}
         >
           {tab.label}
           {tab.badge != null && tab.badge > 0 && (
-            <span className="ml-1.5 rounded-sm bg-ember-500/20 px-1 font-mono text-[9px] text-ember-300">
+            <span className="ui-tab-count">
               {tab.badge}
             </span>
           )}
@@ -168,11 +192,13 @@ export function Progress({
   max = 100,
   color = "signal",
   className,
+  label = "Progress",
 }: {
   value: number;
   max?: number;
   color?: "signal" | "amber" | "lime" | "red";
   className?: string;
+  label?: string;
 }) {
   const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
   const colors = {
@@ -185,6 +211,7 @@ export function Progress({
     <div
       className={cn("h-1.5 w-full overflow-hidden rounded-sm bg-graphite-800", className)}
       role="progressbar"
+      aria-label={label}
       aria-valuenow={pct}
       aria-valuemin={0}
       aria-valuemax={100}
@@ -207,14 +234,14 @@ export function ScrollArea({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn("overflow-y-auto overscroll-contain", className)}>{children}</div>
+    <div className={cn("overflow-auto overscroll-contain", className)}>{children}</div>
   );
 }
 
 /* Separator */
 
 export function Separator({ className }: { className?: string }) {
-  return <div className={cn("h-px w-full bg-graphite-700/70", className)} />;
+  return <div className={cn("ui-separator", className)} />;
 }
 
 /* Tooltip (simple title-based) */
@@ -227,9 +254,9 @@ export function Tooltip({
   children: React.ReactNode;
 }) {
   return (
-    <span className="group relative inline-flex">
+    <span className="ui-tooltip-wrap">
       {children}
-      <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1 -translate-x-1/2 whitespace-nowrap rounded-sm border border-graphite-600 bg-graphite-900 px-2 py-1 text-[10px] text-graphite-200 opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+      <span className="ui-tooltip">
         {label}
       </span>
     </span>
@@ -249,19 +276,21 @@ export function Drawer({
   onClose: () => void;
   title: React.ReactNode;
   children: React.ReactNode;
-  side?: "right" | "bottom";
+  side?: "right" | "bottom" | "left";
 }) {
   const dialog = React.useRef<HTMLDivElement>(null);
   const titleId = React.useId();
   React.useEffect(() => {
     if (!open) return;
     const origin = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     dialog.current?.querySelector<HTMLButtonElement>("button")?.focus();
-    return () => origin?.focus();
+    return () => { document.body.style.overflow = previousOverflow; origin?.focus(); };
   }, [open]);
   if (!open) return null;
   return (
-    <div ref={dialog} className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-labelledby={titleId}
+    <div ref={dialog} className="ui-drawer" role="dialog" aria-modal="true" aria-labelledby={titleId}
       onKeyDown={event => {
         if (event.key === "Escape") {
           event.preventDefault();
@@ -282,30 +311,29 @@ export function Drawer({
         }
       }}>
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-[1px]"
+        className="ui-drawer-backdrop"
         onClick={onClose}
       />
       <div
         className={cn(
-          "relative flex flex-col border-graphite-600 bg-graphite-850 shadow-2xl",
-          side === "right"
-            ? "ml-auto h-full w-full max-w-xl border-l"
-            : "mt-auto h-[70vh] w-full border-t",
+          "ui-drawer-sheet",
+          side === "right" ? "ui-drawer-right" : side === "left" ? "ui-drawer-left" : "ui-drawer-bottom",
         )}
       >
-        <div className="flex items-center justify-between border-b border-graphite-700 px-4 py-3">
-          <div id={titleId} className="font-display text-[13px] font-semibold uppercase tracking-wider text-graphite-200">
+        <div className="ui-drawer-header">
+          <div id={titleId} className="ui-drawer-title">
             {title}
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-sm px-2 py-1 text-graphite-400 hover:bg-graphite-800 hover:text-graphite-100"
+            className="ui-button ui-button-ghost ui-button-icon"
             aria-label="Close"
           >
-            ✕
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-4">{children}</div>
+        <div className="ui-drawer-body">{children}</div>
       </div>
     </div>
   );

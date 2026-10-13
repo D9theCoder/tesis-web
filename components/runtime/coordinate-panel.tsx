@@ -1,130 +1,183 @@
 "use client";
 
-import { Activity, Clock, Crosshair, Route, Target, TerminalSquare } from "lucide-react";
+import { Activity, ArrowRight, Clock3, Route, Target } from "lucide-react";
 import type { LiveRunState, RunConnectionStatus } from "@/lib/schemas";
 import { Badge } from "@/components/ui/primitives";
-import { cn } from "@/lib/utils";
-import {
-  fmtClock,
-  fmtDuration,
-} from "@/lib/formatters";
+import { fmtClock, fmtDuration } from "@/lib/formatters";
 
-const CONNECTION_STYLE: Record<RunConnectionStatus, { label: string; cls: string; dot: string }> = {
-  waiting: { label: "waiting", cls: "border-graphite-600 bg-graphite-800 text-graphite-400", dot: "bg-graphite-500" },
-  active: { label: "active", cls: "border-signal-500/50 bg-signal-500/10 text-signal-300", dot: "bg-signal-400 animate-pulse" },
-  stale: { label: "stale", cls: "border-ember-500/50 bg-ember-500/10 text-ember-300", dot: "bg-ember-400" },
-  completed: { label: "completed", cls: "border-confirm-500/50 bg-confirm-500/10 text-confirm-400", dot: "bg-confirm-400" },
-  cancelled: { label: "cancelled", cls: "border-danger-500/50 bg-danger-500/10 text-danger-400", dot: "bg-danger-500" },
-  error: { label: "error", cls: "border-danger-500/50 bg-danger-500/10 text-danger-400", dot: "bg-danger-500" },
+const CONNECTION_STYLE: Record<
+  RunConnectionStatus,
+  { label: string; variant: "default" | "cyan" | "amber" | "lime" | "red" }
+> = {
+  waiting: { label: "Waiting", variant: "default" },
+  active: { label: "Active", variant: "cyan" },
+  stale: { label: "Stale", variant: "amber" },
+  completed: { label: "Completed", variant: "cyan" },
+  cancelled: { label: "Cancelled", variant: "red" },
+  error: { label: "Error", variant: "red" },
 };
 
-function Field({
+function MetadataField({
   label,
   value,
-  mono = true,
+  mono = false,
 }: {
   label: string;
   value: React.ReactNode;
   mono?: boolean;
 }) {
+  const title = typeof value === "string" ? value : undefined;
   return (
-    <div className="flex min-w-0 items-baseline justify-between gap-2 border-b border-graphite-700/40 py-0.5">
-      <span className="flex shrink-0 items-center gap-1 font-mono text-[9px] uppercase tracking-wider text-graphite-500">
-        {label}
-      </span>
-      <span className={cn("truncate text-right text-[11px] text-graphite-200", mono && "font-mono")}>
+    <div className="metadata-field">
+      <dt>{label}</dt>
+      <dd className={mono ? "metadata-value font-mono" : "metadata-value"} title={title}>
         {value ?? "—"}
-      </span>
+      </dd>
     </div>
   );
 }
 
 export function CoordinatePanel({ state }: { state: LiveRunState }) {
-  const conn = CONNECTION_STYLE[state.connection];
+  const connection = CONNECTION_STYLE[state.connection];
+  const path = state.akgPath.length ? state.akgPath : state.chain;
+
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-center justify-between gap-2 border-b border-graphite-700/70 px-3 py-2">
-        <div className="flex items-center gap-1.5 font-display text-[13px] font-semibold uppercase tracking-[0.12em] text-signal-300">
-          <Activity size={13} /> Runtime Coordinate
+    <div className="runtime-panel">
+      <header className="runtime-panel-header">
+        <div className="runtime-panel-title">
+          <Activity aria-hidden="true" size={17} />
+          <h2>Runtime coordinate</h2>
         </div>
-        <span className={cn("inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider", conn.cls)}>
-          <span className={cn("h-1.5 w-1.5 rounded-full", conn.dot)} />
-          {conn.label}
-        </span>
-      </div>
-      <div className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2">
-        <div className="flex items-center gap-2 pb-1">
-          <span className="flex items-center gap-1 font-mono text-[10px] text-ember-300">
-            <Clock size={11} /> ELAPSED
-          </span>
-          <span className="font-mono text-[13px] font-semibold text-graphite-100">
-            {fmtDuration(state.elapsedMs)}
-          </span>
-        </div>
-        <Field label="status" value={state.status} />
-        <Field label="start" value={fmtClock(state.startedAt)} />
-        <Field label="end" value={state.endedAt ? fmtClock(state.endedAt) : "—"} />
-        <Field label="execution id" value={truncateId(state.executionId)} />
-        <Field label="run id" value={truncateId(state.runId)} />
-        <Field label="mode" value={state.mode} />
-        <Field label="condition" value={state.experimentCondition} />
-        <Field label="surface" value={state.surface} />
-        <Field label="security level" value={state.securityLevel} />
-        <Field label="provider" value={state.provider} />
-        <Field label="model" value={state.model} />
-        <Field label="payload mode" value={state.payloadMode} />
-        <Field label="target method" value={state.targetMethod} />
+        <Badge
+          variant={connection.variant}
+          className={`runtime-status runtime-status--${state.connection}`}
+          aria-label={`Connection ${connection.label.toLowerCase()}`}
+        >
+          <span className="runtime-status-indicator" aria-hidden="true" />
+          {connection.label}
+        </Badge>
+      </header>
 
-        <div className="pt-2">
-          <div className="pb-1 font-mono text-[9px] uppercase tracking-wider text-graphite-500">Traversal</div>
-          <Field label="current node" value={<Badge variant="amber">{state.currentNode ?? "—"}</Badge>} mono={false} />
-          <Field label="selected method" value={state.selectedMethod ?? "—"} />
-          <Field label="viable" value={<span className="flex flex-wrap gap-1">{state.viableMethods.length ? state.viableMethods.map((m) => <Badge key={m} variant="cyan">{m}</Badge>) : "—"}</span>} mono={false} />
-          <Field label="iteration" value={state.metrics.iterationCount} />
-        </div>
-
-        <div className="pt-2">
-          <div className="flex items-center gap-1 pb-1 font-mono text-[9px] uppercase tracking-wider text-graphite-500">
-            <Route size={10} /> Chain / Path
-          </div>
-          <PathCrumbs items={state.akgPath.length ? state.akgPath : state.chain} />
-        </div>
-
-        <div className="pt-2">
-          <div className="flex items-center gap-1 pb-1 font-mono text-[9px] uppercase tracking-wider text-graphite-500">
-            <Target size={10} /> Target scope (contained)
-          </div>
-          <div className="flex items-center gap-1.5 rounded-sm border border-graphite-700/70 bg-graphite-900/60 px-2 py-1">
-            <TerminalSquare size={11} className="text-graphite-500" />
-            <span className="truncate font-mono text-[11px] text-graphite-300">
-              {state.targetUrl ?? "—"}
+      <div className="runtime-panel-body coordinate-panel-body overflow-y-auto overscroll-contain">
+        <section className="panel-section coordinate-overview" aria-label="Run timing and status">
+          <div className="coordinate-elapsed">
+            <span className="coordinate-elapsed-label">
+              <Clock3 aria-hidden="true" size={14} /> Elapsed
             </span>
+            <strong>{fmtDuration(state.elapsedMs)}</strong>
           </div>
-        </div>
+          <dl className="metadata-list">
+            <MetadataField label="Status" value={state.status || "Unknown"} />
+            <MetadataField
+              label="Started"
+              value={state.startedAt !== null ? fmtClock(state.startedAt) : "—"}
+            />
+            <MetadataField
+              label="Ended"
+              value={state.endedAt !== null ? fmtClock(state.endedAt) : "—"}
+            />
+          </dl>
+        </section>
+
+        <details className="panel-section coordinate-details">
+          <summary>Run identifiers and configuration</summary>
+          <dl className="metadata-list">
+            <MetadataField label="Execution ID" value={state.executionId ?? "—"} mono />
+            <MetadataField label="Run ID" value={state.runId ?? "—"} mono />
+            <MetadataField label="Mode" value={state.mode} />
+            <MetadataField label="Condition" value={state.experimentCondition ?? "—"} />
+            <MetadataField label="Surface" value={state.surface ?? "—"} />
+            <MetadataField label="Security level" value={state.securityLevel ?? "—"} />
+            <MetadataField label="Provider" value={state.provider ?? "—"} />
+            <MetadataField label="Model" value={state.model ?? "—"} mono />
+            <MetadataField label="Payload mode" value={state.payloadMode ?? "—"} />
+            <MetadataField label="Target method" value={state.targetMethod ?? "—"} mono />
+          </dl>
+        </details>
+
+        <section className="panel-section" aria-labelledby="coordinate-traversal-heading">
+          <h3 id="coordinate-traversal-heading">Traversal</h3>
+          <dl className="metadata-list">
+            <MetadataField
+              label="Current node"
+              value={
+                state.currentNode ? (
+                  <Badge variant="amber" title={state.currentNode}>
+                    {state.currentNode.replace(/_/g, " ")}
+                  </Badge>
+                ) : (
+                  "—"
+                )
+              }
+            />
+            <MetadataField label="Selected method" value={state.selectedMethod ?? "—"} mono />
+            <MetadataField
+              label="Viable methods"
+              value={
+                state.viableMethods.length ? (
+                  <span className="coordinate-method-list">
+                    {state.viableMethods.map((method) => (
+                      <Badge key={method} variant="cyan" title={method}>
+                        {method.replace(/_/g, " ")}
+                      </Badge>
+                    ))}
+                  </span>
+                ) : (
+                  "—"
+                )
+              }
+            />
+            <MetadataField label="Iteration" value={state.metrics.iterationCount} mono />
+          </dl>
+          <div className="coordinate-path">
+            <h4>
+              <Route aria-hidden="true" size={14} /> Chain / path
+            </h4>
+            <PathCrumbs items={path} />
+          </div>
+        </section>
+
+        <section className="panel-section coordinate-target" aria-labelledby="coordinate-target-heading">
+          <div className="coordinate-target-heading">
+            <h3 id="coordinate-target-heading">
+              <Target aria-hidden="true" size={15} /> Target scope
+            </h3>
+            <Badge variant="outline">Contained</Badge>
+          </div>
+          <p className="coordinate-target-value" title={state.targetUrl ?? undefined}>
+            {state.targetUrl ?? "—"}
+          </p>
+        </section>
       </div>
     </div>
   );
 }
 
 function PathCrumbs({ items }: { items: string[] }) {
-  if (!items.length) return <span className="font-mono text-[10px] text-graphite-500">no route yet</span>;
+  if (!items.length) {
+    return <p className="empty-state coordinate-empty-path">No route has been recorded yet.</p>;
+  }
+
   return (
-    <div className="flex flex-wrap items-center gap-1">
-      {items.map((nodeId, i) => (
-        <span key={`${nodeId}-${i}`} className="flex items-center gap-1">
-          {i > 0 && <span className="text-graphite-600">→</span>}
-          <span className={cn("rounded-sm px-1 py-0.5 font-mono text-[9px]", i === items.length - 1 ? "bg-ember-500/15 text-ember-300" : "text-signal-300")}>
+    <ol className="coordinate-path-list" aria-label="Recorded route">
+      {items.map((nodeId, index) => (
+        <li key={`${nodeId}-${index}`}>
+          {index > 0 && (
+            <ArrowRight
+              className="coordinate-path-arrow"
+              aria-hidden="true"
+              size={13}
+            />
+          )}
+          <span
+            className={index === items.length - 1 ? "coordinate-path-node is-current" : "coordinate-path-node"}
+            title={nodeId}
+          >
             {nodeId.replace(/_/g, " ")}
+            <span className="sr-only">{nodeId}</span>
           </span>
-        </span>
+        </li>
       ))}
-    </div>
+    </ol>
   );
 }
-
-function truncateId(id: string | null, max = 26): string {
-  if (!id) return "—";
-  return id.length > max ? `${id.slice(0, 20)}…` : id;
-}
-
-export { Crosshair };

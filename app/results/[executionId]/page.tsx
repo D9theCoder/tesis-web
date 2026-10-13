@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -13,27 +13,19 @@ import {
   Loader2,
 } from "lucide-react";
 import type { CoordinateSummary, EvidenceRow, NormalizedResult } from "@/lib/schemas";
-import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Tabs,
-} from "@/components/ui/primitives";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Tabs } from "@/components/ui/primitives";
 import { fetchCoordinateResult, fetchResult } from "@/lib/api-client";
 import { DetailTable } from "@/components/results/detail-table";
-import { ScoringTable, MetricsSummary } from "@/components/results/scoring-table";
+import { MetricsSummary, ScoringTable } from "@/components/results/scoring-table";
 import { CoordinateIndex } from "@/components/results/coordinate-index";
 import { EvidenceDrawer } from "@/components/results/evidence-drawer";
-import { fmtDuration, fmtIsoFromStr, prettyJson } from "@/lib/formatters";
-import { normalizeRunStatus } from "@/lib/formatters";
-import { StatusDetails } from "@/components/results/status-details";
+import { CopyButton } from "@/components/ui/copy-button";
+import { fmtDuration, fmtIsoFromStr, normalizeRunStatus, prettyJson } from "@/lib/formatters";
+import { ResultsSummary } from "@/components/results/status-details";
 import { normalizeResult } from "@/lib/result-normalizer";
 import { evidenceForReference } from "@/lib/evidence-ref";
 
-type Tab = "detail" | "scoring" | "matrix" | "json";
+type Tab = "summary" | "evidence" | "scoring" | "matrix" | "json";
 
 export default function ResultsPage() {
   const params = useParams<{ executionId: string }>();
@@ -45,225 +37,251 @@ function ResultsExplorer({ executionId }: { executionId: string }) {
   const [aggregate, setAggregate] = useState<NormalizedResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("detail");
+  const [tab, setTab] = useState<Tab>("summary");
   const [coordRunId, setCoordRunId] = useState<string | null>(null);
   const [coordResult, setCoordResult] = useState<NormalizedResult | null>(null);
   const [coordLoading, setCoordLoading] = useState(false);
   const [evidence, setEvidence] = useState<EvidenceRow | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const coordinateBrowser = useRef<HTMLDetailsElement>(null);
+  const tabsId = useId();
 
   useEffect(() => {
     const controller = new AbortController();
     let stopped = false;
-    fetchResult(executionId, controller.signal).then(result => {
-      if (stopped) return;
-      if (result) setAggregate(result);
-      else setError("No readable result was produced for this execution.");
-    }).catch(cause => { if (!stopped) setError(cause instanceof Error ? cause.message : "Failed to load result"); })
-      .finally(() => { if (!stopped) setLoading(false); });
-    return () => { stopped = true; controller.abort(); };
+    fetchResult(executionId, controller.signal)
+      .then((result) => {
+        if (stopped) return;
+        if (result) setAggregate(result);
+        else setError("No readable result was produced for this execution.");
+      })
+      .catch((cause: unknown) => {
+        if (!stopped) setError(cause instanceof Error ? cause.message : "Failed to load result");
+      })
+      .finally(() => {
+        if (!stopped) setLoading(false);
+      });
+    return () => {
+      stopped = true;
+      controller.abort();
+    };
   }, [executionId]);
+
   useEffect(() => {
     if (!coordRunId) return;
     const controller = new AbortController();
     let stopped = false;
-    fetchCoordinateResult(executionId, coordRunId, controller.signal).then(result => {
-      if (!stopped) setCoordResult(result);
-    }).finally(() => { if (!stopped) setCoordLoading(false); });
-    return () => { stopped = true; controller.abort(); };
+    fetchCoordinateResult(executionId, coordRunId, controller.signal)
+      .then((result) => {
+        if (!stopped) setCoordResult(result);
+      })
+      .catch(() => {
+        if (!stopped) setCoordResult(null);
+      })
+      .finally(() => {
+        if (!stopped) setCoordLoading(false);
+      });
+    return () => {
+      stopped = true;
+      controller.abort();
+    };
   }, [executionId, coordRunId]);
+
   const pickCoordinate = useCallback((coord: CoordinateSummary) => {
+    if (coordinateBrowser.current) {
+      coordinateBrowser.current.open = false;
+      coordinateBrowser.current.querySelector<HTMLElement>("summary")?.focus();
+    }
     if (coord.executionId === coordRunId) return;
-    setCoordRunId(coord.executionId); setCoordResult(null); setCoordLoading(true);
-    setEvidence(null); setDrawerOpen(false);
+    setCoordRunId(coord.executionId);
+    setCoordResult(null);
+    setCoordLoading(true);
+    setEvidence(null);
+    setDrawerOpen(false);
   }, [coordRunId]);
+
   const backToAggregate = useCallback(() => {
-    setCoordRunId(null); setCoordResult(null); setCoordLoading(false); setEvidence(null); setDrawerOpen(false);
+    setCoordRunId(null);
+    setCoordResult(null);
+    setCoordLoading(false);
+    setEvidence(null);
+    setDrawerOpen(false);
   }, []);
+
   const viewResult = coordRunId ? coordResult : aggregate;
   const openReference = (ref: string) => {
     if (!viewResult) return;
     const row = evidenceForReference(viewResult, ref);
-    if (row) { setEvidence(row); setDrawerOpen(true); }
+    if (row) {
+      setEvidence(row);
+      setDrawerOpen(true);
+    }
   };
 
-  if (loading) {
-    return <Loading />;
-  }
-  if (error || !aggregate) {
-    return <ErrorState message={error ?? "Result unavailable"} executionId={executionId} />;
-  }
+  if (loading) return <Loading />;
+  if (error || !aggregate) return <ErrorState message={error ?? "Result unavailable"} executionId={executionId} />;
 
-  const selectedSummary = aggregate.coordinates.find(c => c.executionId === coordRunId);
+  const selectedSummary = aggregate.coordinates.find((coordinate) => coordinate.executionId === coordRunId);
   const header = viewResult ?? (selectedSummary ? normalizeResult({
-    execution_id: selectedSummary.executionId, run_id: selectedSummary.runId, status: selectedSummary.status,
-    execution_status: selectedSummary.executionStatus, security_outcome: selectedSummary.securityOutcome,
-    execution_reason: selectedSummary.executionReason, security_outcome_reason: selectedSummary.securityOutcomeReason,
-    selected_method: selectedSummary.selectedMethod, target_method: selectedSummary.targetMethod,
-    surface: selectedSummary.surface, security_level: selectedSummary.securityLevel, provider: selectedSummary.provider,
-    model: selectedSummary.model, payload_mode: selectedSummary.payloadMode, repeat_index: selectedSummary.repeatIndex,
+    execution_id: selectedSummary.executionId,
+    run_id: selectedSummary.runId,
+    status: selectedSummary.status,
+    execution_status: selectedSummary.executionStatus,
+    security_outcome: selectedSummary.securityOutcome,
+    execution_reason: selectedSummary.executionReason,
+    security_outcome_reason: selectedSummary.securityOutcomeReason,
+    selected_method: selectedSummary.selectedMethod,
+    target_method: selectedSummary.targetMethod,
+    surface: selectedSummary.surface,
+    security_level: selectedSummary.securityLevel,
+    provider: selectedSummary.provider,
+    model: selectedSummary.model,
+    payload_mode: selectedSummary.payloadMode,
+    repeat_index: selectedSummary.repeatIndex,
     experiment_condition: selectedSummary.experimentCondition,
   }) : aggregate);
+
   const tabs: Array<{ value: Tab; label: string; badge?: number }> = [
-    { value: "detail", label: "Detailed", badge: viewResult?.evidenceRows.length },
+    { value: "summary", label: "Summary" },
+    { value: "evidence", label: "Evidence", badge: viewResult?.evidenceRows.length },
     { value: "scoring", label: "Scoring" },
   ];
-  if (aggregate.isMatrix) tabs.push({ value: "matrix", label: "Matrix"} );
+  if (aggregate.isMatrix) tabs.push({ value: "matrix", label: "Matrix", badge: aggregate.coordinates.length });
   tabs.push({ value: "json", label: "JSON" });
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="relative border-b border-graphite-700/70 bg-graphite-900/70 px-4 py-3">
-        <div className="mb-2 flex items-center gap-2">
-          <Link href="/" className="flex items-center gap-1 font-display text-[11px] uppercase tracking-wider text-graphite-500 hover:text-graphite-200">
-            <ArrowLeft size={12} /> Live
+    <div className="results-page flex h-full min-h-0 flex-col">
+      <header className="page-header results-page-header">
+        <div className="breadcrumbs" aria-label="Breadcrumb">
+          <Link href="/" className="ui-link inline-flex items-center gap-1">
+            <ArrowLeft size={14} aria-hidden="true" /> Live
           </Link>
-          <span className="text-graphite-700">/</span>
-          <span className="font-display text-[12px] uppercase tracking-wider text-graphite-400">Results</span>
+          <span aria-hidden="true">/</span>
+          <span>Results</span>
         </div>
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="page-header-main flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="font-display text-xl font-bold uppercase tracking-[0.12em] text-graphite-100">
-                Experiment Results
-              </h1>
+              <h1 className="page-title">Experiment results</h1>
               <StatusBadge status={header.executionStatus ?? "unknown"} />
-              {header.isMatrix && <Badge variant="violet">matrix · {header.coordinates.length} coords</Badge>}
-              {header.taskResult && <Badge variant="outline">Legacy task: {header.taskResult}</Badge>}
+              {header.isMatrix && <Badge variant="outline">Matrix · {header.coordinates.length} coordinates</Badge>}
+              {header.taskResult && <Badge variant="outline">Legacy task · {readable(header.taskResult)}</Badge>}
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] text-graphite-500">
-              <span>{header.experimentCondition}</span>
-              <span>·</span>
-              <span>{header.surface ?? "—"} · {header.securityLevel ?? "—"}</span>
-              <span>·</span>
-              <span>{header.payloadMode}</span>
-              <span>·</span>
-              <span>method: {header.selectedMethod ?? header.targetMethod ?? "—"}</span>
-            </div>
-            <div className="mt-1 break-all font-mono text-[9px] text-graphite-600">execution {header.executionId}</div>
+            <p className="page-description">
+              {header.experimentCondition || "Execution record"}
+              {header.surface && <> · {readable(header.surface)}{header.securityLevel ? ` · ${readable(header.securityLevel)}` : ""}</>}
+              {header.payloadMode && <> · {readable(header.payloadMode)}</>}
+              {(header.selectedMethod ?? header.targetMethod) && <> · Method {header.selectedMethod ?? header.targetMethod}</>}
+            </p>
+            <div className="execution-identifier"><span>Execution ID</span> <code>execution {header.executionId}</code><CopyButton value={header.executionId} label="execution ID" /></div>
           </div>
-          <div className="shrink-0 text-right">
-            <div className="font-mono text-[10px] text-graphite-500">
-              started <span className="text-graphite-300">{fmtIsoFromStr(header.startedAt)}</span>
-            </div>
-            <div className="font-mono text-[10px] text-graphite-500">
-              duration <span className="text-graphite-300">{fmtDuration(header.durationMs)}</span>
-            </div>
-            <div className="font-mono text-[10px] text-graphite-500">
-              target <span className="text-signal-300">{header.targetUrl ?? "—"}</span>
-            </div>
+          <div className="page-actions">
+            <Button variant="outline" onClick={() => setTab("json")}>
+              <FileJson size={15} aria-hidden="true" /> View artifact
+            </Button>
+            <Link href="/" className="ui-button ui-button-secondary">
+              <ArrowLeft size={15} aria-hidden="true" /> Return to live
+            </Link>
           </div>
         </div>
+        <dl className="metadata-grid execution-metadata mt-4">
+          <Metadata label="Started" value={fmtIsoFromStr(header.startedAt)} />
+          <Metadata label="Duration" value={fmtDuration(header.durationMs)} />
+          <Metadata label="Provider" value={header.provider ?? "Unavailable"} />
+          <Metadata label="Model" value={header.model ?? "Unavailable"} />
+          <Metadata label="Target" value={header.targetUrl ?? "Unavailable"} />
+          {coordRunId && <Metadata label="Selected coordinate" value={`#${(selectedSummary?.index ?? 0) + 1} · ${coordRunId}`} mono />}
+        </dl>
+      </header>
 
-        <StatusDetails result={header} onEvidenceRef={openReference} />
-
-        {/* Findings strip */}
-        {(header.confirmedVulns.length > 0 || header.achievedOutcomes.length > 0) && (
-          <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-graphite-700/40 pt-2">
-            <span className="text-label">confirmed</span>
-            {header.confirmedVulns.map((v) => <Badge key={v} variant="lime">{v.replace(/_/g, " ")}</Badge>)}
-            <span className="text-label ml-2">outcomes</span>
-            {header.achievedOutcomes.map((v) => <Badge key={v} variant="cyan">{v.replace(/_/g, " ")}</Badge>)}
-            {header.akgPath.length > 0 && (
-              <span className="ml-auto flex items-center gap-1 font-mono text-[9px] text-graphite-500">
-                path: {header.akgPath.join(" → ")}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Matrix coordinate bar */}
       {aggregate.isMatrix && (
-        <div className="flex max-h-44 shrink-0 items-start gap-2 overflow-y-auto border-b border-graphite-700/60 bg-graphite-900/40 px-4 py-1.5">
-          <span className="text-label shrink-0">coordinate</span>
-          <CoordinateIndex
-            result={aggregate}
-            selected={coordRunId}
-            onSelect={pickCoordinate}
-          />
+        <section className="coordinate-browser flex flex-wrap items-start gap-3 border-b p-3" aria-label="Coordinate selection">
+          <details ref={coordinateBrowser} className="min-w-0 flex-1">
+            <summary>
+              <span>Browse coordinates</span>
+              <span className="muted-value">{coordRunId ? `Selected ${coordRunId}` : `${aggregate.coordinates.length} coordinates`}</span>
+            </summary>
+            <CoordinateIndex result={aggregate} selected={coordRunId} onSelect={pickCoordinate} />
+          </details>
           {coordRunId && (
-            <Button variant="ghost" className="px-2 py-0.5 text-[10px]" onClick={backToAggregate}>
-              ← aggregate
+            <Button variant="ghost" onClick={backToAggregate} aria-label="Return to aggregate result">
+              <ArrowLeft size={14} aria-hidden="true" /> Aggregate
             </Button>
           )}
-          {coordLoading && <Loader2 size={12} className="animate-spin text-ember-300" />}
-        </div>
+          {coordLoading && <span role="status" className="inline-flex items-center gap-2"><Loader2 size={15} className="animate-spin" /> Loading coordinate details</span>}
+        </section>
       )}
 
-      {/* Tabs */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-graphite-700/60 px-4 py-1.5">
+      <nav className="results-tabs flex flex-wrap items-center justify-between gap-3 border-b px-4 py-2" aria-label="Result views">
         <Tabs
-          tabs={tabs.map((t) => ({ value: t.value, label: t.label, badge: t.badge }))}
+          idPrefix={tabsId}
+          panelId={`${tabsId}-panel`}
+          tabs={tabs.map(({ value, label, badge }) => ({ value, label, badge }))}
           value={tab}
-          onValueChange={(v) => setTab(v as Tab)}
+          onValueChange={(value) => setTab(value as Tab)}
         />
-        {coordRunId && (
-          <span className="font-mono text-[9px] text-graphite-500">
-            viewing coordinate #{(aggregate.coordinates.find((c) => c.executionId === coordRunId)?.index ?? 0) + 1}
-          </span>
+        {coordRunId && <span className="selected-coordinate-context">Viewing coordinate #{(selectedSummary?.index ?? 0) + 1}</span>}
+      </nav>
+
+      <div className="results-body min-h-0 flex-1" role="tabpanel" id={`${tabsId}-panel`} aria-labelledby={`${tabsId}-${tab}`} tabIndex={0}>
+        {tab === "summary" && (
+          <ResultsSummary
+            result={viewResult ?? header}
+            onEvidenceRef={openReference}
+            loadingCoordinate={Boolean(coordRunId && coordLoading && !viewResult)}
+            unavailableCoordinateId={coordRunId && !coordLoading && !viewResult ? coordRunId : undefined}
+          />
         )}
+        {tab === "evidence" && (viewResult ? (
+          <DetailTable
+            key={viewResult.executionId}
+            rows={viewResult.evidenceRows}
+            onOpen={(row) => { setEvidence(row); setDrawerOpen(true); }}
+          />
+        ) : <UnavailableCoordinate executionId={coordRunId} loading={coordLoading} />)}
+        {tab === "scoring" && (viewResult ? (
+          <ScoringTab key={viewResult.executionId} result={viewResult} onEvidenceRef={openReference} />
+        ) : <UnavailableCoordinate executionId={coordRunId} loading={coordLoading} />)}
+        {tab === "matrix" && aggregate.isMatrix && (
+          <MatrixTab result={aggregate} selectedCoordinateId={coordRunId} onPick={pickCoordinate} />
+        )}
+        {tab === "json" && (viewResult ? (
+          <JsonTab key={viewResult.executionId} result={viewResult} />
+        ) : <UnavailableCoordinate executionId={coordRunId} loading={coordLoading} />)}
       </div>
 
-      {/* Body */}
-      <div className="min-h-0 flex-1 overflow-hidden">
-        {coordRunId && !viewResult && (tab !== "matrix") ? (
-          <div role="status" className="p-4 text-sm">{coordLoading ? `Loading ${coordRunId}…` : `Detail unavailable for ${coordRunId}. Select another coordinate or return to the aggregate.`}</div>
-        ) : <>
-          {tab === "detail" && viewResult && <DetailTab result={viewResult} onOpenEvidence={row => { setEvidence(row); setDrawerOpen(true); }} />}
-          {tab === "scoring" && viewResult && <ScoringTab result={viewResult} onEvidenceRef={openReference} />}
-          {tab === "json" && viewResult && <JsonTab result={viewResult} />}
-        </>}
-        {tab === "matrix" && aggregate.isMatrix && <MatrixTab result={aggregate} onPick={pickCoordinate} />}
-
-      </div>
-
-      <EvidenceDrawer row={evidence} open={drawerOpen} onClose={() => setDrawerOpen(false)}
-        onSelectRelated={id => { const row = viewResult?.evidenceRows.find(r => r.id === id); if (row) setEvidence(row); }} />
+      <EvidenceDrawer
+        row={evidence}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        onSelectRelated={(id) => {
+          const row = viewResult?.evidenceRows.find((candidate) => candidate.id === id);
+          if (row) setEvidence(row);
+        }}
+      />
     </div>
   );
 }
 
-function DetailTab({
-  result,
-  onOpenEvidence,
-}: {
-  result: NormalizedResult;
-  onOpenEvidence: (row: EvidenceRow) => void;
-}) {
-  const evidenceRows =
-    result.evidenceRows.length > 0
-      ? result.evidenceRows
-      : combinedEvidence(result);
-  return <DetailTable key={result.executionId} rows={evidenceRows} onOpen={onOpenEvidence} />;
+function Metadata({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return <div><dt>{label}</dt><dd className={mono ? "font-mono break-all" : "break-words"}>{value}</dd></div>;
 }
 
-function combinedEvidence(result: NormalizedResult): EvidenceRow[] {
-  // Fallback: derive minimal rows from final_state lists already exposed in
-  // coordinates by reusing the normalizer's evidence builder via raw fields.
-  return result.evidenceRows;
-}
-
-function ScoringTab({ result, onEvidenceRef }: { result: NormalizedResult; onEvidenceRef: (ref: string)=>void }) {
+function ScoringTab({ result, onEvidenceRef }: { result: NormalizedResult; onEvidenceRef: (ref: string) => void }) {
   return (
-    <div className="grid h-full grid-cols-1 gap-3 xl:grid-cols-[1fr_340px]">
-      <Card className="min-h-0 overflow-hidden">
+    <div className="results-panel-grid grid min-h-0 grid-cols-1 gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
+      <Card className="results-panel min-h-0 overflow-hidden">
         <CardHeader>
-          <CardTitle>Thesis Scoring</CardTitle>
-          <Gauge size={14} className="text-graphite-500" />
+          <CardTitle>Score review</CardTitle>
+          <Gauge size={16} aria-hidden="true" />
         </CardHeader>
         <CardContent className="h-full min-h-0 p-0">
-          <ScoringTable key={result.executionId} result={result} onEvidenceRef={onEvidenceRef} />
+          <ScoringTable result={result} onEvidenceRef={onEvidenceRef} />
         </CardContent>
       </Card>
-      <Card className="min-h-0 overflow-hidden">
-        <CardHeader>
-          <CardTitle>Thesis Metrics</CardTitle>
-        </CardHeader>
-        <CardContent className="overflow-y-auto">
-          <MetricsSummary result={result} />
-        </CardContent>
+      <Card className="results-panel min-h-0 overflow-hidden">
+        <CardHeader><CardTitle>Recorded metrics</CardTitle></CardHeader>
+        <CardContent className="overflow-y-auto"><MetricsSummary result={result} /></CardContent>
       </Card>
     </div>
   );
@@ -271,26 +289,27 @@ function ScoringTab({ result, onEvidenceRef }: { result: NormalizedResult; onEvi
 
 function MatrixTab({
   result,
+  selectedCoordinateId,
   onPick,
 }: {
   result: NormalizedResult;
-  onPick: (c: CoordinateSummary) => void;
+  selectedCoordinateId: string | null;
+  onPick: (coordinate: CoordinateSummary) => void;
 }) {
   return (
-    <Card className="h-full overflow-hidden">
+    <Card className="results-panel h-full overflow-hidden">
       <CardHeader>
-        <CardTitle>Matrix Coordinate Comparison</CardTitle>
-        <Grid3X3 size={13} className="text-graphite-500" />
+        <CardTitle>Matrix coordinate comparison</CardTitle>
+        <Grid3X3 size={16} aria-hidden="true" />
       </CardHeader>
       <CardContent className="h-full p-0">
         <ScoringTable
           result={result}
           coordinateMode
-          onPickCoordinate={(_execId, runId) => {
-            const coord = result.coordinates.find(
-              (c) => c.runId === runId || c.executionId === runId,
-            );
-            if (coord) onPick(coord);
+          selectedCoordinateId={selectedCoordinateId}
+          onPickCoordinate={(_executionId, runId) => {
+            const coordinate = result.coordinates.find((candidate) => candidate.executionId === runId || candidate.runId === runId);
+            if (coordinate) onPick(coordinate);
           }}
         />
       </CardContent>
@@ -309,51 +328,45 @@ function JsonTab({ result }: { result: NormalizedResult }) {
     anchor.click();
     URL.revokeObjectURL(url);
   };
-  const downloadJson = () =>
-    download(
-      `${result.executionId}.redacted.json`,
-      JSON.stringify(result.raw, null, 2),
-      "application/json",
-    );
+  const downloadJson = () => download(`${result.executionId}.redacted.json`, JSON.stringify(result.raw, null, 2), "application/json");
   const downloadEvidence = () => {
     const lines = [
-      `# TESIS evidence export`,
-      ``,
+      "# TESIS evidence export",
+      "",
       `- Execution: ${result.executionId}`,
-      `- Execution: ${result.executionStatus ?? "unknown"}`,
+      `- Execution status: ${result.executionStatus ?? "unknown"}`,
       `- Security outcome: ${result.securityOutcome ?? "unknown"}`,
       `- Legacy status: ${result.status}`,
       `- Source SHA-256: ${result.source?.sha256 ?? "unavailable"}`,
       `- Surface: ${result.surface ?? "—"}`,
       `- Selected method: ${result.selectedMethod ?? "—"}`,
-      ``,
-      `| Time | Phase | Method | Action | Result | Safety |`,
-      `| --- | --- | --- | --- | --- | --- |`,
+      "",
+      "| Time | Phase | Method | Action | Result | Safety |",
+      "| --- | --- | --- | --- | --- | --- |",
       ...result.evidenceRows.map((row) =>
         `| ${row.timestamp || "—"} | ${escapeMarkdown(row.phase)} | ${escapeMarkdown(row.method ?? "—")} | ${escapeMarkdown(row.action)} | ${escapeMarkdown(row.result)} | ${escapeMarkdown(row.safety)} |`,
       ),
     ];
-    download(
-      `${result.executionId}.evidence.md`,
-      lines.join("\n"),
-      "text/markdown",
-    );
+    download(`${result.executionId}.evidence.md`, lines.join("\n"), "text/markdown");
   };
+
   return (
-    <Card className="h-full overflow-hidden">
+    <Card className="results-panel h-full overflow-hidden">
       <CardHeader>
-        <CardTitle>Redacted Artifact</CardTitle>
-        <div className="flex items-center gap-2">
-          <Button variant={showFormatted ? "amber" : "ghost"} onClick={() => setShowFormatted(true)} className="px-2 py-0.5 text-[10px]"><List size={11} /> Formatted</Button>
-          <Button variant={!showFormatted ? "amber" : "ghost"} onClick={() => setShowFormatted(false)} className="px-2 py-0.5 text-[10px]"><FileJson size={11} /> Raw</Button>
-          <Button variant="ghost" onClick={downloadJson} className="px-2 py-0.5 text-[10px]"><Download size={11} /> JSON</Button>
-          <Button variant="ghost" onClick={downloadEvidence} className="px-2 py-0.5 text-[10px]"><Download size={11} /> Evidence</Button>
+        <CardTitle>Redacted artifact</CardTitle>
+        <div className="page-actions">
+          <Button variant={showFormatted ? "default" : "outline"} aria-pressed={showFormatted} onClick={() => setShowFormatted(true)}>
+            <List size={15} aria-hidden="true" /> Formatted
+          </Button>
+          <Button variant={!showFormatted ? "default" : "outline"} aria-pressed={!showFormatted} onClick={() => setShowFormatted(false)}>
+            <FileJson size={15} aria-hidden="true" /> Raw
+          </Button>
+          <Button variant="outline" onClick={downloadJson}><Download size={15} aria-hidden="true" /> JSON</Button>
+          <Button variant="outline" onClick={downloadEvidence}><Download size={15} aria-hidden="true" /> Evidence</Button>
         </div>
       </CardHeader>
-      <CardContent className="h-full p-0">
-        <pre className="h-full overflow-auto bg-graphite-900/40 p-3 font-mono text-[10px] leading-relaxed text-graphite-300">
-          {prettyJson(showFormatted ? summarizeJson(result.raw) : result.raw)}
-        </pre>
+      <CardContent className="h-full min-h-0 p-0">
+        <pre className="artifact-json h-full overflow-auto p-4 font-mono text-sm leading-relaxed">{prettyJson(showFormatted ? summarizeJson(result.raw) : result.raw)}</pre>
       </CardContent>
     </Card>
   );
@@ -364,43 +377,47 @@ function escapeMarkdown(value: string): string {
 }
 
 function summarizeJson(raw: Record<string, unknown>): Record<string, unknown> {
-  const keys = Object.keys(raw);
   const out: Record<string, unknown> = {};
-  for (const k of keys) {
-    const v = raw[k];
-    if (Array.isArray(v)) out[`${k}[]`] = `${v.length} items`;
-    else if (v && typeof v === "object") out[k] = `${Object.keys(v as object).length} keys`;
-    else out[k] = v;
+  for (const [key, value] of Object.entries(raw)) {
+    if (Array.isArray(value)) out[`${key}[]`] = `${value.length} items`;
+    else if (value && typeof value === "object") out[key] = `${Object.keys(value as object).length} keys`;
+    else out[key] = value;
   }
   return out;
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const s = normalizeRunStatus(status);
+  const normalized = normalizeRunStatus(status);
+  const variant = normalized === "completed" ? "cyan" : normalized === "error" || normalized === "failed" ? "red" : normalized === "cancelled" || normalized === "interrupted" ? "amber" : "outline";
+  return <Badge variant={variant}>{readable(status)}</Badge>;
+}
+
+function UnavailableCoordinate({ executionId, loading }: { executionId: string | null; loading: boolean }) {
+  if (!executionId) return <div className="empty-state" role="status">This result view is unavailable.</div>;
   return (
-    <Badge variant={s === "completed" ? "lime" : s === "error" ? "red" : s === "cancelled" ? "amber" : "cyan"}>
-      {status}
-    </Badge>
+    <div className="empty-state" role="status">
+      <h2>{loading ? "Loading coordinate details" : "Coordinate details unavailable"}</h2>
+      <p>{loading ? `Loading ${executionId}…` : `Detail unavailable for ${executionId}. Select another coordinate or return to the aggregate.`}</p>
+    </div>
   );
 }
 
 function Loading() {
-  return (
-    <div className="flex h-full items-center justify-center gap-2 font-mono text-[12px] text-graphite-400">
-      <Loader2 size={16} className="animate-spin text-signal-400" /> loading result…
-    </div>
-  );
+  return <div className="result-skeleton" role="status" aria-label="Loading result"><p>Loading result…</p><div className="catalog-skeleton" aria-hidden="true"><span /><span /><span /><span /></div></div>;
 }
 
 function ErrorState({ message, executionId }: { message: string; executionId: string }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-      <h2 className="font-display text-lg uppercase tracking-wider text-graphite-200">Result unavailable</h2>
-      <p className="max-w-md font-mono text-[11px] text-danger-400">{message}</p>
-      <p className="font-mono text-[10px] text-graphite-600">execution: {executionId}</p>
-      <Link href="/" className="text-signal-400 hover:text-signal-300">
-        ← back to runtime monitor
-      </Link>
+    <div className="empty-state results-error-state" role="alert">
+      <h1>Result unavailable</h1>
+      <p>{message}</p>
+      <p className="font-mono break-all">Execution ID: {executionId}</p>
+      <Link href="/results" className="ui-link">Browse other results</Link>
+      <Link href="/" className="ui-link"><ArrowLeft size={14} aria-hidden="true" /> Return to live</Link>
     </div>
   );
+}
+
+function readable(value: string): string {
+  return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

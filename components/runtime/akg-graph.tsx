@@ -17,6 +17,16 @@ import {
   type NodeChange,
   type Viewport,
 } from "@xyflow/react";
+import {
+  BookOpen,
+  Check,
+  Crosshair,
+  Maximize2,
+  Minimize2,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import "@xyflow/react/dist/style.css";
 import type { AkgSnapshot } from "@/lib/schemas";
 import {
@@ -53,7 +63,7 @@ type CardNode = Node<
   "card"
 >;
 type RouteEdge = Edge<
-  { placed: PlacedEdge; traversed: boolean; latest: boolean; pulse: boolean },
+  { placed: PlacedEdge; traversed: boolean; latest: boolean },
   "route"
 >;
 
@@ -105,7 +115,6 @@ function RoutedEdge({ id, data, markerEnd }: EdgeProps<RouteEdge>) {
       data-edge-id={data.placed.edge.id}
       data-traversed={data.traversed}
       data-latest={data.latest}
-      className={data.pulse ? "akg-edge-pulse" : ""}
     >
       {data.placed.points.map((points, index) => (
         <BaseEdge
@@ -165,7 +174,6 @@ function GraphCanvas(props: Props) {
   } | null>(null);
   const [legend, setLegend] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [pulse, setPulse] = useState<string | null>(null);
   const [measurements, setMeasurements] = useState<
     Record<string, { width: number; height: number }>
   >({});
@@ -252,13 +260,6 @@ function GraphCanvas(props: Props) {
     akgPath.length > 1
       ? directedPair(akgPath[akgPath.length - 2], akgPath[akgPath.length - 1])
       : null;
-  useEffect(() => {
-    // Synchronize a short arrival animation with a newly observed traversal.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPulse(latest);
-    const timer = setTimeout(() => setPulse(null), 750);
-    return () => clearTimeout(timer);
-  }, [latest, akgPath.length]);
 
   const pairs = useMemo(() => traversedPairs(akgPath), [akgPath]);
   const visible = useMemo(
@@ -344,21 +345,24 @@ function GraphCanvas(props: Props) {
                 placed,
                 traversed,
                 latest: isLatest,
-                pulse: pulse === pair,
               },
               hidden:
                 !visible.has(placed.edge.source) ||
                 !visible.has(placed.edge.target),
               markerEnd: {
                 type: MarkerType.ArrowClosed,
-                color: isLatest ? "#e8ad56" : traversed ? "#639ea8" : "#394750",
+                color: isLatest
+                  ? "var(--akg-current)"
+                  : traversed
+                    ? "var(--akg-traversed)"
+                    : "var(--akg-edge)",
                 width: 16,
                 height: 16,
               },
               ariaLabel: `${placed.edge.source} to ${placed.edge.target}. Inspect transition`,
             };
           }),
-    [layout, pairs, latest, pulse, visible],
+    [layout, pairs, latest, visible],
   );
 
   const center = (id: string) => {
@@ -452,70 +456,125 @@ function GraphCanvas(props: Props) {
       tabIndex={expanded ? -1 : undefined}
     >
       <header className="akg-heading">
-        <div>
-          <span className="akg-eyebrow">Attack knowledge graph</span>
-          <h2>Traversal map</h2>
+        <div className="akg-heading-copy">
+          <h2>Attack knowledge graph</h2>
+          <p>Traversal map for the current run</p>
         </div>
         <span className="akg-count" data-testid="node-count">
           {snapshot.nodes.filter((node) => visible.has(node.id)).length}/
           {snapshot.nodes.length} nodes
         </span>
       </header>
-      <div className="akg-toolbar" aria-label="Graph controls">
-        <div className="akg-view-switch">
+      <div className="akg-toolbar" role="group" aria-label="Graph controls">
+        <div className="akg-control-group" role="group" aria-label="Graph view">
+          <span className="akg-control-label">View</span>
+          <div className="akg-view-switch">
           <button
+            type="button"
             aria-pressed={view === "full"}
             onClick={() => setView("full")}
           >
             Full graph
           </button>
           <button
+            type="button"
             aria-pressed={view === "focus"}
             onClick={() => setView("focus")}
           >
             Focus path
           </button>
+          </div>
         </div>
-        <button onClick={fit}>Fit</button>
-        <button
-          onClick={() => currentNode && center(currentNode)}
-          disabled={!currentNode}
-        >
-          Center current
-        </button>
-        <button aria-label="Zoom out" onClick={() => void flow.zoomOut()}>
-          −
-        </button>
-        <button aria-label="Zoom in" onClick={() => void flow.zoomIn()}>
-          +
-        </button>
-        <button
-          ref={expandButton}
-          onClick={() => {
-            if (expanded) closeExpanded();
-            else {
-              savedViewport.current = flow.getViewport();
-              setExpanded(true);
-            }
-          }}
-        >
-          {expanded ? "Close expanded view" : "Expand"}
-        </button>
-        <button
-          aria-expanded={legend}
-          onClick={() => setLegend((value) => !value)}
-        >
-          Legend
-        </button>
+        <div className="akg-control-group" role="group" aria-label="Graph position">
+          <span className="akg-control-label">Position</span>
+          <button type="button" onClick={fit} title="Fit all visible nodes in the graph">
+            <Crosshair aria-hidden="true" size={15} /> Fit
+          </button>
+          <button
+            type="button"
+            onClick={() => currentNode && center(currentNode)}
+            disabled={!currentNode}
+            title={currentNode ? `Center ${currentNode}` : "No current node is available"}
+          >
+            <Crosshair aria-hidden="true" size={15} /> Center current
+          </button>
+          <button
+            type="button"
+            aria-label="Zoom out"
+            className="ui-button-icon"
+            title="Zoom out"
+            onClick={() => void flow.zoomOut()}
+          >
+            <ZoomOut aria-hidden="true" size={15} />
+          </button>
+          <button
+            type="button"
+            aria-label="Zoom in"
+            className="ui-button-icon"
+            title="Zoom in"
+            onClick={() => void flow.zoomIn()}
+          >
+            <ZoomIn aria-hidden="true" size={15} />
+          </button>
+        </div>
+        <div className="akg-control-group" role="group" aria-label="Graph display">
+          <span className="akg-control-label">Display</span>
+          <button
+            type="button"
+            ref={expandButton}
+            onClick={() => {
+              if (expanded) closeExpanded();
+              else {
+                savedViewport.current = flow.getViewport();
+                setExpanded(true);
+              }
+            }}
+            title={expanded ? "Close expanded graph" : "Expand graph"}
+          >
+            {expanded ? (
+              <Minimize2 aria-hidden="true" size={15} />
+            ) : (
+              <Maximize2 aria-hidden="true" size={15} />
+            )}
+            {expanded ? "Close expanded view" : "Expand"}
+          </button>
+          <button
+            type="button"
+            aria-expanded={legend}
+            aria-controls={legend ? "akg-legend" : undefined}
+            onClick={() => setLegend((value) => !value)}
+            title={legend ? "Hide graph legend" : "Show graph legend"}
+          >
+            <BookOpen aria-hidden="true" size={15} /> Legend
+          </button>
+        </div>
       </div>
       {legend && (
-        <div className="akg-legend">
-          <span className="legend-current">● Current / latest</span>
-          <span className="legend-traversed">→ Traversed</span>
-          <span className="legend-achieved">✓ Confirmed / achieved</span>
-          <span>◇ Pending</span>
-          <span>┄ Chain</span>
-          <span className="legend-failed">✕ Mismatch</span>
+        <div className="akg-legend" id="akg-legend" aria-label="Graph legend">
+          <span className="akg-legend-item">
+            <span className="akg-legend-marker legend-current" aria-hidden="true" />
+            <span>Current node or latest transition</span>
+          </span>
+          <span className="akg-legend-item">
+            <span className="akg-legend-marker legend-traversed" aria-hidden="true" />
+            <span>Traversed route</span>
+          </span>
+          <span className="akg-legend-item">
+            <Check aria-hidden="true" size={14} className="legend-achieved" />
+            <span>Confirmed or achieved</span>
+          </span>
+          <span className="akg-legend-item">
+            <span className="akg-legend-marker legend-pending" aria-hidden="true" />
+            <span>Pending node</span>
+          </span>
+          <span className="akg-legend-item">
+            <span className="akg-legend-marker legend-chain" aria-hidden="true" />
+            <span>Chain transition</span>
+          </span>
+          <span className="akg-legend-item">
+            <X aria-hidden="true" size={14} className="legend-failed" />
+            <span>Mismatch</span>
+          </span>
         </div>
       )}
       <div className="akg-canvas">
@@ -561,71 +620,92 @@ function GraphCanvas(props: Props) {
                 );
               }
             }}
-            colorMode="dark"
+            colorMode="light"
           />
         )}
         {selected && (
           <aside className="akg-details" aria-label="Graph inspection">
             <button
               ref={drawerClose}
+              type="button"
+              className="akg-details-close ui-button-icon"
               aria-label="Close inspection"
               onClick={() => {
                 setSelected(null);
                 selectionOrigin.current?.focus();
               }}
             >
-              ×
+              <X aria-hidden="true" size={17} />
             </button>
             {inspectedNode && (
               <>
-                <h3>{inspectedNode.node.label ?? inspectedNode.node.id}</h3>
-                <dl>
-                  <dt>ID</dt>
-                  <dd>{inspectedNode.node.id}</dd>
-                  <dt>Kind</dt>
-                  <dd>{inspectedNode.node.kind}</dd>
-                  <dt>Surface</dt>
-                  <dd>
-                    {inspectedNode.surface ??
-                      inspectedNode.node.surface ??
-                      "Shared"}
-                  </dd>
-                  <dt>Runtime state</dt>
-                  <dd>
-                    {currentNode === inspectedNode.node.id ? "Current · " : ""}
-                    {confirmedVulns.includes(inspectedNode.node.id)
-                      ? "Confirmed"
-                      : achievedOutcomes.includes(inspectedNode.node.id)
-                        ? "Achieved"
-                        : akgPath.includes(inspectedNode.node.id)
-                          ? "Visited"
-                          : "Pending"}
-                  </dd>
+                <h3 title={inspectedNode.node.label ?? inspectedNode.node.id}>
+                  {inspectedNode.node.label ?? inspectedNode.node.id}
+                </h3>
+                <dl className="metadata-list akg-inspection-fields">
+                  <div className="metadata-field">
+                    <dt>ID</dt>
+                    <dd title={inspectedNode.node.id}>{inspectedNode.node.id}</dd>
+                  </div>
+                  <div className="metadata-field">
+                    <dt>Kind</dt>
+                    <dd>{inspectedNode.node.kind}</dd>
+                  </div>
+                  <div className="metadata-field">
+                    <dt>Surface</dt>
+                    <dd>
+                      {inspectedNode.surface ??
+                        inspectedNode.node.surface ??
+                        "Shared"}
+                    </dd>
+                  </div>
+                  <div className="metadata-field">
+                    <dt>Runtime state</dt>
+                    <dd>
+                      {currentNode === inspectedNode.node.id ? "Current · " : ""}
+                      {confirmedVulns.includes(inspectedNode.node.id)
+                        ? "Confirmed"
+                        : achievedOutcomes.includes(inspectedNode.node.id)
+                          ? "Achieved"
+                          : akgPath.includes(inspectedNode.node.id)
+                            ? "Visited"
+                            : "Pending"}
+                    </dd>
+                  </div>
                 </dl>
               </>
             )}
             {inspectedEdge && (
               <>
-                <h3>
-                  {inspectedEdge.isChain ? "Chain transition" : "Transition"}
-                </h3>
-                <dl>
-                  <dt>Source</dt>
-                  <dd>{inspectedEdge.source}</dd>
-                  <dt>Target</dt>
-                  <dd>{inspectedEdge.target}</dd>
-                  <dt>Preconditions</dt>
-                  <dd>{inspectedEdge.preconditions.join(", ") || "None"}</dd>
-                  <dt>Target agent</dt>
-                  <dd>{inspectedEdge.targetAgent ?? "None"}</dd>
+                <h3>{inspectedEdge.isChain ? "Chain transition" : "Transition"}</h3>
+                <dl className="metadata-list akg-inspection-fields">
+                  <div className="metadata-field">
+                    <dt>Source</dt>
+                    <dd title={inspectedEdge.source}>{inspectedEdge.source}</dd>
+                  </div>
+                  <div className="metadata-field">
+                    <dt>Target</dt>
+                    <dd title={inspectedEdge.target}>{inspectedEdge.target}</dd>
+                  </div>
+                  <div className="metadata-field">
+                    <dt>Preconditions</dt>
+                    <dd>{inspectedEdge.preconditions.join(", ") || "None"}</dd>
+                  </div>
+                  <div className="metadata-field">
+                    <dt>Target agent</dt>
+                    <dd>{inspectedEdge.targetAgent ?? "None"}</dd>
+                  </div>
                 </dl>
               </>
+            )}
+            {!inspectedNode && !inspectedEdge && (
+              <p className="empty-state">Details for this graph item are unavailable.</p>
             )}
           </aside>
         )}
       </div>
       <nav className="akg-traversal" aria-label="Numbered traversal">
-        <span>PATH</span>
+        <span className="akg-traversal-label">Runtime path</span>
         {akgPath.length ? (
           akgPath.map((id, index) => (
             <button

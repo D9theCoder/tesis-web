@@ -8,6 +8,9 @@ export default defineConfig([
   globalIgnores([
     ".next/**",
     "node_modules/**",
+    ".agents/**",
+    ".codex/**",
+    ".impeccable/**",
     "next-env.d.ts",
     "test-results/**",
     "playwright-report/**",

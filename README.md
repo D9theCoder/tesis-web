@@ -52,8 +52,25 @@ visible. On completion a button links to the detailed results page.
 
 Live dashboard:
 
-- `/` — graph-first runtime monitor with Coordinate, Conversation, and Outcomes sidebar
-- `/results/[executionId]` — detailed + thesis scoring explorer
+- `/` — primary live monitor with execution context, model stream, AKG, and status panels
+- `/?execution=ID` — monitor one execution selected from the catalog
+- `/results` — searchable, filterable run catalog with bounded pagination
+- `/results/[executionId]` — summary, evidence, scoring, matrix comparison, and redacted artifact explorer
+- `/overview` — counts for the loaded catalog and recent executions
+- `/help` — reviewer guidance on status, scoring, evidence, graph inspection, and setup
+
+The application uses a compact persistent sidebar on desktop and a keyboard-accessible
+navigation drawer on mobile. Light is the default theme; the header theme control
+switches to dark and retains the local preference. The current-run live monitor
+remains the primary entry point. All catalog counts describe loaded data, not
+unloaded catalog pages.
+
+Results opens on Summary. Browse coordinates provides search, filters, ordering,
+and pagination; selecting a coordinate closes the chooser and loads its exact
+artifact. Evidence records have explicit Inspect actions, common and advanced
+filters, sorting, density controls, and local pagination. Scoring keeps provisional,
+Human, and AI sources separate, with a visible selected origin. Mobile scoring
+retains interpretation and evidence links beneath each dimension.
 
 Read-only API (served by the local Next.js process, contained under configured
 source/review roots and response-redacted):
@@ -156,10 +173,11 @@ unterminated records retain their byte cursor until the writer completes them.
 
 ## Graph dashboard
 
-At 1280px and above, the AKG occupies approximately two-thirds of the dashboard.
+Above 1200px, the AKG shares the workspace with a 330px supporting sidebar.
 The right sidebar divides its height between Coordinate (30%), Conversation
 (40%), and Outcomes (30%); each panel scrolls independently. Smaller screens
-place the graph first and allow the page to scroll through the supporting panels.
+show compact execution context before the graph and stack the supporting panels.
+The run catalog and the local Demonstration replay remain available below the live workspace.
 
 The client graph boundary loads React Flow and ELK. The deterministic layered
 layout uses explicit ports, orthogonal routes, rounded bends, and restrained
@@ -175,8 +193,8 @@ A failed layout displays an error and a Retry layout button.
   preserve the viewport; initial placement and view changes fit automatically.
 - **Expand**: full-screen graph with the same session. Escape closes it and
   restores the prior viewport and keyboard focus.
-- **Legend**: amber marks the current node/latest edge, muted cyan previous
-  transitions, lime confirmed findings/achieved outcomes, red mismatches.
+- **Legend**: amber marks the current node/latest edge, blue previous
+  transitions, green confirmed findings/achieved outcomes, red mismatches.
   Pending outcomes remain neutral. Dashed edges identify chain transitions.
 - Select a node or edge for inspection. Tab to a node/edge and press Enter for
   keyboard inspection. Node details include the complete label, ID, kind,

@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Activity, ExternalLink, FlaskConical, Radio } from "lucide-react";
+import { Activity, ExternalLink, FlaskConical } from "lucide-react";
 import type { AkgSnapshot, LiveRunState, RunSummary } from "@/lib/schemas";
-import { Badge, Button, ScrollArea } from "@/components/ui/primitives";
+import { Badge, Button } from "@/components/ui/primitives";
+import { RunCatalog } from "@/components/run-catalog";
 import { canonicalStatus } from "@/lib/artifact-contract";
 import { initialState, reduceEvents } from "@/lib/event-reducer";
 import {
@@ -13,12 +14,13 @@ import {
   fetchAkgMock,
   fetchEvents,
   fetchResult,
+  fetchRunSummary,
   fetchRuns,
 } from "@/lib/api-client";
 import { CoordinatePanel } from "@/components/runtime/coordinate-panel";
 import { ConversationPanel } from "@/components/runtime/conversation-panel";
 import { OutcomePanel } from "@/components/runtime/outcome-panel";
-import { fmtClock, normalizeRunStatus } from "@/lib/formatters";
+import { fmtDuration, normalizeRunStatus } from "@/lib/formatters";
 import { AKG_SNAPSHOT } from "@/lib/akg-static";
 import { normalizeAkgSnapshot } from "@/lib/akg-snapshot";
 import {
@@ -94,6 +96,10 @@ export function RuntimeShell() {
   const [nextRunCursor, setNextRunCursor] = useState<number | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const loadedThrough = useRef(0);
+  const requestedExecution = useRef<string | null>(null);
+  useEffect(() => {
+    requestedExecution.current = new URLSearchParams(window.location.search).get("execution");
+  }, []);
 
   const invalidate = useCallback(() => {
     epoch.current += 1;
@@ -143,11 +149,14 @@ export function RuntimeShell() {
         setRuns(previous => [...result.runs, ...previous.filter(run => !incomingIds.has(run.executionId))]);
         loadedThrough.current = Math.max(loadedThrough.current, result.runs.length);
         setNextRunCursor(result.total !== undefined && result.total > loadedThrough.current ? loadedThrough.current : null);
-        const candidate =
-          result.active?.[0] ??
-          (!following.current
-            ? result.runs.find((run) => run.hasJournal || run.hasArtifact)
-            : null);
+        const requested = requestedExecution.current;
+        const requestedRun = requested && !following.current
+          ? result.runs.find(run => run.executionId === requested) ?? await fetchRunSummary(requested, controller.signal)
+          : null;
+        if (!valid()) return;
+        const candidate = requested
+          ? requestedRun
+          : result.active?.[0] ?? (!following.current ? result.runs.find(run => run.hasJournal || run.hasArtifact) : null);
         if (candidate) adopt(candidate.executionId, candidate);
         setError(null);
       } catch (cause) {
@@ -363,6 +372,7 @@ export function RuntimeShell() {
     mockRef.current = null;
     setMock(null);
     following.current = null;
+    requestedExecution.current = null;
     cursor.current = 0;
     setActiveRun(null);
     setLiveState(initialState());
@@ -373,48 +383,25 @@ export function RuntimeShell() {
   const activeId = mock?.simulation?.executionId ?? activeRun?.executionId;
   return (
     <div className="runtime-shell">
-      <div className="runtime-toolbar">
-        <div className="flex items-center gap-3">
-          <Radio size={16} className="text-signal-400" />
-          <span className="font-display uppercase tracking-widest">
-            Runtime Monitor
-          </span>
-          <Badge variant="outline">
-            <Activity size={9} />
-            {mock ? "simulation" : state.connection}
-          </Badge>
+      <header className="runtime-toolbar">
+        <div>
+          <div className="flex flex-wrap items-center gap-3"><h1 className="page-title">Live monitor</h1><Badge variant={state.connection === "active" ? "cyan" : "outline"}><Activity size={13} />{mock ? "Simulation" : state.connection}</Badge></div>
+          <p className="page-description">Follow the current execution, model activity, and knowledge graph traversal.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {mock && (
-            <span role="status" className={`mock-status ${mock.phase}`}>
-              {mock.phase === "passed"
-                ? "✓ AKG verified"
-                : mock.phase === "failed"
-                  ? "✕ AKG mismatch"
-                  : mock.phase === "loading"
-                    ? "◷ Loading mock / layout"
-                    : "◷ Running mock"}
-            </span>
-          )}
-          <Button
-            onClick={runMockTest}
-            aria-label="Run seeded AKG traversal test"
-          >
-            <FlaskConical size={12} />
-            {mock ? "Rerun mock" : "Mock AKG test"}
-          </Button>
-          {mock && <Button onClick={returnToLive}>Return to live</Button>}
-          {!mock && hasArtifact && activeId && (
-            <Link
-              href={`/results/${activeId}`}
-              className="flex items-center gap-1 text-sm"
-            >
-              <ExternalLink size={12} />
-              Open detailed results
-            </Link>
-          )}
+        <div className="page-actions">
+          {mock && <span role="status" className={`mock-status ${mock.phase}`}>{mock.phase === "passed" ? "AKG verified" : mock.phase === "failed" ? "AKG mismatch" : mock.phase === "loading" ? "Loading mock / layout" : "Running mock"}</span>}
+          {mock && <><Button onClick={runMockTest} aria-label="Run seeded AKG traversal test"><FlaskConical size={14} />Rerun mock</Button><Button onClick={returnToLive}>Return to live</Button></>}
+          {!mock && hasArtifact && activeId && <Link href={`/results/${encodeURIComponent(activeId)}`} className="ui-button ui-button-primary"><ExternalLink size={15} />Open detailed results</Link>}
+          <Link href="/results" className="ui-button">Browse results</Link>
         </div>
+      </header>
+      <div className="summary-grid runtime-summary" aria-label="Current execution summary">
+        <div className="summary-item"><span>Execution</span><strong>{(state.executionStatus ?? "unknown").replace(/_/g, " ")}</strong><small>{activeId ?? "Waiting for a run"}</small></div>
+        <div className="summary-item"><span>Security outcome</span><strong>{(state.securityOutcome ?? "unknown").replace(/_/g, " ")}</strong><small>Independent of execution completion</small></div>
+        <div className="summary-item"><span>Model</span><strong>{state.model ?? "Unavailable"}</strong><small>{state.provider ?? "Provider not recorded"}</small></div>
+        <div className="summary-item"><span>Elapsed</span><strong>{fmtDuration(state.elapsedMs)}</strong><small>{mock ? "Mock replay" : "Runtime journal"}</small></div>
       </div>
+
       {error && !mock && (
         <div role="alert" className="runtime-error">
           {error} — retrying discovery…
@@ -450,7 +437,7 @@ export function RuntimeShell() {
       )}
       <div className="runtime-dashboard">
         <section className="akg-panel" aria-label="AKG Traversal">
-          <div className="px-3 py-1 text-xs text-graphite-500">Snapshot: {mock ? "mock capture" : akg.source ?? "static fallback"} {activeRun?.executionId}</div>
+          <div className="snapshot-context">Snapshot: {mock ? "mock capture" : akg.source ?? "static fallback"} <code>{activeRun?.executionId}</code></div>
           {state.mode === "matrix" && Object.keys(state.children).length > 0 && <div className="flex flex-wrap gap-2 p-2 text-xs">
             {Object.values(state.children).map(child => <button key={child.executionId} className="text-signal-300 underline" onClick={() => {
               const run = runs.find(r => r.executionId === child.executionId);
@@ -481,113 +468,10 @@ export function RuntimeShell() {
           </section>
         </aside>
       </div>
-      {!mock && (
-        <details className="px-4 py-2 text-xs text-graphite-400"><summary>Run catalog · {runs.length} loaded</summary>
-          <WaitingState runs={runs} onPick={run => adopt(run.executionId,run)} />
-          {nextRunCursor !== null && <Button onClick={loadOlder} disabled={loadingOlder}>Load older runs</Button>}
-        </details>
-      )}
-      {!activeId && !mock && (
-        <details className="shrink-0 border-t border-graphite-700 px-4 py-2 text-xs text-graphite-400">
-          <summary>Waiting for a live run · {runs.length} recent runs</summary>
-          <WaitingState
-            runs={runs}
-            onPick={(run) => adopt(run.executionId, run)}
-          />
-        </details>
-      )}
-    </div>
-  );
-}
-function WaitingState({
-  runs,
-  onPick,
-}: {
-  runs: RunSummary[];
-  onPick: (r: RunSummary) => void;
-}) {
-  return (
-    <div className="flex flex-1 items-center justify-center overflow-y-auto p-6">
-      <div className="w-full max-w-2xl">
-        <div className="mx-auto flex flex-col items-center gap-3 text-center">
-          <div className="relative flex h-16 w-16 items-center justify-center rounded-full border border-graphite-700">
-            <Radio size={28} className="text-graphite-500" />
-            <span className="absolute -right-1 -top-1 h-3 w-3 animate-ping rounded-full bg-ember-400/60" />
-          </div>
-          <h2 className="font-display text-lg font-semibold uppercase tracking-[0.15em] text-graphite-200">
-            Waiting for a live run
-          </h2>
-          <p className="max-w-md font-mono text-[11px] leading-relaxed text-graphite-500">
-            Start an experiment from the TESIS repo with{" "}
-            <span className="rounded-sm bg-graphite-800 px-1 py-0.5 text-signal-300">
-              python -m tesis run --config config.yaml
-            </span>{" "}
-            or the headless CLI. This observer will auto-adopt the newest active
-            run and tail its redacted journal.
-          </p>
-          <Badge variant="outline" className="mt-1">
-            TESIS_ROOT=
-            {process.env.NEXT_PUBLIC_TESIS_ROOT ?? "/home/kevin/coding/tesis"}
-          </Badge>
-        </div>
+      {!mock && <details className="runtime-demonstration"><summary>Demonstration replay</summary><div className="page-actions"><Button onClick={runMockTest} aria-label="Run seeded AKG traversal test"><FlaskConical size={14} />Mock AKG test</Button><span className="helper-copy">Replay the local fixture to inspect graph behavior.</span></div></details>}
+      {!mock && <details className="runtime-catalog"><summary>Run catalog · {runs.length} loaded</summary><RunCatalog runs={runs} selected={activeRun?.executionId} onPick={run => { requestedExecution.current = run.executionId; adopt(run.executionId, run); }} />{nextRunCursor !== null && <div className="table-footer"><span>Search more executions by loading another page.</span><Button onClick={loadOlder} disabled={loadingOlder}>Load older runs</Button></div>}</details>}
+      {!activeId && !mock && <div className="notice mt-5" role="status">Waiting for a live run. Open the results catalog to review saved executions, or ask the workspace owner to check the TESIS source configuration.</div>}
 
-        {runs.length > 0 && (
-          <div className="mt-8">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-label">recent runs on this machine</span>
-              <span className="font-mono text-[10px] text-graphite-500">
-                {runs.length}
-              </span>
-            </div>
-            <ScrollArea className="max-h-64">
-              <div className="flex flex-col gap-1.5">
-                {runs.map((r) => (
-                  <button
-                    key={r.executionId}
-                    onClick={() => onPick(r)}
-                    className="flex items-center justify-between gap-3 rounded-sm border border-graphite-700/60 bg-graphite-900/40 px-3 py-2 text-left transition-colors hover:border-graphite-500 hover:bg-graphite-800"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant={
-                            r.connection === "active" ? "cyan" : "outline"
-                          }
-                        >
-                          {r.connection ?? r.status} · Execution {r.executionStatus ?? "unknown"} · Outcome {r.securityOutcome ?? "unknown"}
-                        </Badge>
-                        <span className="truncate font-mono text-[11px] text-graphite-200">
-                          {r.mode} · {r.surface ?? "—"} ·{" "}
-                          {r.securityLevel ?? "—"}
-                        </span>
-                      </div>
-                      <div className="mt-1 truncate font-mono text-[9px] text-graphite-500">
-                        {r.executionId}
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <span className="font-mono text-[9px] text-graphite-500">
-                        {fmtClock(
-                          r.startedAt ? Date.parse(r.startedAt) / 1000 : null,
-                        )}
-                      </span>
-                      {r.hasArtifact && (
-                        <Link
-                          href={`/results/${r.executionId}`}
-                          className="text-signal-400 hover:text-signal-300"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <ExternalLink size={13} />
-                        </Link>
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </ScrollArea>
-          </div>
-        )}
-      </div>
     </div>
   );
 }

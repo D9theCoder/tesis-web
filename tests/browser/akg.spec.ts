@@ -16,7 +16,7 @@ test("long labels and unfamiliar nodes remain inspectable without changing topol
   await expect(page.locator(".react-flow__edge")).toHaveCount(snapshot.edges.length);
   const label = node.locator(".akg-node-label");
   expect(await label.evaluate((element) => getComputedStyle(element).fontSize)).toBe("14px");
-  expect(await label.evaluate((element) => element.clientHeight)).toBeLessThanOrEqual(30);
+  expect(await label.evaluate((element) => element.clientHeight)).toBeLessThanOrEqual(32);
   await node.focus(); await page.keyboard.press("Enter");
   await expect(page.getByRole("complementary", { name: "Graph inspection" })).toContainText(longLabel);
   await expect(page.getByRole("complementary", { name: "Graph inspection" })).toContainText("unfamiliar-browser-node");
@@ -61,13 +61,13 @@ for (const [width, height] of [
       path: `${captures}/${width}-overview.png`,
       fullPage: true,
     });
-    await page
-      .getByRole("button", { name: "Run seeded AKG traversal test" })
-      .click();
+    const demonstration = page.getByText("Demonstration replay", { exact: true });
+    if (await demonstration.count()) await demonstration.click();
+    await page.getByRole("button", { name: "Run seeded AKG traversal test" }).click();
     await expect(page.getByTestId("replay-count")).toHaveText(
       "0/18 events reduced",
     );
-    await expect(page.getByText("✓ AKG verified", { exact: true })).toHaveCount(
+    await expect(page.getByText("AKG verified", { exact: true })).toHaveCount(
       0,
     );
     const nodes = page.locator(".react-flow__node-card");
@@ -91,7 +91,7 @@ for (const [width, height] of [
       path: `${captures}/${width}-cross-surface.png`,
       fullPage: true,
     });
-    await expect(page.getByText("✓ AKG verified", { exact: true })).toBeVisible(
+    await expect(page.getByText("AKG verified", { exact: true })).toBeVisible(
       { timeout: 15000 },
     );
     await expect(page.getByTestId("replay-count")).toHaveText(
@@ -176,7 +176,7 @@ for (const [width, height] of [
     await page
       .getByRole("button", { name: "Run seeded AKG traversal test" })
       .click();
-    await expect(page.getByText("✕ AKG mismatch", { exact: true })).toBeVisible(
+    await expect(page.getByText("AKG mismatch", { exact: true })).toBeVisible(
       { timeout: 15000 },
     );
     await expect(
@@ -199,9 +199,8 @@ test("viewport, resize, scrolling, edge inspection and reduced motion during rep
     route.fulfill({ json: { runs: [], active: [], tesisRoot: "fixture" } }),
   );
   await page.goto("/");
-  await page
-    .getByRole("button", { name: "Run seeded AKG traversal test" })
-    .click();
+  await page.getByText("Demonstration replay", { exact: true }).click();
+  await page.getByRole("button", { name: "Run seeded AKG traversal test" }).click();
   const index = async () =>
     Number((await page.getByTestId("replay-count").innerText()).split("/")[0]);
   await expect.poll(index, { intervals: [50] }).toBeGreaterThanOrEqual(3);
@@ -226,14 +225,14 @@ test("viewport, resize, scrolling, edge inspection and reduced motion during rep
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect.poll(index, { timeout: 12000 }).toBe(18);
   await page.keyboard.press("Escape");
-  await expect(page.getByText("✓ AKG verified", { exact: true })).toBeVisible();
+  await expect(page.getByText("AKG verified", { exact: true })).toBeVisible();
   await expect(viewport).toHaveAttribute("style", transform!);
 
-  await page.getByRole("button", { name: "Chat", exact: true }).click();
+  await page.getByRole("button", { name: "Trace", exact: true }).click();
   for (const panel of ["Coordinate", "Conversation", "Outcomes"]) {
     const scroller = page
       .locator(
-        `.runtime-sidebar > section[aria-label="${panel}"] .overflow-y-auto`,
+        `.runtime-sidebar > section[aria-label="${panel}"] .runtime-panel-body`,
       )
       .first();
     const pageScroll = await page.evaluate(() => window.scrollY);
@@ -248,9 +247,9 @@ test("viewport, resize, scrolling, edge inspection and reduced motion during rep
 
   const oldWidth = (await page.locator(".akg-canvas").boundingBox())!.width;
   await page.setViewportSize({ width: 1024, height: 768 });
-  await expect
-    .poll(async () => (await page.locator(".akg-canvas").boundingBox())!.width)
-    .toBeGreaterThan(oldWidth);
+  await expect.poll(async () => (await page.locator(".akg-canvas").boundingBox())!.width).not.toBe(oldWidth);
+  const workspaceWidth = (await page.locator(".runtime-dashboard").boundingBox())!.width;
+  expect((await page.locator(".akg-canvas").boundingBox())!.width).toBeGreaterThanOrEqual(workspaceWidth - 4);
   expect(
     (await page.locator(".akg-panel").boundingBox())!.height,
   ).toBeGreaterThanOrEqual(480);

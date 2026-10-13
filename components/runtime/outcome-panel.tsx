@@ -3,153 +3,308 @@
 import {
   Ban,
   CheckCircle2,
-  ChevronRight,
   FileWarning,
   Repeat,
   ShieldAlert,
   Sparkles,
   XCircle,
 } from "lucide-react";
-import type { LiveRunState } from "@/lib/schemas";
-import { Reason } from "@/components/results/status-details";
-import { Progress } from "@/components/ui/primitives";
-import { cn } from "@/lib/utils";
+import type {
+  ExecutionStatus,
+  LiveRunState,
+  SecurityOutcome,
+  StatusReason,
+} from "@/lib/schemas";
+import { Badge, Progress } from "@/components/ui/primitives";
 import { fmtCost, fmtNumber, fmtPercent } from "@/lib/formatters";
 
-function MetricCard({
+function Metric({
   label,
   value,
-  denom,
   icon,
   tone = "neutral",
 }: {
   label: string;
-  value: string | number;
-  denom?: string;
-  icon?: React.ReactNode;
+  value: number | string;
+  icon: React.ReactNode;
   tone?: "neutral" | "good" | "bad" | "warn";
 }) {
-  const tones = {
-    neutral: "text-graphite-200",
-    good: "text-confirm-400",
-    bad: "text-danger-400",
-    warn: "text-ember-300",
-  };
   return (
-    <div className="rounded-sm border border-graphite-700/60 bg-graphite-900/50 px-2 py-1.5">
-      <div className="flex items-center justify-between">
-        <span className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-wider text-graphite-500">
-          {icon}
-          {label}
-        </span>
-        {denom && <span className="font-mono text-[9px] text-graphite-600">{denom}</span>}
-      </div>
-      <div className={cn("mt-0.5 font-mono text-[15px] font-semibold leading-none", tones[tone])}>
-        {typeof value === "number" ? fmtNumber(value) : value}
-      </div>
+    <div className={`outcome-metric outcome-metric--${tone}`}>
+      <span className="outcome-metric-label">
+        {icon}
+        {label}
+      </span>
+      <strong>{typeof value === "number" ? fmtNumber(value) : value}</strong>
     </div>
   );
 }
 
-export function OutcomePanel({ state }: { state: LiveRunState }) {
-  const m = state.metrics;
-  const guardrailRate = m.iterationCount > 0 ? m.guardrailCount / m.iterationCount : 0;
-  const budgetTotal = m.generationBudget || m.maxIterations || 1;
-  const budgetUsed = Math.min(budgetTotal, m.generatedCandidates || m.attempts);
-  const iterationsTotal = m.maxIterations || 1;
-  const iterationsUsed = Math.min(iterationsTotal, m.iterationCount);
+function StatusReason({ label, reason }: { label: string; reason: StatusReason | null }) {
+  if (!reason) return null;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-center justify-between gap-2 border-b border-graphite-700/70 px-3 py-2">
-        <div className="flex items-center gap-1.5 font-display text-[13px] font-semibold uppercase tracking-[0.12em] text-confirm-400">
-          <Sparkles size={13} /> Outcomes &amp; Budget
-        </div>
-      </div>
+    <div className="outcome-reason">
+      <h4>{label}</h4>
+      <p>
+        <code>{reason.code}</code>
+        {reason.detail && <span> · {reason.detail}</span>}
+      </p>
+      {reason.evidence_refs.length > 0 && (
+        <p className="outcome-evidence-refs">
+          Evidence references: {reason.evidence_refs.join(", ")}
+        </p>
+      )}
+    </div>
+  );
+}
 
-      <div className="flex-1 space-y-3 overflow-y-auto p-3">
-        <div className="space-y-1 text-xs"><p>Execution: {state.executionStatus ?? "unknown"}</p><p>Security outcome: {state.securityOutcome ?? "unknown"}</p>
-          <Reason label="Execution reason" reason={state.executionReason} /><Reason label="Security reason" reason={state.securityOutcomeReason} />
-          {state.diagnostics.map((d,i) => <p key={i}>{d}</p>)}
+function executionVariant(
+  status: ExecutionStatus | null,
+): "outline" | "cyan" | "amber" | "red" {
+  if (status === "completed") return "cyan";
+  if (status === "failed") return "red";
+  if (status === "interrupted") return "amber";
+  return "outline";
+}
+
+function securityVariant(
+  outcome: SecurityOutcome | null,
+): "outline" | "lime" | "amber" {
+  if (outcome === "confirmed") return "lime";
+  if (outcome === "unconfirmed" || outcome === "fixture_limited") return "amber";
+  return "outline";
+}
+
+function displayStatus(value: string | null): string {
+  return value ? value.replace(/_/g, " ") : "Unknown";
+}
+
+export function OutcomePanel({ state }: { state: LiveRunState }) {
+  const metrics = state.metrics;
+  const hasReason = Boolean(state.executionReason || state.securityOutcomeReason);
+  const hasDiagnostics = state.diagnostics.length > 0;
+  const generationBudgetSet = metrics.generationBudget > 0;
+  const generatedCount = metrics.generatedCandidates || metrics.attempts;
+  const candidateUsed = generationBudgetSet
+    ? Math.min(metrics.generationBudget, generatedCount)
+    : metrics.attempts;
+  const iterationLimitSet = metrics.maxIterations > 0;
+  const iterationUsed = iterationLimitSet
+    ? Math.min(metrics.maxIterations, metrics.iterationCount)
+    : metrics.iterationCount;
+  const guardrailRate =
+    metrics.iterationCount > 0
+      ? metrics.guardrailCount / metrics.iterationCount
+      : 0;
+
+  return (
+    <div className="runtime-panel">
+      <header className="runtime-panel-header">
+        <div className="runtime-panel-title">
+          <Sparkles aria-hidden="true" size={17} />
+          <h2>Outcomes and budget</h2>
         </div>
-        {/* Safety strip */}
-        <div className={cn("flex items-center gap-2 rounded-sm border px-2 py-1.5", m.containmentCount > 0 ? "border-danger-500/50 bg-danger-500/10" : "border-graphite-700/60 bg-graphite-900/50")}>
-          <ShieldAlert size={14} className={m.containmentCount > 0 ? "text-danger-400" : "text-graphite-500"} />
-          <span className="flex-1 font-mono text-[10px] uppercase tracking-wider text-graphite-300">
-            containment events
-          </span>
-          <span className={cn("font-mono text-[13px] font-bold", m.containmentCount > 0 ? "text-danger-400" : "text-graphite-300")}>
-            {m.containmentCount}
-          </span>
-        </div>
-        {m.containmentViolations > 0 && (
-          <div className="flex items-center gap-2 rounded-sm border border-danger-500/50 bg-danger-500/10 px-2 py-1.5">
-            <Ban size={13} className="text-danger-400" />
-            <span className="flex-1 font-mono text-[10px] uppercase tracking-wider text-danger-400">
-              external-target violations (blocked)
-            </span>
-            <span className="font-mono text-[13px] font-bold text-danger-400">{m.containmentViolations}</span>
+      </header>
+
+      <div className="runtime-panel-body outcome-panel-body overflow-y-auto overscroll-contain">
+        <section className="panel-section outcome-status" aria-label="Execution and security status">
+          <div className="outcome-status-field">
+            <span>Execution</span>
+            <Badge variant={executionVariant(state.executionStatus)}>
+              {displayStatus(state.executionStatus)}
+            </Badge>
           </div>
+          <div className="outcome-status-field">
+            <span>Security outcome</span>
+            <Badge variant={securityVariant(state.securityOutcome)}>
+              {displayStatus(state.securityOutcome)}
+            </Badge>
+          </div>
+          {hasReason || hasDiagnostics ? (
+            <details className="outcome-details">
+              <summary>
+                Reasons and diagnostics
+                {hasDiagnostics && <span>{state.diagnostics.length}</span>}
+              </summary>
+              <div className="outcome-details-content">
+                <StatusReason label="Execution reason" reason={state.executionReason} />
+                <StatusReason label="Security reason" reason={state.securityOutcomeReason} />
+                {hasDiagnostics && (
+                  <div className="outcome-diagnostics">
+                    <h4>Diagnostics</h4>
+                    <ul>
+                      {state.diagnostics.map((diagnostic, index) => (
+                        <li key={`${index}-${diagnostic}`}>{diagnostic}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </details>
+          ) : (
+            <p className="outcome-no-details">No status reasons or diagnostics recorded.</p>
+          )}
+        </section>
+
+        <section
+          className={`notice containment-notice ${metrics.containmentCount > 0 ? "notice--danger" : "notice--neutral"}`}
+          aria-label="Containment events"
+        >
+          <ShieldAlert aria-hidden="true" size={17} />
+          <span>Containment events</span>
+          <strong>{fmtNumber(metrics.containmentCount)}</strong>
+        </section>
+        {metrics.containmentViolations > 0 && (
+          <section className="notice notice--danger containment-notice" aria-label="Blocked external target violations">
+            <Ban aria-hidden="true" size={16} />
+            <span>External target violations blocked</span>
+            <strong>{fmtNumber(metrics.containmentViolations)}</strong>
+          </section>
         )}
 
-        {/* Success / failure / signal */}
-        <div className="grid grid-cols-2 gap-2">
-          <MetricCard label="positive events" value={m.successes} icon={<CheckCircle2 size={10} className="text-confirm-400" />} tone="good" />
-          <MetricCard label="negative events" value={m.failures} icon={<XCircle size={10} className="text-danger-400" />} tone="bad" />
-          <MetricCard label="guardrails" value={m.guardrailCount} icon={<ShieldAlert size={10} className="text-ember-300" />} tone="warn" />
-          <MetricCard label="invalid json" value={m.invalidJson} icon={<FileWarning size={10} className="text-ember-300" />} tone="warn" />
-          <MetricCard label="fallbacks" value={m.fallbacks} icon={<Repeat size={10} className="text-graphite-400" />} />
-          <MetricCard label="attempts" value={m.attempts} icon={<Sparkles size={10} className="text-graphite-400" />} />
-        </div>
-
-        {/* Budget */}
-        <div className="space-y-2 rounded-sm border border-graphite-700/60 bg-graphite-900/50 p-2">
-          <div className="flex items-center justify-between text-label">
-            <span>candidate budget</span>
-            <span className="font-mono text-[10px] text-graphite-400">{budgetUsed}/{budgetTotal}</span>
+        <section className="panel-section" aria-labelledby="outcome-counts-heading">
+          <h3 id="outcome-counts-heading">Run counts</h3>
+          <div className="outcome-metrics">
+            <Metric
+              label="Positive events"
+              value={metrics.successes}
+              icon={<CheckCircle2 aria-hidden="true" size={15} />}
+              tone="good"
+            />
+            <Metric
+              label="Negative events"
+              value={metrics.failures}
+              icon={<XCircle aria-hidden="true" size={15} />}
+              tone="bad"
+            />
+            <Metric
+              label="Guardrails"
+              value={metrics.guardrailCount}
+              icon={<ShieldAlert aria-hidden="true" size={15} />}
+              tone="warn"
+            />
+            <Metric
+              label="Invalid JSON"
+              value={metrics.invalidJson}
+              icon={<FileWarning aria-hidden="true" size={15} />}
+              tone="warn"
+            />
+            <Metric
+              label="Fallbacks"
+              value={metrics.fallbacks}
+              icon={<Repeat aria-hidden="true" size={15} />}
+            />
+            <Metric
+              label="Attempts"
+              value={metrics.attempts}
+              icon={<Sparkles aria-hidden="true" size={15} />}
+            />
           </div>
-          <Progress value={budgetUsed} max={budgetTotal} color="signal" />
-          <div className="flex items-center justify-between text-label">
-            <span>iterations</span>
-            <span className="font-mono text-[10px] text-graphite-400">{iterationsUsed}/{iterationsTotal}</span>
-          </div>
-          <Progress value={iterationsUsed} max={iterationsTotal} color="amber" />
-          <div className="flex items-center justify-between text-label">
-            <span>guardrail rate</span>
-            <span className="font-mono text-[10px] text-graphite-400">{fmtPercent(guardrailRate, 1)}</span>
-          </div>
-          <Progress value={m.guardrailCount} max={Math.max(1, m.iterationCount || 1)} color="red" />
-        </div>
+        </section>
 
-        {/* Tokens */}
-        <div className="grid grid-cols-2 gap-2">
-          <MetricCard label="tokens" value={fmtNumber(m.tokenCount)} icon={<Sparkles size={10} className="text-signal-400" />} />
-          <MetricCard label="cost" value={fmtCost(m.tokenCost)} icon={<Sparkles size={10} className="text-graphite-400" />} />
-        </div>
+        <section className="panel-section outcome-budget" aria-labelledby="outcome-budget-heading">
+          <h3 id="outcome-budget-heading">Budget and iteration use</h3>
+          <div className="outcome-budget-row">
+            <div className="outcome-budget-heading">
+              <span>Candidate budget</span>
+              <strong>
+                {generationBudgetSet
+                  ? `${fmtNumber(candidateUsed)} / ${fmtNumber(metrics.generationBudget)}`
+                  : `${fmtNumber(candidateUsed)} attempts · no limit set`}
+              </strong>
+            </div>
+            {generationBudgetSet && (
+              <Progress
+                value={candidateUsed}
+                max={metrics.generationBudget}
+                color="signal"
+                className="outcome-progress"
+              />
+            )}
+          </div>
+          <div className="outcome-budget-row">
+            <div className="outcome-budget-heading">
+              <span>Iterations</span>
+              <strong>
+                {iterationLimitSet
+                  ? `${fmtNumber(iterationUsed)} / ${fmtNumber(metrics.maxIterations)}`
+                  : `${fmtNumber(iterationUsed)} · no limit set`}
+              </strong>
+            </div>
+            {iterationLimitSet && (
+              <Progress
+                value={iterationUsed}
+                max={metrics.maxIterations}
+                color="amber"
+                className="outcome-progress"
+              />
+            )}
+          </div>
+          <div className="outcome-budget-row">
+            <div className="outcome-budget-heading">
+              <span>Guardrail rate</span>
+              <strong>
+                {fmtPercent(guardrailRate, 1)} · {fmtNumber(metrics.guardrailCount)} / {fmtNumber(metrics.iterationCount)} iterations
+              </strong>
+            </div>
+            {metrics.iterationCount > 0 && (
+              <Progress
+                value={metrics.guardrailCount}
+                max={metrics.iterationCount}
+                color="red"
+                className="outcome-progress"
+              />
+            )}
+          </div>
+        </section>
 
-        {/* Findings */}
-        <div className="rounded-sm border border-confirm-500/20 bg-confirm-500/5 p-2">
-          <div className="pb-1 text-label">confirmed findings</div>
-          {state.confirmedVulns.length ? (
-            state.confirmedVulns.map((v) => (
-              <div key={v} className="flex items-center gap-1 font-mono text-[11px] text-confirm-400">
-                <ChevronRight size={10} /> {v.replace(/_/g, " ")}
-              </div>
-            ))
-          ) : (
-            <span className="font-mono text-[10px] text-graphite-500">none yet</span>
-          )}
-          <div className="pb-1 pt-2 text-label">achieved outcomes</div>
-          {state.achievedOutcomes.length ? (
-            state.achievedOutcomes.map((v) => (
-              <div key={v} className="flex items-center gap-1 font-mono text-[11px] text-signal-300">
-                <ChevronRight size={10} /> {v.replace(/_/g, " ")}
-              </div>
-            ))
-          ) : (
-            <span className="font-mono text-[10px] text-graphite-500">none yet</span>
-          )}
-        </div>
+        <section className="panel-section outcome-resource-use" aria-label="Token use and cost">
+          <Metric
+            label="Tokens"
+            value={fmtNumber(metrics.tokenCount)}
+            icon={<Sparkles aria-hidden="true" size={15} />}
+          />
+          <Metric
+            label="Cost"
+            value={fmtCost(metrics.tokenCost)}
+            icon={<Sparkles aria-hidden="true" size={15} />}
+          />
+        </section>
+
+        <section className="panel-section outcome-findings" aria-labelledby="outcome-findings-heading">
+          <h3 id="outcome-findings-heading">Findings</h3>
+          <div className="outcome-finding-group">
+            <h4>Confirmed vulnerabilities</h4>
+            {state.confirmedVulns.length ? (
+              <ul>
+                {state.confirmedVulns.map((finding) => (
+                  <li key={finding} title={finding}>
+                    <CheckCircle2 aria-hidden="true" size={14} />
+                    {finding.replace(/_/g, " ")}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="empty-state">No confirmed vulnerabilities recorded.</p>
+            )}
+          </div>
+          <div className="outcome-finding-group">
+            <h4>Achieved outcomes</h4>
+            {state.achievedOutcomes.length ? (
+              <ul>
+                {state.achievedOutcomes.map((outcome) => (
+                  <li key={outcome} title={outcome}>
+                    <CheckCircle2 aria-hidden="true" size={14} />
+                    {outcome.replace(/_/g, " ")}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="empty-state">No achieved outcomes recorded.</p>
+            )}
+          </div>
+        </section>
       </div>
     </div>
   );
