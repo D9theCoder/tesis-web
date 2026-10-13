@@ -1,0 +1,156 @@
+{
+  "checks": [
+    {
+      "name": "touch-pan-normal",
+      "point": {
+        "x": 248.20000000000002,
+        "y": 308.240625,
+        "hit": "react-flow__pane draggable"
+      },
+      "before": "matrix(0.204019, 0, 0, 0.204019, 10.1036, 83.6043)",
+      "after": "matrix(0.204019, 0, 0, 0.204019, -29.8964, 98.6043)",
+      "inspectionOpen": 0
+    },
+    {
+      "name": "touch-pan-cancel",
+      "point": {
+        "x": 248.20000000000002,
+        "y": 308.240625,
+        "hit": "react-flow__pane draggable"
+      },
+      "before": "matrix(0.204019, 0, 0, 0.204019, -29.8964, 98.6043)",
+      "after": "matrix(0.204019, 0, 0, 0.204019, -69.8964, 113.604)",
+      "inspectionOpen": 0
+    },
+    {
+      "name": "touch-pan-after-cancel",
+      "point": {
+        "x": 248.20000000000002,
+        "y": 308.240625,
+        "hit": "react-flow__pane draggable"
+      },
+      "before": "matrix(0.204019, 0, 0, 0.204019, -69.8964, 113.604)",
+      "after": "matrix(0.204019, 0, 0, 0.204019, -109.896, 128.604)",
+      "inspectionOpen": 0
+    },
+    {
+      "name": "light-graph-connector-contrast",
+      "edge": {
+        "stroke": "rgb(139, 155, 177)",
+        "background": "rgb(248, 250, 253)",
+        "contrast": 2.706289305820343
+      }
+    },
+    {
+      "name": "outcomes-sequential-keyboard",
+      "outcomesReached": true,
+      "visited": [
+        {
+          "tag": "BUTTON",
+          "class": "conversation-entry-toggle",
+          "name": "Modelllm.response18 tokensUse the seeded credential pair and veri"
+        },
+        {
+          "tag": "DIV",
+          "class": "runtime-panel-body outcome-panel-body overflow-y-auto overscroll-contain",
+          "name": "ExecutionUnknownSecurity outcomeUnknownNo status reasons or diagn"
+        },
+        {
+          "tag": "BODY",
+          "class": "",
+          "name": "Skip to contentTTESISWeb ObserverRResearch workspaceDVWA sandboxL"
+        },
+        {
+          "tag": "A",
+          "class": "skip-link",
+          "name": "Skip to content"
+        }
+      ]
+    },
+    {
+      "name": "outcomes-programmatic-focus",
+      "clientHeight": 391,
+      "scrollHeight": 1046,
+      "tabIndex": -1,
+      "focused": true,
+      "before": 0
+    },
+    {
+      "name": "outcomes-arrow-scroll",
+      "scrollTop": 30
+    },
+    {
+      "name": "light-search-boundary-contrast",
+      "border": "rgb(178, 190, 208)",
+      "background": "rgb(255, 255, 255)",
+      "surrounding": "rgb(255, 255, 255)",
+      "borderContrast": 1.880171972106517,
+      "fillContrast": 1
+    },
+    {
+      "name": "copy-feedback-after-value-change",
+      "clipboardStub": true,
+      "clipboard": "browser-matrix",
+      "displayedId": "execution browser-child-a",
+      "button": "Copied"
+    },
+    {
+      "name": "cold-monitor-long-tasks",
+      "cpuMultiplier": 1,
+      "tasks": [
+        {
+          "start": 304.30000000074506,
+          "duration": 59
+        },
+        {
+          "start": 370.7000000011176,
+          "duration": 53
+        }
+      ],
+      "elapsed": 723.3000000007451,
+      "paint": [
+        {
+          "name": "first-paint",
+          "start": 100
+        },
+        {
+          "name": "first-contentful-paint",
+          "start": 100
+        }
+      ]
+    },
+    {
+      "name": "cold-monitor-long-tasks",
+      "cpuMultiplier": 4,
+      "tasks": [
+        {
+          "start": 132.59999999962747,
+          "duration": 160
+        },
+        {
+          "start": 697.4000000003725,
+          "duration": 210
+        },
+        {
+          "start": 968.4000000003725,
+          "duration": 243
+        },
+        {
+          "start": 1242.7000000011176,
+          "duration": 679
+        }
+      ],
+      "elapsed": 2569.9000000003725,
+      "paint": [
+        {
+          "name": "first-paint",
+          "start": 128
+        },
+        {
+          "name": "first-contentful-paint",
+          "start": 128
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+
+> tesis-web@0.1.0 test:browser
+> playwright test
+
+
+Running 19 tests using 6 workers
+
+(node:76599) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:76581) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:76580) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:76600) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:76587) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:76589) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   2 tests/browser/artifacts.spec.ts:4:7 › saved artifact retrieval › exact IDs, coverage, redaction, independent reviews and snapshot ownership (362ms)
+  ✓   3 tests/browser/runtime-pagination.spec.ts:4:5 › pagination resumes after mock replay cancels a pending page (1.5s)
+  ✓   4 tests/browser/akg.spec.ts:6:5 › long labels and unfamiliar nodes remain inspectable without changing topology (1.9s)
+  ✓   7 tests/browser/artifacts.spec.ts:23:7 › saved artifact retrieval › rapid selection retains one child's header, evidence, reviews and JSON download (2.4s)
+  ✓   9 tests/browser/artifacts.spec.ts:45:7 › saved artifact retrieval › score origins, evidence links, filters and responsive selection (749ms)
+  ✓   6 tests/browser/audit-fixes.spec.ts:8:9 › technical audit regressions › contrast, semantics, copy identity and touch controls at 320px (10.6s)
+  ✓   1 tests/browser/dashboard.spec.ts:7:9 › enterprise observer workspace › navigation, themes, review and keyboard access at 1440px (11.6s)
+  ✓   5 tests/browser/polish.spec.ts:9:9 › dashboard polish › graph, icon controls and long evidence at 320px (11.8s)
+  ✓   8 tests/browser/akg.spec.ts:31:7 › replay, controls and mismatch at 1440x900 (12.9s)
+  ✓  10 tests/browser/audit-fixes.spec.ts:8:9 › technical audit regressions › contrast, semantics, copy identity and touch controls at 768px (9.8s)
+  ✓  14 tests/browser/audit-fixes.spec.ts:59:7 › technical audit regressions › saved dark theme is applied while all client bundles are pending (290ms)
+  ✓  11 tests/browser/dashboard.spec.ts:7:9 › enterprise observer workspace › navigation, themes, review and keyboard access at 390px (10.6s)
+  ✓  12 tests/browser/polish.spec.ts:9:9 › dashboard polish › graph, icon controls and long evidence at 768px (10.4s)
+  ✓  15 tests/browser/audit-fixes.spec.ts:74:7 › technical audit regressions › a real layout worker runs, and a failed worker can be retried (1.6s)
+  ✓  16 tests/browser/polish.spec.ts:90:7 › dashboard polish › loading, source failure and a successful empty catalog remain distinct (389ms)
+  ✓  13 tests/browser/akg.spec.ts:31:7 › replay, controls and mismatch at 1920x1080 (12.8s)
+  ✓  17 tests/browser/akg.spec.ts:31:7 › replay, controls and mismatch at 1024x768 (12.6s)
+  ✓  18 tests/browser/akg.spec.ts:31:7 › replay, controls and mismatch at 390x844 (12.2s)
+  ✓  19 tests/browser/akg.spec.ts:193:5 › viewport, resize, scrolling, edge inspection and reduced motion during replay (9.2s)
+
+  19 passed (1.1m)

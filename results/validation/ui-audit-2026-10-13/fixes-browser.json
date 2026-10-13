@@ -1,0 +1,335 @@
+{
+  "engine": "153.0.8010.12",
+  "scans": [
+    {
+      "name": "1440-light-guide",
+      "documentWidth": 1440,
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "name": "1440-light-scoring",
+      "documentWidth": 1440,
+      "width": 1440,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-prohibited-attr",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "name": "320-dark-guide",
+      "documentWidth": 320,
+      "width": 320,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "name": "320-dark-scoring",
+      "documentWidth": 320,
+      "width": 320,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-prohibited-attr",
+          "count": 2
+        },
+        {
+          "id": "color-contrast",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "name": "768-light-guide",
+      "documentWidth": 768,
+      "width": 768,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "name": "768-light-scoring",
+      "documentWidth": 768,
+      "width": 768,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-prohibited-attr",
+          "count": 2
+        }
+      ]
+    }
+  ],
+  "performance": [
+    {
+      "cpuMultiplier": 1,
+      "tasks": [],
+      "elapsed": 923.3999999985099,
+      "paint": [
+        {
+          "name": "first-paint",
+          "start": 56
+        },
+        {
+          "name": "first-contentful-paint",
+          "start": 56
+        }
+      ],
+      "scripts": [
+        {
+          "path": "/_next/static/chunks/webpack-e2c64a3e8af1013a.js",
+          "bytes": 4766,
+          "gzipBytes": 2268,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/4bd1b696-92152b0f5947070d.js",
+          "bytes": 201054,
+          "gzipBytes": 63299,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/794-735cf927e48def02.js",
+          "bytes": 240953,
+          "gzipBytes": 65622,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/main-app-f88714dd34232ceb.js",
+          "bytes": 513,
+          "gzipBytes": 222,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/app/layout-5563fe1345878ede.js",
+          "bytes": 10269,
+          "gzipBytes": 3699,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/837-5f9295afe777e65f.js",
+          "bytes": 29643,
+          "gzipBytes": 10607,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/938-5a5f568604cf20e2.js",
+          "bytes": 7659,
+          "gzipBytes": 2601,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/323-78556b973d443054.js",
+          "bytes": 56835,
+          "gzipBytes": 13034,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/434-eece77a343880c61.js",
+          "bytes": 7544,
+          "gzipBytes": 2087,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/157-1820444af3a2a2c1.js",
+          "bytes": 29193,
+          "gzipBytes": 9191,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/app/page-4f4a04f1325f713f.js",
+          "bytes": 49173,
+          "gzipBytes": 12989,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/1a258343.01cc0e36efea277b.js",
+          "bytes": 69152,
+          "gzipBytes": 20223,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/562.ea91e87a5afa79df.js",
+          "bytes": 99136,
+          "gzipBytes": 34375,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/613.6aac8bebc7492bb1.js",
+          "bytes": 18174,
+          "gzipBytes": 6245,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/app/results/page-6f7137ddb97cc725.js",
+          "bytes": 4570,
+          "gzipBytes": 1966,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/tesis-akg-layout.7e66c8b0e03fd761.js",
+          "bytes": 1638,
+          "gzipBytes": 933,
+          "worker": true
+        }
+      ],
+      "workers": [
+        {
+          "path": "/_next/static/chunks/tesis-akg-layout.7e66c8b0e03fd761.js",
+          "bytes": 1638,
+          "gzipBytes": 933
+        }
+      ],
+      "mainBytes": 828634,
+      "mainGzipBytes": 248428,
+      "maxLongTask": 0
+    },
+    {
+      "cpuMultiplier": 4,
+      "tasks": [
+        {
+          "start": 69,
+          "duration": 73
+        },
+        {
+          "start": 163.69999999925494,
+          "duration": 237
+        },
+        {
+          "start": 731.1999999992549,
+          "duration": 62
+        }
+      ],
+      "elapsed": 1622.199999999255,
+      "paint": [
+        {
+          "name": "first-paint",
+          "start": 160
+        },
+        {
+          "name": "first-contentful-paint",
+          "start": 160
+        }
+      ],
+      "scripts": [
+        {
+          "path": "/_next/static/chunks/webpack-e2c64a3e8af1013a.js",
+          "bytes": 4766,
+          "gzipBytes": 2268,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/4bd1b696-92152b0f5947070d.js",
+          "bytes": 201054,
+          "gzipBytes": 63299,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/794-735cf927e48def02.js",
+          "bytes": 240953,
+          "gzipBytes": 65622,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/main-app-f88714dd34232ceb.js",
+          "bytes": 513,
+          "gzipBytes": 222,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/app/layout-5563fe1345878ede.js",
+          "bytes": 10269,
+          "gzipBytes": 3699,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/837-5f9295afe777e65f.js",
+          "bytes": 29643,
+          "gzipBytes": 10607,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/323-78556b973d443054.js",
+          "bytes": 56835,
+          "gzipBytes": 13034,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/938-5a5f568604cf20e2.js",
+          "bytes": 7659,
+          "gzipBytes": 2601,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/434-eece77a343880c61.js",
+          "bytes": 7544,
+          "gzipBytes": 2087,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/157-1820444af3a2a2c1.js",
+          "bytes": 29193,
+          "gzipBytes": 9191,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/app/page-4f4a04f1325f713f.js",
+          "bytes": 49173,
+          "gzipBytes": 12989,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/1a258343.01cc0e36efea277b.js",
+          "bytes": 69152,
+          "gzipBytes": 20223,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/562.ea91e87a5afa79df.js",
+          "bytes": 99136,
+          "gzipBytes": 34375,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/613.6aac8bebc7492bb1.js",
+          "bytes": 18174,
+          "gzipBytes": 6245,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/app/results/page-6f7137ddb97cc725.js",
+          "bytes": 4570,
+          "gzipBytes": 1966,
+          "worker": false
+        },
+        {
+          "path": "/_next/static/chunks/tesis-akg-layout.7e66c8b0e03fd761.js",
+          "bytes": 1638,
+          "gzipBytes": 933,
+          "worker": true
+        }
+      ],
+      "workers": [
+        {
+          "path": "/_next/static/chunks/tesis-akg-layout.7e66c8b0e03fd761.js",
+          "bytes": 1638,
+          "gzipBytes": 933
+        }
+      ],
+      "mainBytes": 828634,
+      "mainGzipBytes": 248428,
+      "maxLongTask": 237
+    }
+  ],
+  "errors": [],
+  "emittedWorkerEngineAssets": [
+    {
+      "path": ".next/static/chunks/3ec8db7e.f5fb32bfe11ba170.js",
+      "bytes": 1444733,
+      "sha256": "d1fc0c8b860fe6f90d396c42537a33bc8688ede8767ff3384c4edb6224c2a016"
+    }
+  ]
+}
