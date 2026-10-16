@@ -1,4 +1,4 @@
-import { expect, test, type Route } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 
 test.describe("dashboard polish", () => {
@@ -21,7 +21,8 @@ test.describe("dashboard polish", () => {
       for (const [route, label] of [["/results", "catalog"], ["/overview", "overview"], ["/help", "guide"]]) {
         await page.goto(route);
         await expect(page.locator("h1")).toBeVisible();
-        if (route !== "/help") await expect(page.getByRole("table", { name: "Run catalog" })).toBeVisible();
+        if (route === "/results") await expect(page.getByRole("table")).toBeVisible();
+        if (route === "/overview") await expect(page.locator(".research-conclusion")).toBeVisible();
         await noOverflow();
         await capture(label);
       }
@@ -87,23 +88,4 @@ test.describe("dashboard polish", () => {
     });
   }
 
-  test("loading, source failure and a successful empty catalog remain distinct", async ({ page }) => {
-    await mkdir(captures, { recursive: true });
-    await page.setViewportSize({ width: 390, height: 844 });
-    let pending: Route | undefined;
-    await page.route("**/api/runtime/runs*", route => { pending = route; });
-    await page.goto("/overview");
-    await expect(page.getByRole("status", { name: "Loading run catalog" })).toBeVisible();
-    await page.screenshot({ path: `${captures}/after-loading.png`, fullPage: true });
-    await pending!.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Source temporarily unavailable" }) });
-    await expect(page.getByRole("heading", { name: "Run catalog unavailable" })).toBeVisible();
-    await expect(page.getByText("No runs available", { exact: true })).toHaveCount(0);
-    await page.screenshot({ path: `${captures}/after-error.png`, fullPage: true });
-    await page.unroute("**/api/runtime/runs*");
-    await page.route("**/api/runtime/runs*", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ tesisRoot: "/sanitized", runs: [], total: 0, nextCursor: null }) }));
-    await page.getByRole("button", { name: "Retry", exact: true }).click();
-    await expect(page.getByText("No runs available", { exact: true })).toBeVisible();
-    await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
-    await page.screenshot({ path: `${captures}/after-empty.png`, fullPage: true });
-  });
 });

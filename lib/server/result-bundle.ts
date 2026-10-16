@@ -2,7 +2,7 @@ import path from "node:path";
 import { artifactSchema, resultBundleSchema, type SourceBinding } from "@/lib/schemas";
 import { record, mergeArtifact, canonicalStatus } from "@/lib/artifact-contract";
 import { readSource, artifactRoots, redact, collectSecrets } from "@/lib/server/fs-util";
-import { getCatalog, uniqueRun, RetrievalError, clearCatalogCache, type ResolvedRun } from "@/lib/server/resolve-run";
+import { getCatalog, uniqueRun, hasExactMatrixMembership, RetrievalError, clearCatalogCache, type ResolvedRun } from "@/lib/server/resolve-run";
 import { normalizeResult } from "@/lib/result-normalizer";
 import { resolveReviews } from "@/lib/server/reviews";
 
@@ -19,9 +19,11 @@ export async function resultBundle(run: ResolvedRun) {
     coordinate_index: run.coordinateIndex, historical_analysis: run.historicalAnalysis ?? null };
   if (run.mode === "matrix" && Array.isArray(run.raw.runs)) {
     const catalog = await getCatalog();
+    const declaredIds = new Set(run.raw.runs.map(child => record(child).execution_id).filter((id): id is string => typeof id === "string"));
     const rows = run.raw.runs.map(record).map((child,index) => {
       let resolved: ResolvedRun | null = null;
       try { resolved = uniqueRun(catalog, String(child.execution_id)); } catch { diagnostics.push(`ambiguous_child:${child.execution_id}`); }
+      if (resolved && !hasExactMatrixMembership(run, resolved, declaredIds)) { diagnostics.push(`unresolved_child_membership:${child.execution_id}`); resolved = null; }
       const m = mergeArtifact(resolved?.raw ?? child);
       const config = record(m.config), canonical = canonicalStatus(m);
       // Summary responses contain coordinate metadata. Evidence is retrieved on exact child selection.

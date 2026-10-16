@@ -60,4 +60,14 @@ await write("reviews/human.review-status.json",{ artifact_type: "thesis_review_s
   generated_at: "2026-10-12T00:00:21Z", rubric_version: "scoring.v4", method: a.selected_method, config,
   workflows: { human: { status: "pending", reason: "pending_candidate_grades", Spayload_final: null, Srun_final: null } },
 });
+if (process.argv.includes("--overview")) {
+  const standalone = { schema_version: "tui.v1", execution_id: "overview-standalone", status: "success",
+    execution_status: "completed", security_outcome: null, experiment_condition: "Saved baseline", target_method: "fixture-method",
+    provider: "fixture", model: "fixture-model", config: {}, created_at: "2026-10-17T00:00:00Z" };
+  await write("overview-standalone.json", standalone);
+  await write("overview-orphan.json", { ...standalone, execution_id: "overview-orphan", matrix_execution_id: "absent-parent" });
+  for (const dir of ["one", "two"]) await write(`${dir}/overview-ambiguous.json`, { ...standalone, execution_id: "overview-ambiguous" });
+  await write("overview-unavailable/runtime.json", { schema_version: "runtime-descriptor.v1",
+    execution_id: "overview-unavailable", mode: "single-run", status: "finished", started_at: "2026-10-16T00:00:00Z" });
+}
 console.log(root);

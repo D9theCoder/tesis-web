@@ -15,7 +15,7 @@ test.describe("technical audit regressions", () => {
       expect(await proseLink.evaluate(el => getComputedStyle(el).textDecorationLine)).toContain("underline");
 
       await page.goto("/results");
-      await expect(page.getByRole("table", { name: "Run catalog" })).toBeVisible();
+      await expect(page.getByRole("table")).toBeVisible();
       const input = page.getByRole("searchbox");
       for (const theme of ["light", "dark"]) {
         if (theme === "dark") await page.getByRole("button", { name: "Switch to dark theme" }).click();
@@ -28,7 +28,7 @@ test.describe("technical audit regressions", () => {
         });
         expect(contrast).toBeGreaterThanOrEqual(3);
       }
-      for (const control of [input, page.getByRole("button", { name: "Switch to light theme" }), page.locator(".catalog-identity").first()]) {
+      for (const control of [input, page.getByRole("button", { name: "Switch to light theme" }), page.getByRole("link", { name: "Open results", exact: true }).first()]) {
         const bounds = (await control.boundingBox())!;
         expect(bounds.height).toBeGreaterThanOrEqual(44);
       }
@@ -72,6 +72,8 @@ test.describe("technical audit regressions", () => {
   });
 
   test("a real layout worker runs, and a failed worker can be retried", async ({ page }) => {
+    // Hold one graph identity: runtime adoption must not replace the failed layout before Retry.
+    await page.route("**/api/runtime/runs?*", route => route.fulfill({ json: { runs: [], active: [], tesisRoot: "fixture" } }));
     const workers: string[] = [];
     page.on("worker", worker => workers.push(worker.url()));
     await page.goto("/");

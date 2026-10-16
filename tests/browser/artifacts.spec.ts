@@ -2,9 +2,9 @@ import { expect, test } from "@playwright/test";
 test.describe("saved artifact retrieval", () => {
   test.skip(!process.env.TESIS_WEB_BROWSER_FIXTURES, "Requires the prepared /tmp observer fixtures and configured local server");
   test("exact IDs, coverage, redaction, independent reviews and snapshot ownership", async ({ request }) => {
-    const first = await (await request.get("/api/runtime/runs?limit=2")).json();
+    const first = await (await request.get("/api/runtime/runs?q=browser-&limit=2")).json();
     expect(first.total).toBe(4); expect(first.runs).toHaveLength(2); expect(first.nextCursor).toBe(2);
-    const second = await (await request.get(`/api/runtime/runs?limit=2&cursor=${first.nextCursor}`)).json();
+    const second = await (await request.get(`/api/runtime/runs?q=browser-&limit=2&cursor=${first.nextCursor}`)).json();
     expect(new Set([...first.runs,...second.runs].map(r=>r.executionId)).size).toBe(4);
     const parent = await (await request.get("/api/results/browser-matrix")).json();
     expect(parent.schema_version).toBe("observer-result.v1"); expect(JSON.stringify(parent)).not.toContain("Saved response");

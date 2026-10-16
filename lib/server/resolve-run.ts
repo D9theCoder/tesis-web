@@ -24,12 +24,14 @@ export async function scanJson(roots: Root[], diagnostics: string[], skipReviewD
   const files: { path: string; root: Root }[] = [], visited = new Set<string>();
   async function walk(dir: string, root: Root, depth: number) {
     const safe = await realInside(root.path, dir);
-    if (!safe || visited.has(safe)) return;
+    if (!safe) { diagnostics.push(`root_or_directory_unavailable:${root.id}/${path.relative(root.path, dir)}`); return; }
+    if (visited.has(safe)) return;
     visited.add(safe);
-    if (depth > 12 || files.length > 20000) { diagnostics.push(`scan_limit:${root.id}`); return; }
+    if (depth > 12 || files.length >= 20000) { diagnostics.push(`scan_limit:${root.id}`); return; }
     try {
       if ((await fs.stat(safe)).isFile()) { if (safe.endsWith(".json")) files.push({ path: safe, root }); return; }
       for (const e of (await fs.readdir(safe, { withFileTypes: true })).sort((a,b) => a.name.localeCompare(b.name))) {
+        if (files.length >= 20000) { diagnostics.push(`scan_limit:${root.id}`); return; }
         const child = path.join(safe, e.name);
         if (e.isDirectory() && !EXCLUDED_DIRS.has(e.name) && !(skipReviewDirs && /review|^ai-|^human-/.test(e.name))) await walk(child, root, depth + 1);
         else if ((e.isFile() || e.isSymbolicLink()) && e.name.endsWith(".json")) {
@@ -83,7 +85,8 @@ async function buildCatalog(roots: Root[]): Promise<Catalog> {
       if (!parsed.success) { catalog.diagnostics.push(`artifact_schema_invalid:${file.root.id}/${path.relative(file.root.path, file.path)}`); continue; }
       put({ executionId: parsed.data.execution_id, dir: path.dirname(source.path), root: file.root,
         primaryPath: source.path, sha256: source.sha256, raw: parsed.data,
-        mode: Array.isArray(raw.runs) || raw.matrix === true ? "matrix" : "single-run", metadata: {}, matrixExecutionId: null, coordinateIndex: null, diagnostics: [] });
+        mode: Array.isArray(raw.runs) || raw.matrix === true ? "matrix" : "single-run", metadata: {},
+        matrixExecutionId: text(raw.matrix_execution_id), coordinateIndex: finite(raw.coordinate_index), diagnostics: [] });
     } catch { catalog.diagnostics.push(`json_unreadable:${file.root.id}/${path.relative(file.root.path, file.path)}`); }
   }
   for (const manifest of manifests) {
@@ -113,7 +116,10 @@ async function buildCatalog(roots: Root[]): Promise<Catalog> {
           if (key === "snapshot") { run.snapshotPath = full; run.snapshotOwnerExecutionId = text(detail.owner_execution_id) ?? parentId ?? id; }
           else if (!run.journalPath || key === "journal") { run.journalPath = full; run.journalOwnerExecutionId = key === "trace" ? id : text(detail.owner_execution_id) ?? parentId ?? id; }
         }
-        if (parentId && id !== parentId) run.matrixExecutionId = parentId;
+        if (parentId && id !== parentId) {
+          if (run.matrixExecutionId && run.matrixExecutionId !== parentId) run.diagnostics.push("ambiguous_parent_membership");
+          else run.matrixExecutionId = parentId;
+        }
         run.coordinateIndex = finite(m.index) === null ? null : Math.max(0, Number(m.index) - 1);
       }
     }
@@ -149,9 +155,14 @@ async function buildCatalog(roots: Root[]): Promise<Catalog> {
       }
     }
   }
+  const membershipIds = new Map<ResolvedRun, Set<string>>();
+  for (const sources of catalog.runs.values()) for (const parent of sources) {
+    if (parent.mode === "matrix") membershipIds.set(parent, new Set(Array.isArray(parent.raw?.runs)
+      ? parent.raw.runs.map(row => text(record(row).execution_id)).filter((id): id is string => id !== null) : []));
+  }
   for (const run of [...catalog.runs.values()].flat()) {
     const parent = run.matrixExecutionId ? catalog.runs.get(run.matrixExecutionId) : null;
-    const owner = parent?.length === 1 ? parent[0] : null;
+    const owner = parent?.length === 1 && hasExactMatrixMembership(parent[0], run, membershipIds.get(parent[0])) ? parent[0] : null;
     const descriptor = run.descriptor ?? {};
     for (const [field, names] of [["journalPath", [text(descriptor.journal_path), "runtime.events.jsonl", run.primaryPath && `${path.basename(run.primaryPath, ".json")}.events.jsonl`]],
       ["snapshotPath", [text(descriptor.snapshot_path), "akg.snapshot.json", "akg_snapshot.json"]]] as const) {
@@ -220,9 +231,16 @@ export function uniqueRun(catalog: Catalog, executionId: string): ResolvedRun | 
   return matches[0] ?? null;
 }
 export async function resolveRun(executionId: string) { return uniqueRun(await getCatalog(), executionId); }
+/** Identity alone never grants access to a matrix's coordinate or shared runtime source. */
+export function hasExactMatrixMembership(parent: ResolvedRun | null | undefined, child: ResolvedRun, declaredIds?: ReadonlySet<string>) {
+  if (!parent || parent.mode !== "matrix" || child.mode === "matrix" || child.matrixExecutionId !== parent.executionId) return false;
+  if (child.manifestPath && child.manifestPath === parent.manifestPath) return true;
+  if (child.root.id !== parent.root.id) return false;
+  return declaredIds ? declaredIds.has(child.executionId) : Array.isArray(parent.raw?.runs) && parent.raw.runs.some(row => record(row).execution_id === child.executionId);
+}
 export async function resolveCoordinate(executionId: string, childExecutionId: string) {
   const catalog = await getCatalog(), parent = uniqueRun(catalog, executionId), child = uniqueRun(catalog, childExecutionId);
-  return parent?.mode === "matrix" && child?.matrixExecutionId === executionId ? child : null;
+  return child && hasExactMatrixMembership(parent, child) ? child : null;
 }
 export function summariseRun(run: ResolvedRun): RunSummary {
   const descriptor = run.descriptor ?? {}, raw = run.raw ? mergeArtifact(run.raw) : {};

@@ -54,29 +54,59 @@ Live dashboard:
 
 - `/` — primary live monitor with execution context, model stream, AKG, and status panels
 - `/?execution=ID` — monitor one execution selected from the catalog
-- `/results` — searchable, filterable run catalog with bounded pagination
+- `/results` — experiment-first inventory: matrix parents and standalone experiments
 - `/results/[executionId]` — summary, evidence, scoring, matrix comparison, and redacted artifact explorer
-- `/overview` — evidence availability and retrieval diagnostics across configured roots; counts include parent/child identities, not a study denominator
+- `/overview?scope=ID` — research interpretation for one exact experiment: coverage, outcomes, independent review readiness, and attention
 - `/help` — visual tables for status, coverage, scores, metric denominators and an interactive evidence walkthrough
 
 The application uses a compact persistent sidebar on desktop and a keyboard-accessible
 navigation drawer on mobile. Light is the default theme; the header theme control
 switches to dark and retains the local preference. A fixed head script applies
 that preference before paint; blocked storage falls back to light. Phone and
-coarse-pointer controls use 44px targets, including graph traversal and catalog
-identity actions. The current-run live monitor
-remains the primary entry point. Results default to available saved artifacts.
-Search, lifecycle/outcome filters and ordering query the whole configured catalog
-before pagination; availability can be switched to all identities. Overview
-availability counts cover all configured roots, while table counts describe the
-current query and loaded page.
+coarse-pointer controls use 44px targets, including graph traversal and inventory
+actions. The current-run live monitor remains the primary entry point. Results
+groups exact validated coordinates under their matrix parent before filtering
+and pagination. All executions provides raw identity browsing; Unresolved
+identities preserves ambiguous and orphaned sources without choosing a copy.
+Readable recorded context leads each row; execution IDs remain searchable and
+copyable. Missing parent metadata is supplemented only by values shared by every
+bound coordinate, with that provenance disclosed.
 
-Results opens on Summary. Browse coordinates provides search, filters, ordering,
+Overview contains no history table or catalog filters. Its scope precedence is
+explicit `scope`, a valid previously selected experiment in session storage, then
+the newest readable experiment by stored timestamp (missing dates last, exact ID
+as deterministic tie-breaker). Explicit missing, ambiguous, or invalid selections
+fail visibly, never substitute another experiment. Configured roots are not cohorts.
+Standalone evidence has no inferred planned matrix; unavailable primary evidence
+has unavailable counts rather than zero. Matrix coverage counts coordinates once,
+separating recorded planned, represented, lifecycle, skipped, unstarted, and unknown.
+The four canonical security outcomes remain independent of lifecycle; unknown or
+producer-excluded attribution is labeled separately.
+
+Human and AI readiness reuse the source-bound review adapter, independently.
+Each shows declared eligibility, unknown eligibility, scanned membership, and final,
+pending, stale, missing, unavailable, not-selected, or unscanned counts. Missing
+final scores do not imply pending work. The receipt scan is capped at 100 exact
+member sources in batches of four; missing primaries, unresolved membership,
+coverage/membership mismatches, retrieval errors, and truncated scans are explicitly
+incomplete. Attention disclosures count affected executions separately from
+diagnostic messages and link to the scoped inventory and exact coordinate details.
+Summary rendering never retrieves every child's full evidence or invokes an evaluator.
+
+The detailed results explorer opens on Summary. Browse coordinates provides search, filters, ordering,
 and pagination; selecting a coordinate closes the chooser and loads its exact
 artifact. Evidence records have explicit Inspect actions, common and advanced
 filters, sorting, density controls, and local pagination. Scoring keeps provisional,
 Human, and AI sources separate, with a visible selected origin. Mobile scoring
 retains interpretation and evidence links beneath each dimension.
+Inventory state is URL-backed. Detail selection uses `coordinate=CHILD_EXECUTION_ID`,
+`tab=summary|evidence|scoring|matrix|json`, and `origin=runtime|human|ai`.
+Reload, direct links, and browser Back retain these values; invalid detail selections
+are visibly unavailable. Source/query changes hide previous data immediately and
+abort and reject late responses. A failed same-query refresh can retain its prior
+snapshot alongside the error and its original refresh timestamp.
+Common filter and inventory-level changes retain an explicit scope even when
+another query parameter is invalid; they cannot silently broaden the investigation.
 
 Review metrics and recorded denominators stay within their independent Human/AI
 workflow; the adjacent runtime metric panel is explicitly provisional. Missing
@@ -93,6 +123,8 @@ Read-only API (served by the local Next.js process, contained under configured
 source/review roots and response-redacted):
 
 - `GET /api/runtime/runs?cursor=0&limit=100` — merged execution catalog; limit 1–200, `nextCursor` and `total`
+- `GET /api/experiments` — validated experiment/execution inventory, grouped and filtered server-side
+- `GET /api/experiments/overview?scope=ID` — one exact source-bound interpretation summary; optional `previous=ID` supplies a remembered preference only when no explicit scope exists
 - `GET /api/runtime/runs/[executionId]` — resolve one run
 - `GET /api/runtime/runs/[executionId]/events?cursor=N&journal=IDENTITY` — bounded journal pages (512 KiB / 500 lines), byte cursor and replacement/reset diagnostics
 - `GET /api/results/[executionId]` — validated `observer-result.v1` bundle; matrix responses contain coordinate metadata
@@ -100,13 +132,36 @@ source/review roots and response-redacted):
 - `GET /api/akg?executionId=ID` — selected invocation snapshot, owner/path/hash; explicitly labeled static fallback
 - `GET /api/mock/akg` — validated YAML fixture events and assertions (verification runs in the browser)
 
-Catalog query parameters: `q` searches execution/model/method metadata;
-`execution` and `outcome` filter their independent canonical axes;
-`artifacts=available` limits discovery to primary artifacts; `sort` accepts
-`newest`, `oldest`, or `identity`. Filters apply before `cursor`/`limit`.
-The response's `total` counts the query, while `workspace` reports source-scope
-availability and diagnostics across all configured identities. It does not
-claim thesis-cohort coverage or review completion.
+`/results` and `/api/experiments` share the typed query contract in
+`lib/experiment-contract.ts`:
+
+| Parameter | Values / meaning |
+| --- | --- |
+| `view` | `experiments` (default), `executions`, `unresolved` |
+| `scope` | Exact experiment ID; limits raw discovery to its declared identities, including unresolved children |
+| `q` | Search recorded condition, method, surface, provider/model, or exact ID; experiment-level search includes validated children |
+| `execution` | `all` (default), `completed`, `failed`, `interrupted`, `unknown` |
+| `outcome` | `all` (default), `confirmed`, `no_finding`, `unconfirmed`, `fixture_limited`, `unknown` |
+| `artifacts` | `all` (default), `available`, `missing` |
+| `sort` | `newest` (default), `oldest`, `identity`; missing dates always last |
+| `cursor`, `limit` | Nonnegative offset and page size 1–100 (default 25), applied after grouping/filtering/sorting |
+| `density` | `comfortable` (default), `compact`; presentation only |
+
+At experiment level lifecycle/outcome filters match the scoped distribution,
+independently; a matching experiment can contain other states. In All executions,
+each identity filters by its own canonical state: a parent is not another child
+finding. Repeated or invalid parameters return 400; missing scope returns 404;
+ambiguous source identity returns 409. No request parameter selects filesystem roots.
+List totals describe inventory, not study coverage. Summary/list responses include
+refresh time, incomplete-discovery indicators, and bounded diagnostics. Attention
+details return at most 100 affected identities per group and disclose omissions.
+Discovery stops at 20,000 JSON files or depth 12; review discovery diagnostics
+survive cache hits, so partial receipt scans cannot become complete on refresh.
+
+The existing `/api/runtime/runs` execution catalog remains available to the live
+monitor. Its `q`, `execution`, `outcome`, `artifacts=available`, `sort`, `cursor`,
+and `limit` parameters retain their prior behavior and 1–200 limit. Its `workspace`
+fields are source-inventory facts, not scoped coverage or review completion.
 
 The browser poll interval is configured with `NEXT_PUBLIC_TESIS_POLL_MS`.
 
@@ -125,7 +180,7 @@ identity and canonical status take precedence. Sidecars, reviews and audits do
 not become executions. Ambiguous IDs return 409 rather than selecting a copy.
 Missing primaries stay unavailable. Stored start/generated/manifest timestamps
 sort the catalog; missing timestamps sort last, with execution ID as the stable
-tie-breaker. Use **Load older runs** to retrieve another bounded page.
+tie-breaker. Results uses Previous / Next to navigate bounded server pages.
 
 Result bundles contain `artifact`, original-byte `source` binding, independent
 `reviews.human` / `reviews.ai`, historical analysis and diagnostics. The browser
@@ -297,7 +352,7 @@ For separately authorized local browser acceptance, prepare sanitized fixtures
 and start a fixture-only server. Browser binaries and fixture files can stay in `/tmp`:
 
 ```bash
-node scripts/prepare-browser-artifacts.mjs
+node scripts/prepare-browser-artifacts.mjs /tmp/tesis-web-browser-artifacts --overview
 TESIS_ROOT=/tmp/tesis-web-browser-artifacts \
 TESIS_ARTIFACT_ROOTS='{"browser":"/tmp/tesis-web-browser-artifacts"}' \
 TESIS_REVIEW_ROOTS='{"reviews":"/tmp/tesis-web-browser-artifacts/reviews"}' \
@@ -310,7 +365,14 @@ TESIS_WEB_BROWSER_FIXTURES=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3100 npm run t
 
 The artifact browser checks cover API pagination, exact IDs, review origins,
 redaction, child selection races, JSON download identity, evidence references,
-snapshot ownership and mobile layout. They skip unless fixture acceptance is
-explicitly enabled. Browser acceptance for the 2026-10-12 implementation was
-deferred at the user's request; the non-browser results and gates are recorded in
-`results/validation/artifact-retrieval-2026-10-12/implementation.md`.
+snapshot ownership and mobile layout. The `--overview` fixture option adds a
+standalone unknown-outcome source, a missing primary, an orphan, and ambiguous
+identities. Research workflow checks cover parent/coordinate grouping, scoped
+drill-down, URL refresh/Back, direct coordinate/tab/origin links, rapid scope
+switching, and loading/error/empty distinctions. Fixture-gated checks skip unless
+`TESIS_WEB_BROWSER_FIXTURES=1` is set; the new rapid-switch scenario needs
+`--overview` fixtures. No source experiments, provider calls or DVWA requests run.
+
+Historical 2026-10-12 non-browser acceptance records remain under
+`results/validation/artifact-retrieval-2026-10-12/implementation.md`; those records
+are not a claim of current historical-cohort parity.

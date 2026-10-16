@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Download,
@@ -24,24 +24,42 @@ import { fmtDuration, fmtIsoFromStr, normalizeRunStatus, prettyJson } from "@/li
 import { ResultsSummary } from "@/components/results/status-details";
 import { normalizeResult } from "@/lib/result-normalizer";
 import { evidenceForReference } from "@/lib/evidence-ref";
+import { useReadResource } from "@/lib/use-read-resource";
+
+async function loadSelectedCoordinate(query: string, signal: AbortSignal) {
+  const [parent, coordinate] = JSON.parse(query) as [string, string | null];
+  return coordinate === null ? null : fetchCoordinateResult(parent, coordinate, signal);
+}
 
 type Tab = "summary" | "evidence" | "scoring" | "matrix" | "json";
 
 export default function ResultsPage() {
   const params = useParams<{ executionId: string }>();
   const executionId = params.executionId;
-  return <ResultsExplorer key={executionId} executionId={executionId} />;
+  return <Suspense fallback={<Loading />}><ResultsExplorer key={executionId} executionId={executionId} /></Suspense>;
 }
 
 function ResultsExplorer({ executionId }: { executionId: string }) {
   const [aggregate, setAggregate] = useState<NormalizedResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("summary");
-  const [coordRunId, setCoordRunId] = useState<string | null>(null);
-  const [coordResult, setCoordResult] = useState<NormalizedResult | null>(null);
-  const [coordLoading, setCoordLoading] = useState(false);
+  const router = useRouter(), search = useSearchParams();
+  const tabValue = search.get("tab") ?? "summary";
+  const tab = tabValue as Tab;
+  const coordRunId = search.get("coordinate");
+  const coordinate = useReadResource(JSON.stringify([executionId, coordRunId]), loadSelectedCoordinate);
+  const coordResult = coordinate.data ?? null;
+  const coordLoading = coordRunId !== null && coordinate.busy;
+  const navigate = useCallback((values: Record<string, string | null>) => {
+    const query = new URLSearchParams(search.toString());
+    for (const [key,value] of Object.entries(values)) {
+      if (value === null) query.delete(key); else query.set(key,value);
+    }
+    router.push(`/results/${encodeURIComponent(executionId)}${query.size ? `?${query}` : ""}`, { scroll: false });
+  }, [router, search, executionId]);
+  const setTab = (value: Tab) => navigate({ tab: value });
   const [evidence, setEvidence] = useState<EvidenceRow | null>(null);
+  const [evidenceOwner, setEvidenceOwner] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const coordinateBrowser = useRef<HTMLDetailsElement>(null);
   const tabsId = useId();
@@ -67,25 +85,6 @@ function ResultsExplorer({ executionId }: { executionId: string }) {
     };
   }, [executionId]);
 
-  useEffect(() => {
-    if (!coordRunId) return;
-    const controller = new AbortController();
-    let stopped = false;
-    fetchCoordinateResult(executionId, coordRunId, controller.signal)
-      .then((result) => {
-        if (!stopped) setCoordResult(result);
-      })
-      .catch(() => {
-        if (!stopped) setCoordResult(null);
-      })
-      .finally(() => {
-        if (!stopped) setCoordLoading(false);
-      });
-    return () => {
-      stopped = true;
-      controller.abort();
-    };
-  }, [executionId, coordRunId]);
 
   const pickCoordinate = useCallback((coord: CoordinateSummary) => {
     if (coordinateBrowser.current) {
@@ -93,20 +92,16 @@ function ResultsExplorer({ executionId }: { executionId: string }) {
       coordinateBrowser.current.querySelector<HTMLElement>("summary")?.focus();
     }
     if (coord.executionId === coordRunId) return;
-    setCoordRunId(coord.executionId);
-    setCoordResult(null);
-    setCoordLoading(true);
+    navigate({ coordinate: coord.executionId });
     setEvidence(null);
     setDrawerOpen(false);
-  }, [coordRunId]);
+  }, [coordRunId, navigate]);
 
   const backToAggregate = useCallback(() => {
-    setCoordRunId(null);
-    setCoordResult(null);
-    setCoordLoading(false);
+    navigate({ coordinate: null });
     setEvidence(null);
     setDrawerOpen(false);
-  }, []);
+  }, [navigate]);
 
   const viewResult = coordRunId ? coordResult : aggregate;
   const openReference = (ref: string) => {
@@ -114,12 +109,15 @@ function ResultsExplorer({ executionId }: { executionId: string }) {
     const row = evidenceForReference(viewResult, ref);
     if (row) {
       setEvidence(row);
+      setEvidenceOwner(viewResult.executionId);
       setDrawerOpen(true);
     }
   };
 
   if (loading) return <Loading />;
   if (error || !aggregate) return <ErrorState message={error ?? "Result unavailable"} executionId={executionId} />;
+  if (!["summary", "evidence", "scoring", "matrix", "json"].includes(tabValue) || (tabValue === "matrix" && !aggregate.isMatrix)) return <ErrorState message={`Unavailable result view: ${tabValue}`} executionId={executionId} />;
+  if (coordRunId !== null && (!aggregate.isMatrix || !aggregate.coordinates.some(row => row.executionId === coordRunId))) return <div className="notice notice-error" role="alert"><h2>Selected coordinate unavailable</h2><p>The exact identity {coordRunId || "(empty)"} is not a member of this experiment. No other source is shown.</p><Button onClick={backToAggregate}>Return to aggregate</Button></div>;
 
   const selectedSummary = aggregate.coordinates.find((coordinate) => coordinate.executionId === coordRunId);
   const header = viewResult ?? (selectedSummary ? normalizeResult({
@@ -153,8 +151,8 @@ function ResultsExplorer({ executionId }: { executionId: string }) {
     <div className="results-page flex h-full min-h-0 flex-col">
       <header className="page-header results-page-header">
         <div className="breadcrumbs" aria-label="Breadcrumb">
-          <Link href="/" className="ui-link inline-flex items-center gap-1">
-            <ArrowLeft size={14} aria-hidden="true" /> Live
+          <Link href="/results" className="ui-link inline-flex items-center gap-1">
+            <ArrowLeft size={14} aria-hidden="true" /> Experiments
           </Link>
           <span aria-hidden="true">/</span>
           <span>Results</span>
@@ -236,7 +234,7 @@ function ResultsExplorer({ executionId }: { executionId: string }) {
           <DetailTable
             key={viewResult.executionId}
             rows={viewResult.evidenceRows}
-            onOpen={(row) => { setEvidence(row); setDrawerOpen(true); }}
+            onOpen={(row) => { setEvidence(row); setEvidenceOwner(viewResult.executionId); setDrawerOpen(true); }}
           />
         ) : <UnavailableCoordinate executionId={coordRunId} loading={coordLoading} />)}
         {tab === "scoring" && (viewResult ? (
@@ -252,7 +250,7 @@ function ResultsExplorer({ executionId }: { executionId: string }) {
 
       <EvidenceDrawer
         row={evidence}
-        open={drawerOpen}
+        open={drawerOpen && evidenceOwner === viewResult?.executionId}
         onClose={() => setDrawerOpen(false)}
         onSelectRelated={(id) => {
           const row = viewResult?.evidenceRows.find((candidate) => candidate.id === id);
@@ -308,7 +306,7 @@ function MatrixTab({
           coordinateMode
           selectedCoordinateId={selectedCoordinateId}
           onPickCoordinate={(_executionId, runId) => {
-            const coordinate = result.coordinates.find((candidate) => candidate.executionId === runId || candidate.runId === runId);
+            const coordinate = result.coordinates.find((candidate) => candidate.executionId === runId);
             if (coordinate) onPick(coordinate);
           }}
         />

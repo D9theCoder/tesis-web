@@ -47,7 +47,7 @@ export async function receiptProblem(raw: Record<string, unknown>, run: Resolved
   return null;
 }
 type ReviewFile = { raw: Record<string, unknown>; path: string; root: Root; sha256: string };
-let cache: { key: string; at: number; promise: Promise<ReviewFile[]> } | undefined;
+let cache: { key: string; at: number; promise: Promise<ReviewFile[]>; diagnostics: string[] } | undefined;
 export function clearReviewCache() { cache = undefined; }
 async function discoverReviews(run: ResolvedRun, diagnostics: string[]) {
   const roots = [...reviewRoots()];
@@ -59,23 +59,30 @@ async function discoverReviews(run: ResolvedRun, diagnostics: string[]) {
     else if (!root.id.startsWith("local_")) diagnostics.push(`review_root_unavailable:${root.id}`);
   }
   const key = JSON.stringify(present);
-  if (cache?.key === key && Date.now() - cache.at < 5000) return { files: await cache.promise, roots };
+  if (cache?.key === key && Date.now() - cache.at < 5000) {
+    const files = await cache.promise;
+    diagnostics.push(...cache.diagnostics);
+    return { files, roots };
+  }
+  const scanDiagnostics: string[] = [];
   const promise = (async () => {
     const files: ReviewFile[] = [];
     // Absent default reviews are a workflow absence, not an unreadable configured root.
     const seen = new Set<string>();
-    for (const entry of await scanJson(present, diagnostics)) {
+    for (const entry of await scanJson(present, scanDiagnostics)) {
       if (seen.has(entry.path)) continue; seen.add(entry.path);
       if (!/\.(?:human-verified|ai-verified|review-status|review-history)\.json$/.test(entry.path)) continue;
       try {
         const source = await readSource(entry.path, present), raw = record(source.raw);
         if (["thesis_score_receipt", "thesis_review_status"].includes(String(raw.artifact_type))) files.push({ raw, path: source.path, root: entry.root, sha256: source.sha256 });
-      } catch { diagnostics.push(`review_unreadable:${entry.root.id}/${path.relative(entry.root.path, entry.path)}`); }
+      } catch { scanDiagnostics.push(`review_unreadable:${entry.root.id}/${path.relative(entry.root.path, entry.path)}`); }
     }
     return files;
   })();
-  cache = { key, at: Date.now(), promise };
-  return { files: await promise, roots };
+  cache = { key, at: Date.now(), promise, diagnostics: scanDiagnostics };
+  const files = await promise;
+  diagnostics.push(...scanDiagnostics);
+  return { files, roots };
 }
 async function selectedLegacyStatuses(run: ResolvedRun, roots: Root[], diagnostics: string[], files: ReviewFile[]) {
   const selected = new Set<string>();

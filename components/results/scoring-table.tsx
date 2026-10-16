@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { CoordinateSummary, NormalizedResult, ScoreRow } from "@/lib/schemas";
 import { Badge, Button } from "@/components/ui/primitives";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -23,10 +24,18 @@ export function ScoringTable({
   onPickCoordinate?: (executionId: string, runId: string) => void;
   onEvidenceRef?: (ref: string) => void;
 }) {
-  const [origin, setOrigin] = useState<ScoreOrigin>("runtime");
+  const search = useSearchParams(), router = useRouter(), pathname = usePathname();
+  const originValue = search.get("origin") ?? "runtime";
+  const origin = originValue as ScoreOrigin;
+  function setOrigin(value: ScoreOrigin) {
+    const query = new URLSearchParams(search.toString());
+    query.set("origin", value);
+    router.push(`${pathname}?${query}`, { scroll: false });
+  }
   if (coordinateMode) {
     return <MatrixComparison result={result} selectedCoordinateId={selectedCoordinateId} onPickCoordinate={onPickCoordinate} />;
   }
+  if (!["runtime", "human", "ai"].includes(originValue)) return <div role="alert" className="notice notice-error">Unavailable score origin: {originValue}. <Button onClick={() => setOrigin("runtime")}>Show provisional runtime</Button></div>;
 
   const workflow = origin === "runtime" ? null : result.reviews?.[origin];
   const rows = origin === "runtime"

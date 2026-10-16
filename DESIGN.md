@@ -246,9 +246,9 @@ Panel titles use the 16px title level consistently. Links within guide prose ret
 
 The desktop workspace uses a fixed 216px sidebar, a sticky 56px top bar, and a flexible content area with 28px page gutters. A 4px-based rhythm supports compact spacing; common gaps and padding step through 8px, 12px, 16px, 20px, and 24px. The current-run view places the AKG in the main column and status, coordinate, and conversation panels in a 330px rail. On wide screens, that rail shares the monitor height; at 1200px and below the runtime layout stacks. Completed results use a main inspection area with a 300px detail rail and collapse to one column at 1100px.
 
-At 900px and below, the fixed sidebar becomes a menu drawer. At 600px and below, page gutters tighten, summary grids and runtime panels stack, and interactive controls reach a 44px minimum height. The run catalog keeps all seven fields in a labeled two-column row layout without horizontal scrolling; execution identity, start time, and actions span the row. Wide evidence and matrix tables keep their columns and scroll within their own container; comfortable and compact density remain available for evidence review.
+At 900px and below, the fixed sidebar becomes a menu drawer. At 600px and below, page gutters tighten, summary grids and runtime panels stack, and interactive controls reach a 44px minimum height. Results discovery uses five semantic columns on desktop: recorded context/identity, provider/model/date, coverage/lifecycle, security outcomes, and inspection actions. At 1100px and below rows reflow into labeled groups; phones stack identity, provider context, and actions around two lifecycle/outcome columns without page-level scrolling. Wide evidence and coordinate tables scroll within their own containers.
 
-Coarse-pointer devices use 44px controls even above the phone breakpoint. Numbered traversal steps and catalog identity controls follow the same target size. Fine-pointer desktop controls retain compact density. The saved theme is applied by a fixed head script before the initial styled paint.
+Coarse-pointer devices use 44px controls even above the phone breakpoint. Numbered traversal steps, experiment actions, and Overview outcome drill-downs follow the same target size. Fine-pointer desktop controls retain compact density. The saved theme is applied by a fixed head script before the initial styled paint.
 
 **The Evidence Context Rule.** Keep the selected execution, coordinate, score origin, and supporting evidence visibly connected as the layout narrows.
 
@@ -296,7 +296,7 @@ Cards and primary panels use gently rounded corners (8px). Navigation and AKG no
 - Column headings sit on a subtle surface with 12px semibold labels. Cells use 12px by 16px padding, 1px row dividers, and top alignment.
 - Hover uses the subtle surface; selection uses the soft accent fill. Numeric values align right with tabular numerals.
 - Long tables scroll inside a positioned, horizontally scrollable container. Preserve readable columns and provide comfortable or compact row density where available.
-- The run catalog reflows into labeled two-column rows on small screens. Keep all seven fields, make the execution identity, start time, and actions span the row, and preserve table row and cell roles.
+- The experiment inventory reflows into labeled row groups on smaller screens. Exact IDs remain secondary, copyable, and searchable. Compact clips metadata for scanning; Comfortable wraps it. Preserve table row/cell roles and explicit counting units.
 
 ### Live Monitor Panels
 - The AKG, coordinate, conversation, and outcome panels share bordered surface containers with compact headers and scrollable bodies.
@@ -311,6 +311,17 @@ Cards and primary panels use gently rounded corners (8px). Navigation and AKG no
 - Experiment activity replaces the monitor catalog with paged source events and per-execution identity. Bounded conversation previews link readers to the complete history.
 - The guide is a Read surface: semantic comparison tables, explicit metric denominators, and a user-controlled evidence walkthrough with a static reduced-motion alternative.
 - Comfortable tables wrap metadata; Compact uses limited-width single-line scanning without changing accessible content. Block disclosures retain 44px coarse-pointer targets.
+
+### Overview and Results discovery
+- Overview leads with one experiment selector, its recorded context/source identity, and a factual conclusion before coverage and independent security outcomes. It contains no catalog table, density control, or history pagination.
+- Coverage and outcomes use paired bordered panels on desktop and stack on phones. Counts carry their unit and denominator; unavailable values are text, not fabricated zeros. No decorative chart duplicates these small distributions.
+- Human and AI readiness occupy independent columns, stacking on phones. Final, pending, stale, missing, unavailable, not-selected, and unscanned states remain text-labeled. Eligibility and scan completeness stay visible.
+- Attention uses bordered disclosures, not alert tiles. Affected execution counts and diagnostic-message counts are distinct. On phones descriptions take the full text width and counts sit below; opened groups show exact source diagnostics and scoped Results links.
+- Source/epoch attribution and discovery limitations sit in a secondary disclosure. Shared coordinate metadata is identified as supplemental context, never an invented experiment name.
+- Results leads with experiment/raw/unresolved inventory levels, search, and outcome filtering. Secondary lifecycle/availability/order/density controls live in a disclosure. Open results is primary; monitoring historical activity is secondary.
+- Matrix parents and standalone experiments own default rows; coordinates remain within their parent. Raw execution rows use their own lifecycle/outcome rather than repeating the parent's coordinate distribution. Unresolved records never borrow one ambiguous source's metadata.
+- Scope, inventory filters/order/page/density, and detail coordinate/tab/score origin live in URLs. Changing source hides previous content immediately; late responses cannot restore it. Missing explicit selections never silently select another experiment.
+
 
 ## Do's and Don'ts
 

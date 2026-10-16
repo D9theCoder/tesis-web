@@ -7,6 +7,7 @@ import type {
 import type { AkgMockSimulation } from "@/lib/akg-mock";
 import { runListResponseSchema, runSummarySchema, eventCursorResponseSchema } from "@/lib/schemas";
 import { normalizeResult } from "@/lib/result-normalizer";
+import { experimentListSchema, experimentOverviewSchema } from "@/lib/experiment-contract";
 
 /** Browser-safe read-only client for the observer route handlers. */
 
@@ -33,6 +34,14 @@ async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
 /** Register of observed runs plus the newest active descriptor, if any. */
 export async function fetchRuns(signal?: AbortSignal, cursor = 0, query = ""): Promise<RunListResponse> {
   return runListResponseSchema.parse(await getJson(`/api/runtime/runs?cursor=${cursor}${query ? `&${query}` : ""}`, signal));
+}
+
+export async function fetchExperiments(query: string, signal?: AbortSignal) {
+  return experimentListSchema.parse(await getJson(`/api/experiments?${query}`, signal));
+}
+
+export async function fetchExperimentOverview(query: string, signal?: AbortSignal) {
+  return experimentOverviewSchema.parse(await getJson(`/api/experiments/overview?${query}`, signal));
 }
 
 export async function fetchRunSummary(

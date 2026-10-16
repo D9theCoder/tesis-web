@@ -4,8 +4,14 @@ import ResultsPage from "@/app/results/[executionId]/page";
 import { normalizeResult } from "@/lib/result-normalizer";
 import * as api from "@/lib/api-client";
 import type { NormalizedResult, ReviewWorkflow } from "@/lib/schemas";
+import { navigation, useRouter, useSearchParams, usePathname } from "./navigation-mock";
 const route = vi.hoisted(() => ({ executionId: "matrix-a" }));
-vi.mock("next/navigation", () => ({ useParams: () => route }));
+vi.mock("next/navigation", () => ({
+  useParams: () => route,
+  useRouter: () => useRouter(),
+  useSearchParams: () => useSearchParams(),
+  usePathname: () => usePathname(),
+}));
 vi.mock("@/lib/api-client", () => ({ fetchResult: vi.fn(), fetchCoordinateResult: vi.fn() }));
 function deferred<T>() { let resolve!: (value:T)=>void; const promise = new Promise<T>(yes => { resolve=yes; }); return { promise, resolve }; }
 function child(id: string, excerpt: string) { return normalizeResult({ execution_id: id, status: "success", execution_status: "completed", security_outcome: "no_finding",
@@ -43,7 +49,7 @@ const matrixForScoreSorting = () => normalizeResult({ execution_id: "score-sort"
 ] });
 async function flush() { await act(async () => { await Promise.resolve(); }); }
 function openCoordinateBrowser() { fireEvent.click(screen.getByText("Browse coordinates")); }
-beforeEach(() => { vi.resetAllMocks(); route.executionId="matrix-a"; vi.mocked(api.fetchResult).mockResolvedValue(matrix()); vi.mocked(api.fetchCoordinateResult).mockResolvedValue(null); });
+beforeEach(() => { vi.resetAllMocks(); navigation.url = "/results/matrix-a"; route.executionId="matrix-a"; vi.mocked(api.fetchResult).mockResolvedValue(matrix()); vi.mocked(api.fetchCoordinateResult).mockResolvedValue(null); });
 describe("source-consistent result selection", () => {
   it("ignores a late child response, switches the header and downloads to the selected child", async () => {
     const a = deferred<NormalizedResult|null>(), b = deferred<NormalizedResult|null>();
@@ -69,7 +75,7 @@ describe("source-consistent result selection", () => {
   it("resets selected evidence and child requests on route changes", async () => {
     const pending = deferred<NormalizedResult|null>(); vi.mocked(api.fetchCoordinateResult).mockReturnValue(pending.promise);
     const rendered = render(<ResultsPage />); await flush(); openCoordinateBrowser(); fireEvent.click(screen.getByRole("button",{ name: /Coordinate 1:/ }));
-    route.executionId = "single-new"; vi.mocked(api.fetchResult).mockResolvedValue(child("single-new","new evidence")); rendered.rerender(<ResultsPage />); await flush();
+    route.executionId = "single-new"; navigation.url = "/results/single-new"; vi.mocked(api.fetchResult).mockResolvedValue(child("single-new","new evidence")); rendered.rerender(<ResultsPage />); await flush();
     pending.resolve(child("child-a","old evidence")); await flush(); expect(screen.getByText("execution single-new")).toBeVisible(); expect(screen.queryByText("execution child-a")).toBeNull();
   });
 });

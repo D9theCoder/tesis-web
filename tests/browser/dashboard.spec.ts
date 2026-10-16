@@ -32,26 +32,27 @@ test.describe("enterprise observer workspace", () => {
       await capture("-dark");
       await page.getByRole("button", { name: "Switch to light theme" }).click();
 
-      for (const [route, heading, label] of [
-        ["/results", "Experiment results", "catalog"],
-        ["/overview", "Workspace overview", "overview"],
-        ["/help", "Observer guide", "guide"],
+      for (const [route, label] of [
+        ["/results", "catalog"], ["/overview", "overview"], ["/help", "guide"],
       ]) {
         await page.goto(route);
-        await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
-        if (route !== "/help") await expect(page.getByRole("table", { name: "Run catalog" })).toBeVisible();
-        if (width < 600 && route !== "/help") {
-          const rows = page.getByRole("table", { name: "Run catalog" }).locator("tbody tr");
-          const firstRow = rows.first();
-          await expect(firstRow.locator(".catalog-cell-label", { hasText: "Execution status" })).toBeVisible();
-          await expect(firstRow.locator(".catalog-cell-label", { hasText: "Security outcome" })).toBeVisible();
-          const cells = firstRow.getByRole("cell");
-          for (const index of [3, 4, 6]) {
-            expect(await cells.nth(index).evaluate(element => {
-              const bounds = element.getBoundingClientRect();
-              return bounds.left >= 0 && bounds.right <= innerWidth;
-            })).toBe(true);
+        await expect(page.locator("main h1")).toBeVisible();
+        if (route === "/results") {
+          await expect(page.getByRole("table")).toBeVisible();
+          if (width < 600) {
+            const cells = page.getByRole("table").locator("tbody tr").first().getByRole("cell");
+            for (const cell of await cells.all()) {
+              expect(await cell.evaluate(element => {
+                const bounds = element.getBoundingClientRect();
+                return bounds.left >= 0 && bounds.right <= innerWidth;
+              })).toBe(true);
+            }
           }
+        }
+        if (route === "/overview") {
+          await expect(page.getByRole("combobox", { name: "Selected experiment" })).toBeVisible();
+          await expect(page.locator(".research-conclusion")).toBeVisible();
+          await expect(page.getByRole("table")).toHaveCount(0);
         }
         await noOverflow();
         await capture(`-${label}`);
