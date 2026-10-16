@@ -308,6 +308,9 @@ Cards and primary panels use gently rounded corners (8px). Navigation and AKG no
 ### Results and Evidence
 - Results keep the chosen coordinate and score origin connected to their detail view. Provisional runtime scores and Human or AI reviews retain distinct labels and source bindings.
 - Evidence tables pair sorting and filtering with visible counts, pagination, and a focused detail drawer. Missing values retain their unavailable state.
+- Experiment activity replaces the monitor catalog with paged source events and per-execution identity. Bounded conversation previews link readers to the complete history.
+- The guide is a Read surface: semantic comparison tables, explicit metric denominators, and a user-controlled evidence walkthrough with a static reduced-motion alternative.
+- Comfortable tables wrap metadata; Compact uses limited-width single-line scanning without changing accessible content. Block disclosures retain 44px coarse-pointer targets.
 
 ## Do's and Don'ts
 

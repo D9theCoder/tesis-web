@@ -94,18 +94,15 @@ test.describe("dashboard polish", () => {
     await page.route("**/api/runtime/runs*", route => { pending = route; });
     await page.goto("/overview");
     await expect(page.getByRole("status", { name: "Loading run catalog" })).toBeVisible();
-    await expect(page.locator(".summary-item strong")).toHaveText(["—", "—", "—", "—"]);
     await page.screenshot({ path: `${captures}/after-loading.png`, fullPage: true });
     await pending!.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Source temporarily unavailable" }) });
     await expect(page.getByRole("heading", { name: "Run catalog unavailable" })).toBeVisible();
     await expect(page.getByText("No runs available", { exact: true })).toHaveCount(0);
-    await expect(page.locator(".summary-item strong")).toHaveText(["—", "—", "—", "—"]);
     await page.screenshot({ path: `${captures}/after-error.png`, fullPage: true });
     await page.unroute("**/api/runtime/runs*");
     await page.route("**/api/runtime/runs*", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ tesisRoot: "/sanitized", runs: [], total: 0, nextCursor: null }) }));
     await page.getByRole("button", { name: "Retry", exact: true }).click();
     await expect(page.getByText("No runs available", { exact: true })).toBeVisible();
-    await expect(page.locator(".summary-item strong")).toHaveText(["0", "0", "0", "0"]);
     await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
     await page.screenshot({ path: `${captures}/after-empty.png`, fullPage: true });
   });

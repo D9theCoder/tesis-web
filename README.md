@@ -56,8 +56,8 @@ Live dashboard:
 - `/?execution=ID` — monitor one execution selected from the catalog
 - `/results` — searchable, filterable run catalog with bounded pagination
 - `/results/[executionId]` — summary, evidence, scoring, matrix comparison, and redacted artifact explorer
-- `/overview` — counts for the loaded catalog and recent executions
-- `/help` — reviewer guidance on status, scoring, evidence, graph inspection, and setup
+- `/overview` — evidence availability and retrieval diagnostics across configured roots; counts include parent/child identities, not a study denominator
+- `/help` — visual tables for status, coverage, scores, metric denominators and an interactive evidence walkthrough
 
 The application uses a compact persistent sidebar on desktop and a keyboard-accessible
 navigation drawer on mobile. Light is the default theme; the header theme control
@@ -65,8 +65,11 @@ switches to dark and retains the local preference. A fixed head script applies
 that preference before paint; blocked storage falls back to light. Phone and
 coarse-pointer controls use 44px targets, including graph traversal and catalog
 identity actions. The current-run live monitor
-remains the primary entry point. All catalog counts describe loaded data, not
-unloaded catalog pages.
+remains the primary entry point. Results default to available saved artifacts.
+Search, lifecycle/outcome filters and ordering query the whole configured catalog
+before pagination; availability can be switched to all identities. Overview
+availability counts cover all configured roots, while table counts describe the
+current query and loaded page.
 
 Results opens on Summary. Browse coordinates provides search, filters, ordering,
 and pagination; selecting a coordinate closes the chooser and loads its exact
@@ -74,6 +77,17 @@ artifact. Evidence records have explicit Inspect actions, common and advanced
 filters, sorting, density controls, and local pagination. Scoring keeps provisional,
 Human, and AI sources separate, with a visible selected origin. Mobile scoring
 retains interpretation and evidence links beneath each dimension.
+
+Review metrics and recorded denominators stay within their independent Human/AI
+workflow; the adjacent runtime metric panel is explicitly provisional. Missing
+review metrics never substitute runtime values. Producer projection vectors
+take precedence over legacy score fields, including explicit unknown dimensions.
+Raw null canonical status fields fall back to final_state; hash-bound projection
+unknowns remain authoritative. Focus path explains empty or mismatched traversal.
+Compact tables prioritize clipped single-line scanning; Comfortable wraps metadata.
+Inspect retains full evidence in either density. Block disclosures have 44px touch
+targets on phones/coarse pointers. Discovery reuses parsed/hash-verified sources
+while their inode, size, modification and change timestamps remain unchanged.
 
 Read-only API (served by the local Next.js process, contained under configured
 source/review roots and response-redacted):
@@ -85,6 +99,14 @@ source/review roots and response-redacted):
 - `GET /api/results/[executionId]/coordinates/[runId]` — load one exact child execution ID; the retained parameter name does not permit nonunique run-ID lookup
 - `GET /api/akg?executionId=ID` — selected invocation snapshot, owner/path/hash; explicitly labeled static fallback
 - `GET /api/mock/akg` — validated YAML fixture events and assertions (verification runs in the browser)
+
+Catalog query parameters: `q` searches execution/model/method metadata;
+`execution` and `outcome` filter their independent canonical axes;
+`artifacts=available` limits discovery to primary artifacts; `sort` accepts
+`newest`, `oldest`, or `identity`. Filters apply before `cursor`/`limit`.
+The response's `total` counts the query, while `workspace` reports source-scope
+availability and diagnostics across all configured identities. It does not
+claim thesis-cohort coverage or review completion.
 
 The browser poll interval is configured with `NEXT_PUBLIC_TESIS_POLL_MS`.
 
@@ -180,7 +202,12 @@ Above 1200px, the AKG shares the workspace with a 330px supporting sidebar.
 The right sidebar divides its height between Coordinate (30%), Conversation
 (40%), and Outcomes (30%); each panel scrolls independently. Smaller screens
 show compact execution context before the graph and stack the supporting panels.
-The run catalog and the local Demonstration replay remain available below the live workspace.
+Experiment activity provides the complete paged journal below the live workspace,
+with execution identity, timestamp and inspectable event data. It refreshes the
+latest journal page automatically and resets when the journal changes. Chat/Trace
+are bounded 300-record previews; earlier events remain available in the timeline.
+Matrix child selection resolves exact metadata independently of catalog pages,
+and exposes a return-to-parent action. Demonstration replay stays separate.
 
 The client graph boundary loads React Flow and a lightweight ELK client. The
 generated ELK engine runs in a same-origin browser Web Worker, emitted by the

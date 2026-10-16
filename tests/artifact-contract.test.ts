@@ -98,3 +98,25 @@ describe("selected execution journal state", () => {
     expect(r.confirmedVulns).toEqual([]); expect(r.metrics.tokenCost).toBeNull(); expect(r.metrics.tokenCount).toBeNull();
   });
 });
+
+describe("producer precedence regressions", () => {
+  it("falls back from raw null envelope fields without undoing projected unknowns", () => {
+    const raw = single({ execution_status: null, security_outcome: null, final_state: { execution_status: "completed", security_outcome: "no_finding" } });
+    expect(canonicalStatus(raw)).toMatchObject({ executionStatus: "completed", securityOutcome: "no_finding" });
+    expect(canonicalStatus({ ...raw, observer_projection: { epoch: "bound" } })).toMatchObject({ executionStatus: null, securityOutcome: null });
+  });
+  it("retains projected components and explicit unknowns over legacy scores", () => {
+    const result = normalizeResult(single({ method_score: 1, composite_score: 1, payload_scores: { candidate: 1 },
+      observer_runtime_scores: { components: { Smethod: 4, Spayload: 2.75, Srun: null } } }));
+    expect(result.scores).toEqual({ Smethod: 4, Spayload: 2.75 });
+  });
+  it("bounds previews without dropping cumulative findings or lifecycle", () => {
+    const events = Array.from({ length: 700 }, (_, index) => ({ event_type: "vuln.confirmed", execution_id: "bounded", method: `method-${index}`, timestamp: index + 1 }));
+    const state = reduceEvents(initialState("bounded"), events);
+    expect(state.events).toHaveLength(300);
+    expect(state.events[0].timestamp).toBe(401);
+    expect(state.confirmedVulns).toContain("method-0");
+    expect(state.confirmedVulns).toContain("method-699");
+    expect(state.endedAt).toBeNull();
+  });
+});

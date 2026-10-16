@@ -27,6 +27,7 @@ export async function resultBundle(run: ResolvedRun) {
       // Summary responses contain coordinate metadata. Evidence is retrieved on exact child selection.
       const fields = ["execution_id", "run_id", "status", "selected_method", "provider", "model", "model_profile", "surface", "security_level", "payload_mode", "experiment_condition", "target_method", "repeat_index", "method_score", "payload_scores", "exploitation_score", "chain_score", "output_score", "composite_score", "confirmed_vulns", "achieved_outcomes"];
       return { ...Object.fromEntries(fields.map(key => [key, m[key] ?? config[key]])),
+        observer_runtime_scores: m.observer_runtime_scores,
         execution_status: canonical.executionStatus, security_outcome: canonical.securityOutcome,
         execution_reason: canonical.executionReason, security_outcome_reason: canonical.securityOutcomeReason,
         matrix_execution_id: run.executionId, coordinate_index: resolved?.coordinateIndex ?? index,

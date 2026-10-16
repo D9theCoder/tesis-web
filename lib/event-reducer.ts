@@ -244,7 +244,7 @@ export function reduceEvents(
     ...prev,
     ...options.canonical,
     children: { ...prev.children },
-    events: [...prev.events, ...events],
+    events: [...prev.events, ...events].slice(-300),
     conversation: [...prev.conversation],
     confirmedVulns: [...prev.confirmedVulns],
     achievedOutcomes: [...prev.achievedOutcomes],
@@ -257,13 +257,20 @@ export function reduceEvents(
     connection: options.connection ?? prev.connection,
   };
 
+  const childBatches = new Map<string, RunEvent[]>();
+  for (const event of events) {
+    const owner = eventExecutionId(event);
+    if (owner && next.executionId && owner !== next.executionId && (next.mode === "matrix" || event.event_type.startsWith("matrix.run."))) {
+      const childEvent = event.event_type.startsWith("matrix.run.") ? { ...event, execution_id: owner, event_type: event.event_type.replace("matrix.run.", "run.") } : event;
+      const batch = childBatches.get(owner) ?? [];
+      batch.push(childEvent); childBatches.set(owner, batch);
+    }
+  }
+  for (const [owner, batch] of childBatches) next.children[owner] = reduceEvents(next.children[owner] ?? initialState(owner), batch, { nowEpochSec: next.lastPolledAt });
   for (const event of events) {
     const owner = eventExecutionId(event);
     if (owner && next.executionId && owner !== next.executionId) {
-      if (next.mode === "matrix" || event.event_type.startsWith("matrix.run.")) {
-        const childEvent = event.event_type.startsWith("matrix.run.") ? { ...event, execution_id: owner, event_type: event.event_type.replace("matrix.run.", "run.") } : event;
-        next.children[owner] = reduceEvents(next.children[owner] ?? initialState(owner), [childEvent], { nowEpochSec: next.lastPolledAt });
-      }
+      // Child batches were reduced once above; never merge their findings into the parent.
       continue;
     }
     if (event.event_type.startsWith("matrix.run.") && !owner) { next.diagnostics = [...next.diagnostics, "child_event_identity_missing"]; continue; }
@@ -425,6 +432,7 @@ export function reduceEvents(
     }
   }
 
+  next.conversation = next.conversation.slice(-300);
   next.elapsedMs = computeElapsed(next);
   next.status = normalizeRunStatus(options.status ?? next.status);
   if (next.metrics.maxIterations > 0) {

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Activity, ExternalLink, FlaskConical } from "lucide-react";
 import type { AkgSnapshot, LiveRunState, RunSummary } from "@/lib/schemas";
 import { Badge, Button } from "@/components/ui/primitives";
-import { RunCatalog } from "@/components/run-catalog";
+import { ActivityTimeline } from "@/components/runtime/activity-timeline";
 import { canonicalStatus } from "@/lib/artifact-contract";
 import { initialState, reduceEvents } from "@/lib/event-reducer";
 import {
@@ -76,7 +76,6 @@ function stateForRun(run: RunSummary) {
 }
 
 export function RuntimeShell() {
-  const [runs, setRuns] = useState<RunSummary[]>([]);
   const [activeRun, setActiveRun] = useState<RunSummary | null>(null);
   const [liveState, setLiveState] = useState<LiveRunState>(initialState);
   const [hasArtifact, setHasArtifact] = useState(false);
@@ -93,9 +92,6 @@ export function RuntimeShell() {
   const artifact = useRef(false);
   const activeRunRef = useRef<RunSummary | null>(null);
   const journalIdentity = useRef<string | null>(null);
-  const [nextRunCursor, setNextRunCursor] = useState<number | null>(null);
-  const [loadingOlder, setLoadingOlder] = useState(false);
-  const loadedThrough = useRef(0);
   const requestedExecution = useRef<string | null>(null);
   useEffect(() => {
     requestedExecution.current = new URLSearchParams(window.location.search).get("execution");
@@ -106,7 +102,6 @@ export function RuntimeShell() {
     for (const request of requests.current) request.abort();
     requests.current.clear();
     clearTimeout(replayTimer.current);
-    setLoadingOlder(false);
     return epoch.current;
   }, []);
   useEffect(
@@ -145,10 +140,14 @@ export function RuntimeShell() {
       try {
         const result = await fetchRuns(controller.signal);
         if (!valid()) return;
-        const incomingIds = new Set(result.runs.map(run => run.executionId));
-        setRuns(previous => [...result.runs, ...previous.filter(run => !incomingIds.has(run.executionId))]);
-        loadedThrough.current = Math.max(loadedThrough.current, result.runs.length);
-        setNextRunCursor(result.total !== undefined && result.total > loadedThrough.current ? loadedThrough.current : null);
+        const refreshed = result.runs.find(run => run.executionId === following.current)
+          ?? (following.current ? await fetchRunSummary(following.current, controller.signal) : null);
+        if (!valid()) return;
+        if (refreshed && refreshed.executionId === following.current) {
+          activeRunRef.current = refreshed;
+          setActiveRun(refreshed);
+          setHasArtifact(!!refreshed.hasArtifact);
+        }
         const requested = requestedExecution.current;
         const requestedRun = requested && !following.current
           ? result.runs.find(run => run.executionId === requested) ?? await fetchRunSummary(requested, controller.signal)
@@ -198,7 +197,7 @@ export function RuntimeShell() {
           }), cursor: result.nextCursor, journalIdentity: result.journalIdentity ?? null, diagnostics: result.diagnostics ?? [] }),
         );
         if (
-          ["completed", "cancelled", "error"].includes(status) &&
+          ["completed", "cancelled", "error"].includes(status) && activeRunRef.current?.hasArtifact &&
           !artifact.current
         ) {
           const resultArtifact = await fetchResult(
@@ -206,8 +205,8 @@ export function RuntimeShell() {
             controller.signal,
           );
           if (!valid() || following.current !== executionId) return;
+          artifact.current = true;
           if (resultArtifact) {
-            artifact.current = true;
             setHasArtifact(true);
             setLiveState(previous => ({ ...previous,
               executionStatus: resultArtifact.executionStatus, securityOutcome: resultArtifact.securityOutcome,
@@ -243,27 +242,19 @@ export function RuntimeShell() {
     }).catch(() => undefined);
     return () => { stopped = true; controller.abort(); };
   }, [activeRun?.executionId, mock]);
-  const loadOlder = async () => {
-    if (nextRunCursor === null || loadingOlder) return;
-    const id = epoch.current;
+  const selection = useRef(0);
+  const selectExecution = async (executionId: string) => {
+    const selected = ++selection.current, session = epoch.current;
     const controller = new AbortController();
     requests.current.add(controller);
-    setLoadingOlder(true);
     try {
-      const page = await fetchRuns(controller.signal, nextRunCursor);
-      if (epoch.current !== id || mockRef.current) return;
-      setRuns(previous => {
-        const existingIds = new Set(previous.map(run => run.executionId));
-        return [...previous, ...page.runs.filter(run => !existingIds.has(run.executionId))];
-      });
-      loadedThrough.current = nextRunCursor + page.runs.length;
-      setNextRunCursor(page.nextCursor ?? null);
-    } catch (cause) { if (epoch.current === id) setError(cause instanceof Error ? cause.message : "Catalog page failed"); }
-    finally {
-      controller.abort();
-      requests.current.delete(controller);
-      if (epoch.current === id) setLoadingOlder(false);
-    }
+      const run = await fetchRunSummary(executionId, controller.signal);
+      if (selected !== selection.current || session !== epoch.current || mockRef.current) return;
+      if (!run) { setError("Execution metadata unavailable. Retry the selection."); return; }
+      requestedExecution.current = executionId;
+      adopt(executionId, run);
+      setError(null);
+    } finally { requests.current.delete(controller); }
   };
 
   const publishMock = useCallback((session: MockSession) => {
@@ -438,11 +429,9 @@ export function RuntimeShell() {
       <div className="runtime-dashboard">
         <section className="akg-panel" aria-label="AKG Traversal">
           <div className="snapshot-context">Snapshot: {mock ? "mock capture" : akg.source ?? "static fallback"} <code>{activeRun?.executionId}</code></div>
+          {activeRun?.matrixExecutionId && <button className="ui-button" onClick={() => void selectExecution(activeRun.matrixExecutionId!)}>Return to matrix {activeRun.matrixExecutionId}</button>}
           {state.mode === "matrix" && Object.keys(state.children).length > 0 && <div className="flex flex-wrap gap-2 p-2 text-xs">
-            {Object.values(state.children).map(child => <button key={child.executionId} className="text-signal-300 underline" onClick={() => {
-              const run = runs.find(r => r.executionId === child.executionId);
-              if (run) adopt(run.executionId,run);
-            }}>{child.executionId} · {child.executionStatus ?? child.status}</button>)}
+            {Object.values(state.children).map(child => <button key={child.executionId} className="ui-button" onClick={() => child.executionId && void selectExecution(child.executionId)}>{child.executionId} · {child.executionStatus ?? child.status}</button>)}
           </div>}
           <AkgGraph
             key={mock ? `mock-${mock.id}-${!!mock.simulation}` : "live"}
@@ -469,7 +458,7 @@ export function RuntimeShell() {
         </aside>
       </div>
       {!mock && <details className="runtime-demonstration"><summary>Demonstration replay</summary><div className="page-actions"><Button onClick={runMockTest} aria-label="Run seeded AKG traversal test"><FlaskConical size={14} />Mock AKG test</Button><span className="helper-copy">Replay the local fixture to inspect graph behavior.</span></div></details>}
-      {!mock && <details className="runtime-catalog"><summary>Run catalog · {runs.length} loaded</summary><RunCatalog runs={runs} selected={activeRun?.executionId} onPick={run => { requestedExecution.current = run.executionId; adopt(run.executionId, run); }} />{nextRunCursor !== null && <div className="table-footer"><span>Search more executions by loading another page.</span><Button onClick={loadOlder} disabled={loadingOlder}>Load older runs</Button></div>}</details>}
+      <ActivityTimeline key={activeId ?? "waiting"} executionId={activeId ?? null} simulationEvents={mock ? state.events : undefined} />
       {!activeId && !mock && <div className="notice mt-5" role="status">Waiting for a live run. Open the results catalog to review saved executions, or ask the workspace owner to check the TESIS source configuration.</div>}
 
     </div>

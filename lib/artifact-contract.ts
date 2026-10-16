@@ -17,6 +17,12 @@ export function mergeArtifact(raw: Record<string, unknown>) {
 }
 export function canonicalStatus(raw: Record<string, unknown>) {
   const m = mergeArtifact(raw);
+  if (!m.observer_projection) {
+    const state = record(raw.final_state ?? raw.state);
+    for (const key of ["execution_status", "security_outcome", "execution_reason", "security_outcome_reason"]) {
+      if (m[key] == null && state[key] != null) m[key] = state[key];
+    }
+  }
   // Legacy proof classification belongs to TESIS. An incomplete label is not a failure.
   const execution = executionStatusSchema.safeParse(m.execution_status);
   const security = securityOutcomeSchema.safeParse(m.security_outcome);

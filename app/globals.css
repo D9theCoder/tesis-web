@@ -272,6 +272,7 @@ svg { flex-shrink: 0; }
 .help-section h2 { margin-bottom: 12px; }
 .help-section p { color: var(--secondary); max-width: 75ch; margin-bottom: 12px; }
 .help-section li { padding: 6px 0; color: var(--secondary); }
+.help-section li a { text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 1200px) { .runtime-dashboard { grid-template-columns: minmax(0,1fr); } .runtime-sidebar { grid-template-columns: repeat(2,minmax(0,1fr)); } .runtime-sidebar > section:last-child { grid-column: 1 / -1; } }
 @media (max-width: 900px) { .app-sidebar { display: none; } .app-workspace { margin-left: 0; } .mobile-menu { display: inline-flex !important; } .app-topbar { padding: 8px 16px; } .app-main { padding: 22px 16px 32px; } }
 @media (max-width: 600px) {
@@ -557,3 +558,52 @@ svg { flex-shrink: 0; }
 }
 .result-skeleton { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 .result-skeleton > p { padding: 18px 20px; color: var(--muted); font-size: 13px; }
+
+/* Review density is a reading mode, not just a padding adjustment. */
+.density-comfortable .data-table td { padding-block: 18px; }
+.density-comfortable .data-table td span, .density-comfortable .catalog-identity { overflow-wrap: anywhere; }
+.density-compact .data-table td { padding-block: 6px; vertical-align: middle; }
+.density-compact .catalog-identity { display: block; max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.density-compact .table-secondary, .density-compact .evidence-table td > span, .density-compact .evidence-table td small { display: block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.density-comfortable .evidence-table td > span { display: block; max-width: 270px; white-space: normal; }
+.workspace-health { margin-block: 0 24px; padding: 20px; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius); }
+.workspace-health p { margin-block: 8px 16px; color: var(--muted); }
+.activity-timeline { margin-top: 24px; }
+.activity-list { margin: 0; padding: 0 20px 0 44px; }
+.activity-list > li { padding: 18px 0; border-bottom: 1px solid var(--border); }
+.activity-list time { display: block; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; margin-bottom: 6px; }
+.activity-list p { margin-block: 6px; }
+.activity-list small { color: var(--muted); overflow-wrap: anywhere; }
+.activity-list pre { max-height: 320px; overflow: auto; font-size: 12px; }
+.visual-guide { max-width: 1100px; }
+.visual-guide .help-section { scroll-margin-top: 80px; margin-top: 40px; }
+.visual-guide .help-section > h2 { font-size: 22px; margin-bottom: 12px; }
+.visual-guide p, .visual-guide li { max-width: 75ch; line-height: 1.7; }
+.visual-guide p { margin-block: 12px; }
+.guide-contents { display: flex; flex-wrap: wrap; gap: 8px 20px; border-block: 1px solid var(--border); padding-block: 12px; }
+.guide-contents a { display: inline-flex; align-items: center; min-height: 44px; }
+.guide-table { margin-block: 18px; border: 1px solid var(--border); border-radius: 6px; }
+.guide-table table { min-width: 560px; }
+.guide-table th { white-space: normal; }
+.guide-table th[scope="row"] { width: 23%; color: var(--text); }
+.guide-formula { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; padding: 18px; background: var(--surface-subtle); border: 1px solid var(--border); }
+.evidence-walkthrough { border-block: 1px solid var(--border); padding-block: 20px; }
+.evidence-walkthrough ol { display: flex; flex-wrap: wrap; gap: 12px; padding: 0; list-style: none; }
+.evidence-walkthrough button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.walkthrough-reading { min-height: 150px; padding: 20px 0; animation: guide-reveal 180ms ease-out; }
+@keyframes guide-reveal { from { transform: translateY(4px); } to { transform: translateY(0); } }
+@media (max-width: 600px), (any-pointer: coarse) {
+  main summary { min-height: 44px; display: flex; align-items: center; gap: 8px; }
+  .density-compact .run-table tbody tr { padding-block: 10px; gap: 4px 12px; }
+  .density-compact .catalog-cell-label { margin-bottom: 0; }
+  .density-compact .catalog-identity { max-width: 100%; }
+  .visual-guide .help-section > h2 { font-size: 20px; }
+}
+@media (max-width: 600px) {
+  .guide-table table { min-width: 0; }
+  .guide-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .guide-table tbody tr { display: block; padding: 14px; border-bottom: 1px solid var(--border); }
+  .guide-table th[scope="row"], .guide-table td { display: block; width: 100%; border: 0; padding: 6px 0; }
+  .guide-table td::before { content: attr(data-label); display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  .density-comfortable .run-table td { padding-block: 0; }
+}

@@ -92,6 +92,18 @@ export function ScoringTable({
           <code>{compositeFormula()}</code>
         </details>
       </section>
+      {origin !== "runtime" && <section aria-label={`${scoreLabel} metrics`} className="review-metrics">
+        <h3>{scoreLabel} metrics</h3>
+        {workflow?.metrics ? <>
+          <dl className="metrics-list">{Object.entries(workflow.metrics.values).map(([key, value]) => <div key={key}>
+            <dt>{readable(key)}</dt><dd>{workflow.metrics!.availability[key] && value !== null ? fmtNumber(value, 4) : "Unavailable"}
+              {(!workflow.metrics!.availability[key] || value === null) && <p>{workflow.metrics!.unavailable_reason[key] ?? "Not established by this receipt"}</p>}
+            </dd>
+          </div>)}</dl>
+          <h4>Recorded denominators</h4>
+          <dl className="metrics-list">{Object.entries(workflow.metrics.denominators).map(([key, value]) => <div key={key}><dt>{readable(key)}</dt><dd>{fmtNumber(value)}</dd></div>)}</dl>
+        </> : <p className="notice">No metric vector is recorded for this review. Runtime metrics are not substituted.</p>}
+      </section>}
 
       {rows.length > 0 ? (
         <DimensionScoring rows={rows} refs={workflow?.evidenceRefs} onEvidenceRef={onEvidenceRef} />

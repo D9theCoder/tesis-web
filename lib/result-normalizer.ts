@@ -22,6 +22,14 @@ function deriveDimensions(m: Record<string, unknown>) {
   if (payloads.length) scores.Spayload = Math.max(...payloads);
   const stored = finite(m.composite_score);
   if (stored !== null) scores.Srun = stored;
+  // The hash-bound producer vector is authoritative, including explicit unknowns.
+  for (const dimension of dimensions) {
+    if (dimension in projected) {
+      const value = finite(projected[dimension]);
+      if (value === null) delete scores[dimension];
+      else scores[dimension] = value;
+    }
+  }
   // A partial vector cannot yield a composite. Finals are accepted only by the server receipt adapter.
   return scores;
 }

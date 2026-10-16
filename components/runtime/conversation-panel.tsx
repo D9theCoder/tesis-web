@@ -97,6 +97,7 @@ export function ConversationPanel({ state }: { state: LiveRunState }) {
         </Badge>
       </div>
 
+      {state.events.length >= 300 && <p className="helper-copy p-3">Recent activity preview. Use Experiment activity below for the complete paged journal.</p>}
       <ScrollArea className="runtime-panel-body conversation-scroll">
         <div className="conversation-list">
           {visibleEntries.length === 0 && (

@@ -37,12 +37,20 @@ export async function containedPath(candidate: string, roots = artifactRoots()):
   }
   return null;
 }
+const sourceCache = new Map<string, { identity: string; raw: unknown; sha256: string }>();
 export async function readSource(file: string, roots = artifactRoots()) {
   const safe = await containedPath(file, roots);
   if (!safe) throw new Error("Source is missing or outside configured roots");
-  const bytes = await fs.readFile(safe.path);
-  const raw: unknown = JSON.parse(bytes.toString("utf8"));
-  return { raw, sha256: createHash("sha256").update(bytes).digest("hex"), path: safe.path, root: safe.root };
+  const stat = await fs.stat(safe.path, { bigint: true });
+  const identity = `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`;
+  let source = sourceCache.get(safe.path);
+  if (!source || source.identity !== identity) {
+    const bytes = await fs.readFile(safe.path);
+    source = { identity, raw: JSON.parse(bytes.toString("utf8")) as unknown, sha256: createHash("sha256").update(bytes).digest("hex") };
+    if (sourceCache.size >= 20000) sourceCache.delete(sourceCache.keys().next().value!);
+    sourceCache.set(safe.path, source);
+  }
+  return { raw: source.raw, sha256: source.sha256, path: safe.path, root: safe.root };
 }
 export async function readJson<T = Record<string, unknown>>(file: string, roots = artifactRoots()): Promise<T | null> {
   try { return (await readSource(file, roots)).raw as T; } catch { return null; }

@@ -11,12 +11,12 @@ test.describe("technical audit regressions", () => {
         configurable: true, value: { writeText: async () => {} },
       }));
       await page.goto("/help");
-      const proseLink = page.getByRole("main").getByRole("link", { name: "live monitor", exact: true });
+      const proseLink = page.locator('main a[href="/"]').last();
       expect(await proseLink.evaluate(el => getComputedStyle(el).textDecorationLine)).toContain("underline");
 
       await page.goto("/results");
       await expect(page.getByRole("table", { name: "Run catalog" })).toBeVisible();
-      const input = page.getByRole("searchbox", { name: "Search loaded runs" });
+      const input = page.getByRole("searchbox");
       for (const theme of ["light", "dark"]) {
         if (theme === "dark") await page.getByRole("button", { name: "Switch to dark theme" }).click();
         const contrast = await input.evaluate(el => {

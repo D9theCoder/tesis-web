@@ -288,7 +288,7 @@ export function focusNodeIds(
     if (core.has(edge.source)) visible.add(edge.target);
     if (core.has(edge.target)) visible.add(edge.source);
   }
-  return visible;
+  return new Set([...visible].filter(id => snapshot.nodes.some(node => node.id === id)));
 }
 
 export function shortNodeLabel(node: AkgNode): string {

@@ -280,7 +280,7 @@ function ScoringTab({ result, onEvidenceRef }: { result: NormalizedResult; onEvi
         </CardContent>
       </Card>
       <Card className="results-panel min-h-0 overflow-hidden">
-        <CardHeader><CardTitle>Recorded metrics</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Provisional runtime metrics</CardTitle></CardHeader>
         <CardContent className="overflow-y-auto"><MetricsSummary result={result} /></CardContent>
       </Card>
     </div>

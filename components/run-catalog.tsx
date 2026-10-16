@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowUpDown, ExternalLink, Search } from "lucide-react";
 import type { RunSummary } from "@/lib/schemas";
@@ -9,8 +9,9 @@ import { fmtIsoFromStr } from "@/lib/formatters";
 
 function readable(value: string) { return value.replace(/_/g, " "); }
 
-export function RunCatalog({ runs, selected, onPick }: {
+export function RunCatalog({ runs, selected, onPick, onFiltersChange }: {
   runs: RunSummary[]; selected?: string | null; onPick?: (run: RunSummary) => void;
+  onFiltersChange?: (query: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [execution, setExecution] = useState("all");
@@ -18,6 +19,9 @@ export function RunCatalog({ runs, selected, onPick }: {
   const [sort, setSort] = useState("newest");
   const [page, setPage] = useState(0);
   const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    onFiltersChange?.(new URLSearchParams({ q: query, execution, outcome, sort }).toString());
+  }, [query, execution, outcome, sort, onFiltersChange]);
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return runs.filter(run => (!needle || [run.executionId, run.provider, run.model, run.surface, run.securityLevel, run.experimentCondition, run.targetMethod].filter(Boolean).join(" ").toLowerCase().includes(needle))
@@ -37,7 +41,7 @@ export function RunCatalog({ runs, selected, onPick }: {
   const reset = () => { setQuery(""); setExecution("all"); setOutcome("all"); setSort("newest"); setPage(0); };
   return <div className={`run-catalog ${compact ? "density-compact" : "density-comfortable"}`}>
     <div className="filter-bar">
-      <label className="field search-field"><span>Search loaded runs</span><span className="search-control"><Search size={16} /><input className="form-control" type="search" placeholder="Execution, model, method…" value={query} onChange={event => { setQuery(event.target.value); setPage(0); }} /></span></label>
+      <label className="field search-field"><span>{onFiltersChange ? "Search workspace" : "Search loaded runs"}</span><span className="search-control"><Search size={16} /><input className="form-control" type="search" placeholder="Execution, model, method…" value={query} onChange={event => { setQuery(event.target.value); setPage(0); }} /></span></label>
       <label className="field"><span>Execution</span><select className="form-control" value={execution} onChange={event => { setExecution(event.target.value); setPage(0); }}><option value="all">All executions</option>{["completed", "failed", "interrupted", "unknown"].map(value => <option key={value} value={value}>{readable(value)}</option>)}</select></label>
       <label className="field"><span>Security outcome</span><select className="form-control" value={outcome} onChange={event => { setOutcome(event.target.value); setPage(0); }}><option value="all">All outcomes</option>{["confirmed", "no_finding", "unconfirmed", "fixture_limited", "unknown"].map(value => <option key={value} value={value}>{readable(value)}</option>)}</select></label>
       <label className="field"><span>Sort</span><select className="form-control" value={sort} onChange={event => { setSort(event.target.value); setPage(0); }}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="identity">Execution ID</option></select></label>

@@ -577,6 +577,10 @@ function GraphCanvas(props: Props) {
           </span>
         </div>
       )}
+      {view === "focus" && !snapshot.nodes.some(node => visible.has(node.id)) && <div className="notice" role="status">
+        {akgPath.length || currentNode ? "The recorded path does not match this snapshot." : "No traversal has been recorded yet. Focus path needs a recorded node."}
+        <button className="ui-button" onClick={() => setView("full")}>Return to full graph</button>
+      </div>}
       <div className="akg-canvas">
         {layoutError ? (
           <div className="akg-layout-message" role="alert">

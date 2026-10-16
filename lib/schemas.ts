@@ -132,6 +132,7 @@ export const runListResponseSchema = z.object({
   tesisRoot: z.string(),
   active: z.array(runSummarySchema).optional(),
   nextCursor: z.number().int().nullable().optional(), total: z.number().int().optional(), diagnostics: z.array(z.string()).optional(),
+  workspace: z.record(z.number()).optional(),
 });
 
 export type RunListResponse = z.infer<typeof runListResponseSchema>;
@@ -361,6 +362,12 @@ const componentSchema = z.object({
   Smethod: z.number().finite().min(0).max(4), Spayload: z.number().finite().min(0).max(4),
   Sexploit: z.number().finite().min(0).max(4), Schain: z.number().finite().min(0).max(4), Soutput: z.number().finite().min(0).max(4),
 });
+export const reviewMetricsSchema = z.object({
+  values: z.record(z.number().finite().nullable()),
+  availability: z.record(z.boolean()),
+  unavailable_reason: z.record(z.string()),
+  denominators: z.record(z.number().finite().nonnegative()),
+});
 export const reviewReceiptSchema = z.object({
   artifact_type: z.literal("thesis_score_receipt"), execution_id: z.string(), run_id: z.string().nullable().optional(),
   source_sha256: z.string().regex(/^[a-f0-9]{64}$/), source_path: z.string(),
@@ -371,6 +378,7 @@ export const reviewReceiptSchema = z.object({
   candidate_grades: z.array(z.object({ candidate_id: z.string(), score: z.number().finite().min(0).max(4),
     evidence_refs: z.array(z.string()).optional() }).passthrough()),
   component_evidence_refs: z.record(z.array(z.string())), formula: componentSchema,
+  metrics: reviewMetricsSchema.optional(),
 }).passthrough();
 export const reviewStatusSchema = z.object({
   artifact_type: z.literal("thesis_review_status"), source_sha256: z.string().regex(/^[a-f0-9]{64}$/),
@@ -387,6 +395,7 @@ export const reviewWorkflowSchema = z.object({
   rubric: z.string().nullable(), origin: z.string().nullable(), source: sourceBindingSchema.nullable(),
   numerator: z.number().nullable(), denominator: z.number().nullable(),
   candidateGrades: z.array(z.record(z.unknown())), evidenceRefs: z.record(z.array(z.string())),
+  metrics: reviewMetricsSchema.nullable().optional(),
 });
 export type ReviewWorkflow = z.infer<typeof reviewWorkflowSchema>;
 export const reviewBundleSchema = z.object({

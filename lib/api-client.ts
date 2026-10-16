@@ -31,8 +31,8 @@ async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
 }
 
 /** Register of observed runs plus the newest active descriptor, if any. */
-export async function fetchRuns(signal?: AbortSignal, cursor = 0): Promise<RunListResponse> {
-  return runListResponseSchema.parse(await getJson(`/api/runtime/runs?cursor=${cursor}`, signal));
+export async function fetchRuns(signal?: AbortSignal, cursor = 0, query = ""): Promise<RunListResponse> {
+  return runListResponseSchema.parse(await getJson(`/api/runtime/runs?cursor=${cursor}${query ? `&${query}` : ""}`, signal));
 }
 
 export async function fetchRunSummary(

@@ -140,7 +140,7 @@ export async function resolveReviews(run: ResolvedRun, diagnostics: string[]) {
       const source: SourceBinding = { rootId: file.root.id, path: path.relative(file.root.path, file.path), sha256: file.sha256, schema: "thesis_score_receipt" };
       bundle[mode] = { status: "final", reason: null, componentPendingReasons: {}, components: r.components, SpayloadFinal: r.Spayload_final,
         SrunFinal: r.Srun_final, rubric: r.rubric_version, origin: `${mode} source-bound receipt`, source,
-        numerator: r.numerator, denominator: r.denominator, candidateGrades: r.candidate_grades, evidenceRefs: r.component_evidence_refs };
+        numerator: r.numerator, denominator: r.denominator, candidateGrades: r.candidate_grades, evidenceRefs: r.component_evidence_refs, metrics: r.metrics ?? null };
       continue;
     }
     const statuses: ReviewFile[] = [];
