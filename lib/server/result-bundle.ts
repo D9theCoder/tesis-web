@@ -1,7 +1,7 @@
 import path from "node:path";
 import { artifactSchema, resultBundleSchema, type SourceBinding } from "@/lib/schemas";
 import { record, mergeArtifact, canonicalStatus } from "@/lib/artifact-contract";
-import { readSource, artifactRoots, redact, collectSecrets } from "@/lib/server/fs-util";
+import { readSource, artifactRoots, redact, cachedSourceSecrets } from "@/lib/server/fs-util";
 import { getCatalog, uniqueRun, hasExactMatrixMembership, RetrievalError, clearCatalogCache, type ResolvedRun } from "@/lib/server/resolve-run";
 import { normalizeResult } from "@/lib/result-normalizer";
 import { resolveReviews } from "@/lib/server/reviews";
@@ -43,7 +43,7 @@ export async function resultBundle(run: ResolvedRun) {
   const payload = resultBundleSchema.parse({ schema_version: "observer-result.v1", artifact: artifactSchema.parse(artifact), source: binding,
     reviews: reviewBundle, diagnostics, historicalAnalysis: run.historicalAnalysis ?? null,
     matrixExecutionId: run.matrixExecutionId, coordinateIndex: run.coordinateIndex });
-  const redacted = redact(payload, true, [...collectSecrets(source.raw)]);
+  const redacted = redact(payload, true, cachedSourceSecrets(source.raw));
   normalizeResult(redacted); // Validate the consumer contract before returning it.
   return redacted;
 }

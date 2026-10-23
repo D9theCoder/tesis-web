@@ -104,6 +104,15 @@ export function redact(value: unknown, deep = true, knownSecrets: string[] = [])
   return visit(value);
 }
 
+const sourceSecrets = new WeakMap<object, string[]>();
+/** Parsed sources are immutable between file changes, so their secret set is stable too. */
+export function cachedSourceSecrets(value: unknown) {
+  if (!value || typeof value !== "object") return [...collectSecrets(value)];
+  let secrets = sourceSecrets.get(value);
+  if (!secrets) { secrets = [...collectSecrets(value)]; sourceSecrets.set(value, secrets); }
+  return secrets;
+}
+
 export async function readJsonlFrom(file: string, cursor: number, previousIdentity?: string | null,
   limits = { bytes: 524288, events: 500 }) {
   const events: unknown[] = [], diagnostics: string[] = [];

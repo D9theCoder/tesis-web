@@ -36,12 +36,12 @@ export async function fetchRuns(signal?: AbortSignal, cursor = 0, query = ""): P
   return runListResponseSchema.parse(await getJson(`/api/runtime/runs?cursor=${cursor}${query ? `&${query}` : ""}`, signal));
 }
 
-export async function fetchExperiments(query: string, signal?: AbortSignal) {
-  return experimentListSchema.parse(await getJson(`/api/experiments?${query}`, signal));
+export async function fetchExperiments(query: string, signal?: AbortSignal, fresh = false) {
+  return experimentListSchema.parse(await getJson(`/api/experiments?${query}${fresh ? `${query ? "&" : ""}fresh=1` : ""}`, signal));
 }
 
-export async function fetchExperimentOverview(query: string, signal?: AbortSignal) {
-  return experimentOverviewSchema.parse(await getJson(`/api/experiments/overview?${query}`, signal));
+export async function fetchExperimentOverview(query: string, signal?: AbortSignal, fresh = false) {
+  return experimentOverviewSchema.parse(await getJson(`/api/experiments/overview?${query}${fresh ? `${query ? "&" : ""}fresh=1` : ""}`, signal));
 }
 
 export async function fetchRunSummary(

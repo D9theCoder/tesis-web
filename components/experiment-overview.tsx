@@ -87,7 +87,7 @@ export function ExperimentOverviewPage() {
             <div><dt>Projection / code epoch</dt><dd>{data.source.projection ? <><code>{data.source.projection.path}</code><pre>{data.source.projection.epoch}</pre></> : "No bound projection supplied"}</dd></div>
           </dl> : <p>No readable primary source binding is available.</p>}
           {data.experiment?.contextFromMembers && <p className="helper-copy">Missing parent context is supplemented only by metadata shared by every bound coordinate.</p>}
-          <p className="helper-copy">Filesystem discovery is bounded and cached for up to two seconds. Reviews scan at most {data.reviews.limit} exact member sources. No cohort definition is available; this summary describes only the named experiment. The observer cannot repair artifacts or run reviews.</p>
+          <p className="helper-copy">Filesystem discovery is bounded and served from a two-second snapshot while it revalidates; Refresh waits for a fresh scan. Reviews scan at most {data.reviews.limit} exact member sources. No cohort definition is available; this summary describes only the named experiment. The observer cannot repair artifacts or run reviews.</p>
           {[...data.diagnostics, ...data.experiment?.diagnostics ?? []].length > 0 && <ul>{[...data.diagnostics, ...data.experiment?.diagnostics ?? []].map((message,i) => <li key={i}>{message}</li>)}</ul>}
           <Link className="ui-link" href="/results?view=unresolved">Inspect unresolved identities</Link>
         </div>

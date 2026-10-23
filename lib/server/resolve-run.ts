@@ -45,15 +45,61 @@ export async function scanJson(roots: Root[], diagnostics: string[], skipReviewD
   for (const root of roots) await walk(root.path, root, 0);
   return files;
 }
-let cache: { key: string; at: number; promise: Promise<Catalog> } | undefined;
-export function clearCatalogCache() { cache = undefined; }
-export async function getCatalog(): Promise<Catalog> {
-  const roots = artifactRoots();
-  const key = JSON.stringify([roots, process.env.TESIS_COMPATIBILITY_FILES, process.env.TESIS_PROJECTION_FILES]);
-  if (cache?.key === key && Date.now() - cache.at < 2000) return cache.promise;
-  const promise = buildCatalog(roots);
-  cache = { key, at: Date.now(), promise };
+const CATALOG_TTL_MS = 2000;
+let cache: { key: string; value?: Catalog; at: number; pending?: Promise<Catalog>; scheduled?: boolean } | undefined;
+let generation = 0;
+export function clearCatalogCache() { generation++; cache = undefined; }
+function catalogKey() { return JSON.stringify([artifactRoots(), process.env.TESIS_COMPATIBILITY_FILES, process.env.TESIS_PROJECTION_FILES]); }
+function refreshCatalog(key: string): Promise<Catalog> {
+  const started = generation;
+  const promise = buildCatalog(artifactRoots()).then(value => {
+    if (started === generation && cache?.key === key) cache = { key, value, at: Date.now() };
+    return value;
+  }, error => {
+    if (started === generation && cache?.key === key) { cache.pending = undefined; cache.at = Date.now(); }
+    throw error;
+  });
+  if (cache?.key === key) cache.pending = promise;
+  else if (!cache) cache = { key, at: 0, pending: promise };
   return promise;
+}
+/**
+ * Discovery reads bounded local source roots, so a rebuild costs a filesystem walk.
+ * Serve the last snapshot immediately once it is two seconds old and rebuild behind it;
+ * an explicit refresh (`fresh`) waits for the scan so a user-requested reload is exact.
+ */
+export async function getCatalog(options: { fresh?: boolean } = {}): Promise<Catalog> {
+  const key = catalogKey();
+  if (cache?.key !== key) cache = undefined;
+  const snapshot = cache;
+  if (!options.fresh && snapshot?.value) {
+    if (Date.now() - snapshot.at < CATALOG_TTL_MS) return snapshot.value;
+    if (!snapshot.pending && !snapshot.scheduled) {
+      // Let the current response flush before spending the event loop on a scan.
+      snapshot.scheduled = true;
+      setTimeout(() => {
+        if (cache !== snapshot) return;
+        snapshot.scheduled = false;
+        if (snapshot.pending) return;
+        void refreshCatalog(key).catch(() => {});
+      }, 0);
+    }
+    return snapshot.value;
+  }
+  if (snapshot?.pending) return snapshot.pending;
+  return refreshCatalog(key);
+}
+const parsedArtifacts = new WeakMap<object, Record<string, unknown>>();
+/** Zod parsing clones the source; reuse that clone so per-source caches survive rescans. */
+function cachedArtifact(raw: Record<string, unknown>) {
+  let artifact = parsedArtifacts.get(raw);
+  if (!artifact) {
+    const parsed = artifactSchema.safeParse(raw);
+    if (!parsed.success) return null;
+    artifact = parsed.data;
+    parsedArtifacts.set(raw, artifact);
+  }
+  return artifact;
 }
 async function buildCatalog(roots: Root[]): Promise<Catalog> {
   const catalog: Catalog = { runs: new Map(), diagnostics: [] };
@@ -81,10 +127,10 @@ async function buildCatalog(roots: Root[]): Promise<Catalog> {
       const recognized = raw.schema_version === "tui.v1" || raw.schema_version === "stage8.v1" || raw.artifact_type === "matrix_aggregate" ||
         (!raw.artifact_type && typeof raw.execution_id === "string" && (raw.final_state !== undefined || raw.execution_log !== undefined || (raw.config !== undefined && raw.status !== undefined)));
       if (!recognized) continue;
-      const parsed = artifactSchema.safeParse(raw);
-      if (!parsed.success) { catalog.diagnostics.push(`artifact_schema_invalid:${file.root.id}/${path.relative(file.root.path, file.path)}`); continue; }
-      put({ executionId: parsed.data.execution_id, dir: path.dirname(source.path), root: file.root,
-        primaryPath: source.path, sha256: source.sha256, raw: parsed.data,
+      const parsed = cachedArtifact(raw);
+      if (!parsed) { catalog.diagnostics.push(`artifact_schema_invalid:${file.root.id}/${path.relative(file.root.path, file.path)}`); continue; }
+      put({ executionId: text(parsed.execution_id)!, dir: path.dirname(source.path), root: file.root,
+        primaryPath: source.path, sha256: source.sha256, raw: parsed,
         mode: Array.isArray(raw.runs) || raw.matrix === true ? "matrix" : "single-run", metadata: {},
         matrixExecutionId: text(raw.matrix_execution_id), coordinateIndex: finite(raw.coordinate_index), diagnostics: [] });
     } catch { catalog.diagnostics.push(`json_unreadable:${file.root.id}/${path.relative(file.root.path, file.path)}`); }

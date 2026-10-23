@@ -119,14 +119,16 @@ unknowns remain authoritative. Focus path explains empty or mismatched traversal
 Compact tables prioritize clipped single-line scanning; Comfortable wraps metadata.
 Inspect retains full evidence in either density. Block disclosures have 44px touch
 targets on phones/coarse pointers. Discovery reuses parsed/hash-verified sources
-while their inode, size, modification and change timestamps remain unchanged.
+while their inode, size, modification and change timestamps remain unchanged. A
+two-second catalog snapshot is served while a fresh scan runs behind it; an
+explicit refresh waits for that scan instead of returning the snapshot.
 
 Read-only API (served by the local Next.js process, contained under configured
 source/review roots and response-redacted):
 
 - `GET /api/runtime/runs?cursor=0&limit=100` — merged execution catalog; limit 1–200, `nextCursor` and `total`
-- `GET /api/experiments` — validated experiment/execution inventory, grouped and filtered server-side
-- `GET /api/experiments/overview?scope=ID` — one exact source-bound interpretation summary; optional `previous=ID` supplies a remembered preference only when no explicit scope exists
+- `GET /api/experiments` — validated experiment/execution inventory, grouped and filtered server-side; `fresh=1` waits for a new discovery scan
+- `GET /api/experiments/overview?scope=ID` — one exact source-bound interpretation summary; optional `previous=ID` supplies a remembered preference only when no explicit scope exists; `fresh=1` waits for a new discovery scan
 - `GET /api/runtime/runs/[executionId]` — resolve one run
 - `GET /api/runtime/runs/[executionId]/events?cursor=N&journal=IDENTITY` — bounded journal pages (512 KiB / 500 lines), byte cursor and replacement/reset diagnostics
 - `GET /api/results/[executionId]` — validated `observer-result.v1` bundle; matrix responses contain coordinate metadata

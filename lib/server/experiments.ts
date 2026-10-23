@@ -4,7 +4,7 @@ import { experimentListSchema, experimentOverviewSchema, inventoryQuerySchema, r
 import { sourceBindingSchema, type SourceBinding } from "@/lib/schemas";
 import { getCatalog, uniqueRun, summariseRun, hasExactMatrixMembership, RetrievalError, type Catalog, type ResolvedRun } from "@/lib/server/resolve-run";
 import { resolveReviews } from "@/lib/server/reviews";
-import { collectSecrets, redact } from "@/lib/server/fs-util";
+import { cachedSourceSecrets, redact } from "@/lib/server/fs-util";
 
 const REVIEW_LIMIT = 100;
 const DETAIL_LIMIT = 100;
@@ -100,11 +100,28 @@ function prepare(catalog: Catalog) {
   return { ...index, entries };
 }
 
-export async function listExperiments(params: URLSearchParams) {
+/** Catalog snapshots are immutable between scans, so their derived views can live as long as they do. */
+const preparedCatalogs = new WeakMap<Catalog, ReturnType<typeof prepare>>();
+function preparedCatalog(catalog: Catalog) {
+  let prepared = preparedCatalogs.get(catalog);
+  if (!prepared) { prepared = prepare(catalog); preparedCatalogs.set(catalog, prepared); }
+  return prepared;
+}
+const catalogSecrets = new WeakMap<Catalog, string[]>();
+function secretsFor(catalog: Catalog) {
+  let secrets = catalogSecrets.get(catalog);
+  if (!secrets) {
+    secrets = [...catalog.runs.values()].flatMap(runs => runs.flatMap(run => run.raw ? cachedSourceSecrets(run.raw) : []));
+    catalogSecrets.set(catalog, secrets);
+  }
+  return secrets;
+}
+
+export async function listExperiments(params: URLSearchParams, options: { fresh?: boolean } = {}) {
   if ([...params.keys()].some(key => params.getAll(key).length > 1)) throw new RetrievalError("Ambiguous repeated experiment query parameter", 400);
   const parsed = inventoryQuerySchema.safeParse(Object.fromEntries(params));
   if (!parsed.success) throw new RetrievalError("Invalid experiment query; check view, scope, filters, sort and pagination", 400);
-  const query = parsed.data, catalog = await getCatalog(), index = prepare(catalog);
+  const query = parsed.data, catalog = await getCatalog(options), index = preparedCatalog(catalog);
   let scopedIds: Set<string> | null = null;
   if (query.scope) {
     const selected = uniqueRun(catalog, query.scope);
@@ -127,12 +144,11 @@ export async function listExperiments(params: URLSearchParams) {
       (query.outcome === "all" || (query.outcome === "unknown" ? entry.unknownOutcomes === null || entry.unknownOutcomes > 0 : (entry.outcomes[query.outcome] ?? 0) > 0));
   });
   filtered.sort((a,b) => compareEntries(a,b,query));
-  const secrets = [...catalog.runs.values()].flatMap(runs => runs.flatMap(run => [...collectSecrets(run.raw ?? {})]));
   return redact(experimentListSchema.parse({ entries: filtered.slice(query.cursor, query.cursor + query.limit), total: filtered.length,
     nextCursor: query.cursor + query.limit < filtered.length ? query.cursor + query.limit : null,
     experiments: experiments.length, executions: index.entries.length, unresolved: unresolved.length,
     refreshedAt: new Date().toISOString(), partial: catalog.diagnostics.length > 0,
-    diagnostics: catalog.diagnostics.slice(0, DETAIL_LIMIT) }), true, secrets);
+    diagnostics: catalog.diagnostics.slice(0, DETAIL_LIMIT) }), true, secretsFor(catalog));
 }
 
 function compareEntries(a: ExperimentEntry, b: ExperimentEntry, query: InventoryQuery) {
@@ -142,8 +158,8 @@ function compareEntries(a: ExperimentEntry, b: ExperimentEntry, query: Inventory
   return (Number.isFinite(left) && Number.isFinite(right) ? (query.sort === "oldest" ? left-right : right-left) : 0) || a.run.executionId.localeCompare(b.run.executionId);
 }
 
-export async function experimentOverview(scope?: string, previous?: string) {
-  const catalog = await getCatalog(), index = prepare(catalog);
+export async function experimentOverview(scope?: string, previous?: string, options: { fresh?: boolean } = {}) {
+  const catalog = await getCatalog(options), index = preparedCatalog(catalog);
   const defaultQuery = inventoryQuerySchema.parse({});
   const choices = index.entries.filter(entry => (entry.kind === "matrix" || entry.kind === "standalone") && entry.run.hasArtifact).sort((a,b) => compareEntries(a,b,defaultQuery));
   // Explicit identity is never substituted; a stale remembered identity may fall back.
@@ -237,6 +253,6 @@ export async function experimentOverview(scope?: string, previous?: string) {
       items: [...group.items.values()].sort((a,b) => a.executionId.localeCompare(b.executionId)).slice(0,DETAIL_LIMIT), omitted: Math.max(0,group.items.size-DETAIL_LIMIT) })),
     diagnostics: diagnostics.slice(0,DETAIL_LIMIT),
   };
-  const secrets = [run, ...members].flatMap(member => [...collectSecrets(member?.raw ?? {})]);
+  const secrets = [run, ...members].flatMap(member => member?.raw ? cachedSourceSecrets(member.raw) : []);
   return redact(experimentOverviewSchema.parse(payload), true, secrets);
 }
