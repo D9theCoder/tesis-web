@@ -66,6 +66,7 @@
 
 .page :global(.guide-formula) {
   padding: 8px;
+  overflow-wrap: normal;
 }
 
 @media (max-width: 600px) {

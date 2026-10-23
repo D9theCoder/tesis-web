@@ -1,6 +1,13 @@
 import Link from "next/link";
+import { renderToString } from "katex";
+import "katex/dist/katex.min.css";
 import { EvidenceWalkthrough } from "@/components/evidence-walkthrough";
 import styles from "./page.module.css";
+
+const scoringFormula = renderToString(
+  String.raw`S_{\mathrm{run}} = 0.20 \cdot S_{\mathrm{method}} + 0.20 \cdot S_{\mathrm{payload}} + 0.30 \cdot S_{\mathrm{exploit}} + 0.10 \cdot S_{\mathrm{chain}} + 0.20 \cdot S_{\mathrm{output}}`,
+  { output: "htmlAndMathml", strict: "error", trust: false },
+);
 
 const outcomes = [
   ["confirmed", "Required evidence establishes the finding.", "Not a synonym for execution completed. Findings can survive a failed or interrupted execution."],
@@ -39,7 +46,7 @@ export default function HelpPage() {
     </section>
     <section id="scores" className="help-section"><h2>One formula, separate score origins</h2><ReferenceTable headers={["Origin", "Evidence basis", "Finality"]} rows={[["Provisional runtime · scoring.v2", "Stored runtime vector. Legacy payload maximum is provisional only.", "Never a substitute for a thesis final."], ["Human review · scoring.v4", "Accepted receipt bound to execution, original SHA-256, method, config and rubric.", "Independent Human workflow."], ["AI review · scoring.v4", "Same source-binding and arithmetic requirements; separate workflow.", "Independent AI workflow, not a Human endorsement."]]} />
       <ReferenceTable headers={["Component", "Weight", "Interpretation"]} rows={[["Smethod", "20%", "Method fit and selection under the frozen rubric."], ["Spayload", "20%", "Final mean over distinct eligible executed validated exploit/bypass candidates for the final method."], ["Sexploit", "30%", "Independent verifier proof, not signals alone."], ["Schain", "10%", "Causal dependency and destination outcome."], ["Soutput", "20%", "Evidence-backed output validity and required context calls."]]} />
-      <p className="guide-formula">Srun = 0.20·Smethod + 0.20·Spayload + 0.30·Sexploit + 0.10·Schain + 0.20·Soutput</p>
+      <p className="guide-formula" dangerouslySetInnerHTML={{ __html: scoringFormula }} />
       <p><strong>Illustrative candidate mean:</strong> eligible scores 2, 3 and 4 give numerator 9 / denominator 3 = Spayload 3. A pending candidate grade or missing component keeps the final pending. Fractional components retain precision; final receipt totals round to four decimals.</p>
       <ReferenceTable headers={["State", "Read it as"]} rows={[["Final", "An accepted source-bound receipt supplies the value."], ["Pending", "Required grading or component evidence is incomplete; no final value."], ["Stale", "Saved receipt does not match the current source or contract."], ["Missing / unavailable", "No eligible workflow evidence; never fall back to runtime as a final."]]} />
     </section>
