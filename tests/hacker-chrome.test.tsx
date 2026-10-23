@@ -120,8 +120,23 @@ describe("boot sequence", () => {
 });
 
 describe("hacker status bar", () => {
+  function renderBar(props?: Partial<Parameters<typeof HackerStatusBar>[0]>) {
+    return render(
+      <HackerStatusBar
+        rainMode="max"
+        onRainChange={() => {}}
+        splashEnabled
+        onSplashChange={() => {}}
+        powerDownEnabled
+        onPowerDownChange={() => {}}
+        reducedMotion={false}
+        {...props}
+      />,
+    );
+  }
+
   it("renders a live UTC clock without becoming a live region", () => {
-    render(<HackerStatusBar rainMode="max" onRainChange={() => {}} reducedMotion={false} />);
+    renderBar();
 
     expect(screen.getByText("04:05:06 UTC")).toBeInTheDocument();
     expect(screen.queryByRole("status")).toBeNull();
@@ -134,9 +149,7 @@ describe("hacker status bar", () => {
 
   it("keeps the same three rain buttons and focus when the mode changes", () => {
     const onRainChange = vi.fn();
-    const view = render(
-      <HackerStatusBar rainMode="max" onRainChange={onRainChange} reducedMotion={false} />,
-    );
+    const view = renderBar({ rainMode: "max", onRainChange });
 
     const group = screen.getByRole("group", { name: "Rain intensity" });
     const buttons = within(group).getAllByRole("button");
@@ -153,7 +166,15 @@ describe("hacker status bar", () => {
     expect(normal).toHaveFocus();
 
     view.rerender(
-      <HackerStatusBar rainMode="normal" onRainChange={onRainChange} reducedMotion={false} />,
+      <HackerStatusBar
+        rainMode="normal"
+        onRainChange={onRainChange}
+        splashEnabled
+        onSplashChange={() => {}}
+        powerDownEnabled
+        onPowerDownChange={() => {}}
+        reducedMotion={false}
+      />,
     );
 
     // Same DOM buttons, only aria-pressed changes.
@@ -163,7 +184,7 @@ describe("hacker status bar", () => {
   });
 
   it("pins off and disables the animated intensities under reduced motion", () => {
-    render(<HackerStatusBar rainMode="off" onRainChange={() => {}} reducedMotion />);
+    renderBar({ rainMode: "off", reducedMotion: true });
 
     const group = screen.getByRole("group", { name: "Rain intensity" });
     expect(within(group).getByRole("button", { name: "Rain off" })).toHaveAttribute("aria-pressed", "true");
@@ -172,6 +193,37 @@ describe("hacker status bar", () => {
     expect(within(group).getByRole("button", { name: "Rain max" })).toBeDisabled();
     expect(group).toHaveAccessibleDescription(/static pattern/i);
     expect(screen.getByText("static pattern")).toBeInTheDocument();
+  });
+
+  it("toggles the splash and power-down switches in place", () => {
+    const onSplashChange = vi.fn();
+    const onPowerDownChange = vi.fn();
+    const view = renderBar({ onSplashChange, onPowerDownChange });
+
+    const splash = screen.getByRole("button", { name: "Splash intro animation: on" });
+    const powerDown = screen.getByRole("button", { name: "Power-down animation: on" });
+    expect(splash).toHaveAttribute("aria-pressed", "true");
+    expect(powerDown).toHaveAttribute("aria-pressed", "true");
+
+    splash.focus();
+    fireEvent.click(splash);
+    expect(onSplashChange).toHaveBeenCalledWith(false);
+    expect(splash).toHaveFocus();
+
+    view.rerender(
+      <HackerStatusBar
+        rainMode="max"
+        onRainChange={() => {}}
+        splashEnabled={false}
+        onSplashChange={onSplashChange}
+        powerDownEnabled
+        onPowerDownChange={onPowerDownChange}
+        reducedMotion={false}
+      />,
+    );
+    expect(splash).toHaveAttribute("aria-pressed", "false");
+    expect(splash).toHaveAttribute("aria-label", "Splash intro animation: off");
+    expect(screen.getByRole("button", { name: "Power-down animation: on" })).toBe(powerDown);
   });
 });
 

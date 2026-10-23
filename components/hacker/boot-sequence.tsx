@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { BOOT_SEEN_VALUE, BOOT_STORAGE_KEY, bootWasSeen, markBootSeen } from "@/lib/hacker-settings";
 
-export const BOOT_STORAGE_KEY = "tesis-boot:v1";
-export const BOOT_SEEN_VALUE = "1";
+export { BOOT_SEEN_VALUE, BOOT_STORAGE_KEY };
 
 /** Long enough to feel cinematic, short enough to stay out of the user's way. */
 export const BOOT_DURATION_MS = 2600;
@@ -23,22 +23,6 @@ export const BOOT_LINES: readonly string[] = [
   "[ OK ] preparing artifact view",
   "[ OK ] ready",
 ];
-
-function markBootSeen() {
-  try {
-    window.sessionStorage.setItem(BOOT_STORAGE_KEY, BOOT_SEEN_VALUE);
-  } catch {
-    /* Storage can be blocked; the overlay still shows once per mount. */
-  }
-}
-
-function bootWasSeen(): boolean {
-  try {
-    return window.sessionStorage.getItem(BOOT_STORAGE_KEY) === BOOT_SEEN_VALUE;
-  } catch {
-    return false;
-  }
-}
 
 type BootSequenceProps = {
   reducedMotion?: boolean;

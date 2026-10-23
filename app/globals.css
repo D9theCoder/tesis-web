@@ -864,6 +864,14 @@ svg { flex-shrink: 0; }
   height: 100%;
   z-index: 0;
   pointer-events: none;
+  transition: opacity 300ms ease-out;
+}
+/* Session cinematics drive the rain entrance and exit: held invisible on the
+   splash until its final frame, faded out on its own clock in the power-down. */
+:root[data-cinema-rain="hold"] .hacker-rain { opacity: 0; }
+:root[data-cinema-rain="fade"] .hacker-rain {
+  opacity: 0;
+  transition: opacity 150ms linear;
 }
 .hacker-scanlines,
 .hacker-vignette {
@@ -1510,6 +1518,137 @@ svg { flex-shrink: 0; }
   color: var(--accent);
 }
 
+/* --- Cheat code switch ------------------------------------------------------ */
+/* “cheatstick” easter egg, switchable in Settings. Light and dark render a
+   plain borderless row with a simple pill; hacker keeps its boxed chip card. */
+
+.cheat-code-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+.cheat-code-switch__body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.cheat-code-switch__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.cheat-code-switch__description {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+/* The whole row is the switch; the pill is its drawn state. */
+.cheat-code-switch__pill {
+  position: relative;
+  flex-shrink: 0;
+  width: 40px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  transition: background-color 160ms ease;
+}
+.cheat-code-switch__pill::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgb(0 0 0 / .2);
+  transition: transform 160ms ease;
+}
+.cheat-code-switch[aria-checked="true"] .cheat-code-switch__pill {
+  background: var(--accent);
+}
+.cheat-code-switch[aria-checked="true"] .cheat-code-switch__pill::after {
+  transform: translateX(20px);
+}
+.cheat-code-switch:focus-visible .cheat-code-switch__pill {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.cheat-code-switch__state { display: none; }
+@media (any-pointer: coarse) {
+  .cheat-code-switch { min-height: 44px; }
+}
+
+/* The return sub-setting sits under the main phrase switch. */
+.cheat-code-switch--sub {
+  margin-top: 8px;
+  padding-left: 16px;
+}
+.cheat-code-switch--sub .cheat-code-switch__title {
+  font-size: 13px;
+}
+.cheat-code-switch--sub .cheat-code-switch__description {
+  font-size: 11px;
+}
+.cheat-code-switch--sub:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.cheat-code-switch--sub:disabled .cheat-code-switch__pill {
+  background: var(--border);
+}
+.cheat-code-switch--sub:disabled .cheat-code-switch__pill::after {
+  transform: translateX(0);
+}
+
+/* Hacker keeps the boxed chip treatment over its terminal chrome. */
+:root[data-theme="hacker"] .cheat-code-switch {
+  min-height: 44px;
+  padding: 12px 14px;
+  border: 1px solid var(--hacker-line-strong);
+  border-radius: var(--radius);
+  background: var(--hacker-panel);
+}
+:root[data-theme="hacker"] .cheat-code-switch:hover {
+  background: var(--surface-hover);
+}
+:root[data-theme="hacker"] .cheat-code-switch:focus-visible .cheat-code-switch__pill {
+  outline: none;
+}
+:root[data-theme="hacker"] .cheat-code-switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+:root[data-theme="hacker"] .cheat-code-switch__pill { display: none; }
+:root[data-theme="hacker"] .cheat-code-switch__state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--secondary);
+  font: 600 11px/1 var(--font-mono);
+  letter-spacing: .08em;
+}
+:root[data-theme="hacker"] .cheat-code-switch[aria-checked="true"] .cheat-code-switch__state {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+:root[data-theme="hacker"] .cheat-code-switch--sub {
+  margin-left: 16px;
+}
+
 /* --- Status bar ----------------------------------------------------------- */
 
 :root[data-theme="hacker"] .hacker-statusbar {
@@ -1587,6 +1726,40 @@ svg { flex-shrink: 0; }
   color: var(--hacker-ink);
 }
 .hacker-rain-option:focus-visible { outline-offset: 1px; }
+/* Cinematic on/off switches share the rain control's visual language. */
+.hacker-cinema-controls { gap: 12px; }
+.hacker-cinema-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--secondary);
+  font: 600 10px/1 var(--font-mono);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.hacker-cinema-toggle:hover {
+  border-color: var(--hacker-line-strong);
+  color: var(--text);
+}
+.hacker-cinema-toggle[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--hacker-ink);
+}
+.hacker-cinema-toggle[aria-pressed="true"]:hover {
+  background: var(--success);
+  border-color: var(--success);
+  color: var(--hacker-ink);
+}
+.hacker-cinema-toggle:focus-visible { outline-offset: 1px; }
+.hacker-cinema-toggle__compact { display: none; }
 
 /* --- Boot sequence -------------------------------------------------------- */
 
@@ -1638,6 +1811,323 @@ svg { flex-shrink: 0; }
   50%, 100% { opacity: 0; }
 }
 
+/* --- Session cinematics ---------------------------------------------------- */
+/* The opening splash (hacker selected) and the CRT power-down (hacker left).
+   One fixed overlay per run at the top of the stack; every visual layer here
+   is aria-hidden and the runs never cause layout changes on the page beneath.
+   All entrance/exit work uses transform and opacity only. */
+
+.hacker-cinema {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  color: #33ff66;
+  font-family: var(--font-mono);
+  user-select: none;
+}
+.hacker-cinema-announcer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.hacker-cinema-screen {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  contain: layout paint;
+}
+.hacker-cinema-screen--splash {
+  background: #020402;
+}
+.hacker-cinema-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Single CRT power-on: one top-to-bottom sweep line and exactly one flash. */
+.hacker-cinema-sweep,
+.hacker-cinema-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.hacker-cinema-sweep {
+  background: linear-gradient(90deg, transparent, #f0fff6 30%, #f0fff6 70%, transparent);
+  box-shadow: 0 0 14px rgb(240 255 246 / .85);
+  opacity: 0;
+}
+.hacker-cinema[data-phase="sweep"] .hacker-cinema-sweep {
+  animation: hacker-cinema-sweep 150ms linear both;
+}
+@keyframes hacker-cinema-sweep {
+  from { transform: translateY(-4px); opacity: 1; }
+  to { transform: translateY(102vh); opacity: 0; }
+}
+.hacker-cinema-flash {
+  background: #f0fff6;
+  opacity: 0;
+}
+.hacker-cinema[data-phase="sweep"] .hacker-cinema-flash {
+  animation: hacker-cinema-flash 90ms linear 45ms both;
+}
+@keyframes hacker-cinema-flash {
+  0% { opacity: 0; }
+  45% { opacity: .85; }
+  100% { opacity: 0; }
+}
+
+/* "ACCESS GRANTED" slam with red/cyan chromatic slices. */
+.hacker-cinema-word {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: clamp(16px, 4vw, 48px);
+  opacity: 0;
+  pointer-events: none;
+}
+.hacker-cinema[data-phase="slam"] .hacker-cinema-word { opacity: 1; }
+.hacker-cinema-word > span {
+  grid-area: 1 / 1;
+  font-weight: 700;
+  font-size: clamp(1.5rem, 9vw, 8rem);
+  line-height: 1;
+  letter-spacing: .045em;
+  white-space: nowrap;
+}
+.hacker-cinema-word-face {
+  color: #33ff66;
+  text-shadow: 0 0 22px rgb(51 255 102 / .4), 0 0 64px rgb(51 255 102 / .22);
+}
+.hacker-cinema[data-phase="slam"] .hacker-cinema-word-face {
+  animation: hacker-cinema-slam 190ms cubic-bezier(.16, 1, .3, 1) both;
+}
+@keyframes hacker-cinema-slam {
+  0% { transform: scale(2.4); opacity: 0; }
+  45% { opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.hacker-cinema[data-phase="slam"] .hacker-cinema-screen {
+  animation: hacker-cinema-shake 100ms steps(2, end) 1 30ms both;
+}
+@keyframes hacker-cinema-shake {
+  0% { transform: translate(0, 0); }
+  20% { transform: translate(-7px, 4px); }
+  40% { transform: translate(6px, -5px); }
+  60% { transform: translate(-5px, -3px); }
+  80% { transform: translate(4px, 3px); }
+  100% { transform: translate(0, 0); }
+}
+.hacker-cinema-word-ghost {
+  opacity: 0;
+  mix-blend-mode: screen;
+}
+.hacker-cinema-word-ghost--red { color: #ff3b4e; }
+.hacker-cinema-word-ghost--cyan { color: #3ce0ff; }
+.hacker-cinema[data-phase="slam"] .hacker-cinema-word-ghost--red {
+  animation: hacker-cinema-ghost-red 260ms steps(1, end) both;
+}
+.hacker-cinema[data-phase="slam"] .hacker-cinema-word-ghost--cyan {
+  animation: hacker-cinema-ghost-cyan 260ms steps(1, end) both;
+}
+@keyframes hacker-cinema-ghost-red {
+  0% { opacity: 0; clip-path: inset(0 0 0 0); transform: translate(0, 0); }
+  15% { opacity: .85; transform: translate(-7px, 2px); clip-path: inset(8% 0 55% 0); }
+  35% { opacity: .85; transform: translate(5px, -2px); clip-path: inset(45% 0 20% 0); }
+  55% { opacity: .8; transform: translate(-4px, 0); clip-path: inset(70% 0 0 0); }
+  75% { opacity: .85; transform: translate(6px, 1px); clip-path: inset(15% 0 42% 0); }
+  100% { opacity: 0; clip-path: inset(0 0 0 0); transform: translate(0, 0); }
+}
+@keyframes hacker-cinema-ghost-cyan {
+  0% { opacity: 0; clip-path: inset(0 0 0 0); transform: translate(0, 0); }
+  15% { opacity: .85; transform: translate(6px, -2px); clip-path: inset(40% 0 24% 0); }
+  35% { opacity: .85; transform: translate(-5px, 2px); clip-path: inset(10% 0 62% 0); }
+  55% { opacity: .8; transform: translate(4px, 0); clip-path: inset(0 0 72% 0); }
+  75% { opacity: .85; transform: translate(-6px, -1px); clip-path: inset(52% 0 8% 0); }
+  100% { opacity: 0; clip-path: inset(0 0 0 0); transform: translate(0, 0); }
+}
+
+/* "WELCOME, OPERATOR" typing layer with a blinking block cursor. */
+.hacker-cinema-welcome {
+  position: absolute;
+  inset: 0;
+  display: none;
+  grid-auto-flow: column;
+  place-content: center;
+  align-items: center;
+  padding: clamp(16px, 4vw, 48px);
+  text-align: center;
+  pointer-events: none;
+}
+.hacker-cinema[data-phase="welcome"] .hacker-cinema-welcome,
+.hacker-cinema[data-phase="dissolve"] .hacker-cinema-welcome {
+  display: grid;
+}
+.hacker-cinema-typed {
+  font-weight: 600;
+  font-size: clamp(1.2rem, 6.5vw, 4.5rem);
+  line-height: 1.2;
+  letter-spacing: .08em;
+  white-space: pre-wrap;
+  color: #7dffab;
+  text-shadow: 0 0 18px rgb(51 255 102 / .35);
+}
+.hacker-cinema-typed-cursor {
+  display: inline-block;
+  width: .55em;
+  height: 1.05em;
+  margin-left: .12em;
+  vertical-align: text-bottom;
+  background: #33ff66;
+  box-shadow: 0 0 12px rgb(51 255 102 / .5);
+  animation: hacker-blink 1.1s steps(1, end) infinite;
+}
+
+/* Skip hint, always small but readable. The power-down keeps it clear of the
+   hacker status bar that is still visible beneath the early phases. */
+.hacker-cinema-hint {
+  position: absolute;
+  inset-inline: 0;
+  bottom: max(14px, env(safe-area-inset-bottom, 14px));
+  text-align: center;
+  color: #ffb020;
+  font-size: clamp(10px, 2.6vw, 12px);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  text-shadow: 0 0 8px rgb(255 176 32 / .35);
+  opacity: 0;
+  pointer-events: none;
+  animation: hacker-cinema-hint 220ms ease-out 420ms both;
+}
+.hacker-cinema[data-kind="power-down"] .hacker-cinema-hint {
+  bottom: max(52px, calc(env(safe-area-inset-bottom, 14px) + 48px));
+}
+@keyframes hacker-cinema-hint {
+  from { opacity: 0; }
+  to { opacity: .92; }
+}
+
+/* Sound toggle; leverages the click gesture, never moves focus. */
+.hacker-cinema-sound {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgb(51 255 102 / .58);
+  border-radius: 2px;
+  background: rgb(2 8 3 / .72);
+  color: #78be87;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  touch-action: manipulation;
+}
+.hacker-cinema-sound:hover {
+  border-color: #33ff66;
+  color: #33ff66;
+}
+.hacker-cinema-sound[aria-pressed="true"] {
+  border-color: #33ff66;
+  background: #33ff66;
+  color: #050805;
+}
+.hacker-cinema-sound:focus-visible {
+  outline: 2px solid #33ff66;
+  outline-offset: 2px;
+}
+@media (any-pointer: coarse) {
+  .hacker-cinema-sound {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Power-down: scrims the page while the glitch/reel runs under it. */
+.hacker-cinema-screen--power { color: #33ff66; }
+.hacker-cinema-shade {
+  position: absolute;
+  inset: 0;
+  background: #020402;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+.hacker-cinema[data-phase="glitch"] .hacker-cinema-shade { opacity: .3; }
+.hacker-cinema[data-phase="reel"] .hacker-cinema-shade { opacity: .92; }
+.hacker-cinema[data-phase="collapse"] .hacker-cinema-shade {
+  opacity: 1;
+  transition: opacity 90ms linear;
+}
+.hacker-cinema[data-phase="reveal"] .hacker-cinema-shade { opacity: 1; }
+
+/* Final frames play on the whole overlay so the hoisted sound control and
+   status line fade with the screen. */
+.hacker-cinema[data-phase="dissolve"] {
+  animation: hacker-cinema-soften 300ms ease-in-out both;
+}
+.hacker-cinema[data-kind="power-down"][data-phase="reveal"] {
+  animation: hacker-cinema-soften 200ms linear both;
+}
+.hacker-cinema[data-phase="skip"] {
+  animation: hacker-cinema-soften 120ms linear both;
+}
+@keyframes hacker-cinema-soften {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* Reduced-motion runs: static acknowledgement and plain opacity fades only. */
+.hacker-cinema-reduced { display: grid; place-items: center; background: #020402; }
+.hacker-cinema-reduced-title {
+  font-weight: 700;
+  font-size: clamp(1.1rem, 4.5vw, 2rem);
+  letter-spacing: .12em;
+  text-align: center;
+  padding-inline: clamp(16px, 4vw, 48px);
+  color: #33ff66;
+  text-shadow: 0 0 14px rgb(51 255 102 / .35);
+}
+.hacker-cinema-reduced .hacker-cinema-hint {
+  animation: none;
+  opacity: .82;
+}
+.hacker-cinema[data-phase="fade"] {
+  animation: hacker-cinema-soften 180ms ease-out both;
+}
+.hacker-cinema[data-kind="power-down"][data-phase="fade"] {
+  animation: hacker-cinema-soften 200ms linear both;
+}
+
+/* The power-down names the theme it is about to paint while it runs. */
+.hacker-cinema-status {
+  position: absolute;
+  top: 10px;
+  inset-inline: 0;
+  text-align: center;
+  color: #78be87;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-shadow: 0 0 10px rgb(51 255 102 / .25);
+  pointer-events: none;
+  animation: hacker-cinema-status-in 200ms ease-out both;
+}
+@keyframes hacker-cinema-status-in {
+  from { opacity: 0; }
+  to { opacity: .92; }
+}
+
 /* --- Glitch --------------------------------------------------------------- */
 /* 300ms, small displacement and split-color shadow only; no full-screen flash. */
 .hacker-glitch { animation: hacker-glitch 300ms steps(2, end) 1; }
@@ -1664,7 +2154,7 @@ svg { flex-shrink: 0; }
   :root[data-theme="hacker"] .hacker-statusbar {
     min-height: 44px;
     padding-block: 0;
-    padding-inline: 8px;
+    padding-inline: 12px;
     flex-wrap: nowrap;
     gap: 0 8px;
   }
@@ -1688,19 +2178,26 @@ svg { flex-shrink: 0; }
   :root[data-theme="hacker"] .app-sidebar { padding-bottom: 54px; }
   :root[data-theme="hacker"] .app-main { padding-bottom: 84px; }
 }
-/* At 375px the status bar keeps only the rain control and the clock; the
-   redundant first status group is dropped and the reduced-motion note is
-   hidden so the three 44px rain options are never clipped. */
+/* At 375px the status bar keeps the rain and cinematic controls and the clock;
+   the redundant first status group is dropped, the cinematic group labels fold
+   into their buttons, and the reduced-motion note is hidden so nothing wraps. */
 @media (max-width: 600px) {
   :root[data-theme="hacker"] .hacker-statusbar__group { display: none; }
   :root[data-theme="hacker"] .hacker-statusbar__group:has(.hacker-statusbar__clock),
-  :root[data-theme="hacker"] .hacker-statusbar__group:has(.hacker-rain-control) {
+  :root[data-theme="hacker"] .hacker-statusbar__group:has(.hacker-rain-control),
+  :root[data-theme="hacker"] .hacker-statusbar__group:has(.hacker-cinema-toggle) {
     display: inline-flex;
     flex: 0 0 auto;
   }
   :root[data-theme="hacker"] .hacker-statusbar__spacer { display: none; }
-  :root[data-theme="hacker"] .hacker-statusbar { justify-content: space-between; }
+  :root[data-theme="hacker"] .hacker-statusbar { justify-content: space-between; gap: 0 6px; }
+  /* Both bar labels fold away so the rain options, cinematic toggles, and the
+     clock share one 375px row without clipping. */
+  :root[data-theme="hacker"] .hacker-statusbar__group:has(.hacker-rain-control) .hacker-statusbar__label { display: none; }
   :root[data-theme="hacker"] .hacker-rain-control ~ .hacker-statusbar__label { display: none; }
+  :root[data-theme="hacker"] .hacker-cinema-controls .hacker-statusbar__label { display: none; }
+  .hacker-cinema-toggle__full { display: none; }
+  .hacker-cinema-toggle__compact { display: inline; }
   /* Narrower panel gutter keeps the inset inside the 12px mobile page gutter. */
   :root[data-theme="hacker"] { --hacker-panel-gutter: 12px; }
 }
@@ -1711,4 +2208,15 @@ svg { flex-shrink: 0; }
 @media (prefers-reduced-motion: reduce) {
   .hacker-glitch { animation: none; transform: none; }
   .hacker-boot-prompt::after { animation: none; opacity: 1; }
+  /* Cinematics already render a static cover under reduced motion; this guards
+     a preference flipped mid-run so no keyframe theater continues. The pure
+     opacity fades used by the static phases are preserved. */
+  .hacker-cinema-sweep,
+  .hacker-cinema-flash,
+  .hacker-cinema-word-face,
+  .hacker-cinema-word-ghost,
+  .hacker-cinema-hint { animation: none; }
+  .hacker-cinema[data-phase="slam"] .hacker-cinema-screen { animation: none; }
+  .hacker-cinema-shade { transition: opacity 120ms linear; }
+  .hacker-cinema-reduced .hacker-cinema-hint { animation: none; opacity: .82; }
 }

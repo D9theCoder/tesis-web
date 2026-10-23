@@ -257,6 +257,34 @@ The variant lives in `:root[data-theme="hacker"]` in `app/globals.css`. Light an
 - Every 4–8s one visible plain-text heading scrambles for about 300ms and shifts slightly. Link text scrambles for about 300ms on hover. Both restore exact text and never destroy icons or nested markup.
 - The boot, glitch, and scramble effects are decorative. They never replace information or block a task.
 
+### Session cinematics
+
+Two theatrical, skippable full-screen runs are tied to the theme control: the opening splash when the user selects hacker during a session, and the CRT power-down when the user leaves hacker for light or dark. Neither plays on page load, neither plays when a saved theme is restored, and the page-load boot sequence never runs inside them (a session that saw one never replays the other). The cinematics are the hacker variant's one documented full-screen exception to the quiet-motion rule; nothing in them crosses into light or dark.
+
+**Triggers.** Only a selection through a theme control in this tab (`setTheme` with animation) arms a run, and each can be switched off in the status bar. A keyboard easter egg counts as a selection: typing "cheatstick" anywhere outside text entry selects hacker through the same path (splash and skip rules included), and a Cheat code section in Settings turns the shorthand on or off (default on). While hacker is active, the same phrase returns to the theme in effect before hacker (its power-down included) — that exit path is a sub-setting under the same section, default on and disabled whenever the phrase itself is off. The theme in effect before hacker is remembered at every hacker entry, persisted, and never remembers hacker itself. External storage changes cancel a running cinematic and apply the restored theme instantly. Selecting the same target again never restarts a run; selecting anything else supersedes it at once and applies the newly selected theme.
+
+**Opening splash (2100ms).**
+1. 0–150ms: the screen cuts to black; one white CRT sweep line runs top to bottom and the screen flashes exactly once (one flash total, roughly 90ms — within the WCAG 2.3.1 budget of three or fewer per second).
+2. 150–750ms: fictional log lines scroll in phosphor green (SYSTEM OVERRIDE ENGAGED, ESTABLISHING UPLINK, EVADING TRACE, NODE 7G SYNCHRONIZED, KEYSTREAM LOADED); three progress bars race to 100% on their own clocks while an ops counter climbs. Behind the logs a wireframe globe spins on canvas with sector labels that blink in.
+3. 750–1300ms: ACCESS GRANTED slams in at full width (type clamps from 1.5rem to 8rem so 375px never scrolls); the screen shakes for ~100ms, red/cyan edge ghosts flash with clip-path slices shifting the word sideways.
+4. 1300–1800ms: WELCOME, OPERATOR types out letter by letter (26ms per letter, complete ~60ms before the dissolve) with a blinking block cursor.
+5. 1800–2100ms: the splash dissolves over 300ms while the rain layer finishes its own 300ms fade-in beneath it (the rain is held invisible until the final frame begins).
+
+**Power-down (1200ms).**
+1. 0–200ms: the content jitters (scroll-offset roll, restored exactly) under a short glitch burst across the screen.
+2. 200–500ms: the rain speeds up to double, then fades out on its own 150ms tail; log lines scroll upward fast while the globe spins down and shrinks under a darkening scrim.
+3. 500–800ms: the picture crushes into one bright horizontal line — the band starts under half the viewport height and decays hard, so the squash reads without a white flashbang.
+4. 800–1000ms: the line contracts into a dot and fades to black; only at fully black is the target theme (light or dark) painted — never earlier.
+5. 1000–1200ms: the black overlay fades over 200ms, revealing the target theme in its own colors.
+
+**Skip rules.** Any click, any tap, or any key press (Escape included) jumps to the final frame: the splash lands on the hacker theme with its rain, the power-down commits the target theme and fades out in 120ms. The overlays' own sound control is exempt from skipping. Changing themes during a run cancels it immediately and applies the newly selected theme; all timers, animation frames, scroll offsets, and audio voices are cleared when a run ends, skips, or is cancelled.
+
+**Sound.** Off by default. A sound toggle sits on each overlay — outside the aria-hidden screen so assistive technology exposes it, and its activation never skips the run. When armed, Web Audio synthesizes short log beeps, a rising tone under the slam, and a falling tone under the collapse — no audio files. The context is created only inside the click that selected the theme (or the toggle click), so autoplay rules are satisfied by the genuine gesture. The preference persists. Reduced-motion runs stay silent, so the control is hidden there.
+
+**Reduced motion.** The opening shows a static overlay reading HACKER MODE ENABLED for ~300ms, then fades out — the splash theater and boot-style log are skipped, not the acknowledgment. The power-down becomes a plain 200ms fade to the target theme. Reduced-motion rain stays off, overlays announce their one plain sentence ("Hacker mode enabled." / "Hacker mode disabled."), and the sound control is hidden because no sound plays.
+
+**Accessibility and performance.** Both overlays are fixed, cover the viewport, sit at the top of the stack, and announce one plain sentence ("Hacker mode enabled." / "Hacker mode disabled.") through a `role="status"` region with `aria-live="polite"`; every visual layer is aria-hidden. The power-down also shows a small `[ RESTORING LIGHT ]`-style status line naming the theme it will paint, so the first 1000ms is never silent about the outcome. Focus stays on the theme control and is never moved into an overlay. Oversized type uses `clamp()`; slams, shakes, and collapses animate transform and opacity only; logs, bars, counter, and globe render on canvases; the workspace beneath never reflows during a run. The overlay text draws exclusively in the system monospace stack, so no font is fetched at run time — text cannot jump on either sequence; the Geist face is self-hosted and preloaded before the app paints.
+
 ### Readability and accessibility
 
 - Body and secondary text keep at least 4.5:1 contrast on the near-solid surfaces; the hero still puts its text on a dark panel even when more rain shows through.
@@ -269,13 +297,17 @@ These are deliberate for this variant and must not leak into light/dark: monospa
 
 ### Implementation map
 
-- `lib/theme.ts` / `lib/use-theme.ts`: three-mode type, system-preference first visit, persistence and session fallback, cross-dissolve.
-- `components/settings/settings-panel.tsx` and `app/settings/page.tsx`: the only three-way theme control.
+- `lib/theme.ts` / `lib/use-theme.ts`: three-mode type, system-preference first visit, persistence and session fallback, cross-dissolve, cinematic hand-off on selection.
+- `lib/hacker-cinema.ts`: run store, trigger policy, timeline constants, reel/globe math shared with the overlay.
+- `lib/hacker-audio.ts`: the synthesized beep/slam/collapse voices.
+- `lib/hacker-settings.ts` / `lib/use-hacker.ts`: run and audio flags, the cheat-code phrase buffer, and the keyboard listener.
+- `components/settings/settings-panel.tsx` and `app/settings/page.tsx`: the only three-way theme control, plus the cheat-code switch.
 - `components/theme-toggle.tsx`: header light/dark quick switch, hidden in hacker mode.
 - `components/hacker/hacker-chrome.tsx`: mounts rain, overlays, effects, boot, and status bar only while hacker is active.
+- `components/hacker/hacker-cinema.tsx`: the two session cinematics (splash and power-down), their skip rules, sound control, and reduced-motion covers.
 - `components/hacker/rain-canvas.tsx` / `lib/hacker-rain.ts`: rain renderer and tuning.
 - `components/hacker/boot-sequence.tsx` / `hacker-effects.tsx` / `lib/hacker-effects.ts`: session boot, heading glitch, link scramble.
-- `components/hacker/hacker-status-bar.tsx` / `lib/use-hacker.ts`: rain control and reduced-motion behavior.
+- `components/hacker/hacker-status-bar.tsx` / `lib/use-hacker.ts` / `lib/hacker-settings.ts`: rain control, splash and power-down switches, audio flag, reduced-motion behavior.
 
 ## Typography
 
@@ -364,14 +396,15 @@ Hacker mode tightens cards, panels, and controls to 2px and adds bracketed title
 - **Mobile:** Navigation opens in a left-side drawer; the top bar retains the menu control and page context. The drawer always shows full labels.
 
 ### Settings
-- `/settings` is an Operate surface: one appearance section and a native three-way radio group for Light, Dark, and Hacker. The group's accessible name includes the current mode, selection is announced and focus stays on the chosen radio, and the layout does not change on selection.
-- Hacker is selected only here; the header light/dark quick switch steps aside while hacker is active. The page uses the same card, heading, and focus system in every theme.
-- The page keeps only the theme decision. Rain lives in the hacker status bar; motion behavior follows the OS setting; storage behavior stays in the implementation, not in explanatory copy.
+- `/settings` is an Operate surface: one appearance section with a native three-way radio group for Light, Dark, and Hacker, plus a Cheat code section. The group's accessible name includes the current mode, selection is announced and focus stays on the chosen radio, and the layout does not change on selection.
+- Light and dark render the cheat-code switch as a plain borderless row with a simple pill; hacker keeps the boxed chip card over its terminal chrome. State is conveyed by `aria-checked` (and the pill/chip visually), focus stays on the control.
+- Hacker is selected only in Appearance or through the cheat code; the header light/dark quick switch steps aside while hacker is active. The page uses the same card, heading, and focus system in every theme.
+- The appearance section keeps only the theme decision. Rain and the session cinematics live in the hacker status bar; motion behavior follows the OS setting; storage behavior stays in the implementation, not in explanatory copy.
 
 ### Hacker Chrome
-- The fixed status bar, scanline/vignette overlays, and rain canvas are inert outside hacker. The bar groups `[ OK ]` observer status, the `[ RAIN ]` three-way control, and a UTC clock; at 375px it keeps the rain control and clock and drops nonessential status copy.
-- Rain options are stable buttons with `aria-pressed`; changing intensity keeps focus on the pressed control. Reduced motion pins the control to off and disables animated intensities while keeping the static pattern.
-- Boot, glitch, and scramble effects are session-scoped or interval-scoped, restore exact text, and never intercept a task.
+- The fixed status bar, scanline/vignette overlays, and rain canvas are inert outside hacker. The bar groups `[ OK ]` observer status, the `[ RAIN ]` three-way control, the `[ SPLASH ]` and `[ POWER-DOWN ]` on/off switches, and a UTC clock; at 375px it keeps the rain and cinematic controls and the clock and drops nonessential status copy.
+- Rain options are stable buttons with `aria-pressed`; changing intensity keeps focus on the pressed control. Reduced motion pins the control to off and disables animated intensities while keeping the static pattern. The cinematic switches follow the same behavior and default both runs on.
+- Boot, glitch, and scramble effects are session-scoped or interval-scoped, restore exact text, and never intercept a task. The two session cinematics follow DESIGN.md's "Session cinematics" section for their timelines, skip rules, sound, and reduced-motion covers.
 
 ### Live Monitor Panels
 - The AKG, coordinate, conversation, and outcome panels share bordered surface containers with compact headers and scrollable bodies.
@@ -423,3 +456,5 @@ Hacker mode tightens cards, panels, and controls to 2px and adds bracketed title
 - Don't collapse provisional runtime scoring and independent Human or AI review into one unlabeled value.
 - Don't carry hacker rain, scanlines, glow, or uppercase labels into light or dark.
 - Don't uppercase body copy, long headings, or control labels in hacker mode.
+- Don't fire more than one full-screen flash in a cinematic run, and never spread them faster than three per second (WCAG 2.3.1).
+- Don't apply a target theme mid-power-down; the swap belongs at the fully black frame.

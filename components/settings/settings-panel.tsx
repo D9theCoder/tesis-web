@@ -3,7 +3,9 @@
 import { useCallback, useRef } from "react";
 import { Moon, Sun, Terminal, type LucideIcon } from "lucide-react";
 import type { Theme } from "@/lib/theme";
+import { CHEAT_CODE_PHRASE } from "@/lib/hacker-settings";
 import { setTheme, useTheme } from "@/lib/use-theme";
+import { useCheatCodeToggle, useCheatExitToggle } from "@/lib/use-hacker";
 
 type ThemeOption = {
   value: Theme;
@@ -40,6 +42,8 @@ export function SettingsPanel() {
     dark: null,
     hacker: null,
   });
+  const [cheatEnabled, setCheatEnabled] = useCheatCodeToggle();
+  const [cheatExitEnabled, setCheatExitEnabled] = useCheatExitToggle();
 
   const selectTheme = useCallback((next: Theme) => {
     setTheme(next, true);
@@ -91,6 +95,52 @@ export function SettingsPanel() {
             );
           })}
         </fieldset>
+      </section>
+
+      <section className="settings-section" aria-labelledby="settings-cheat-code">
+        <h2 className="settings-section-heading" id="settings-cheat-code">
+          Cheat code
+        </h2>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={cheatEnabled}
+          className="cheat-code-switch"
+          onClick={() => setCheatEnabled(!cheatEnabled)}
+        >
+          <span className="cheat-code-switch__body">
+            <span className="cheat-code-switch__title">“{CHEAT_CODE_PHRASE}” code</span>
+            <span className="cheat-code-switch__description">
+              Type “{CHEAT_CODE_PHRASE}” on any page to switch to hacker mode, cinematic
+              splash included. Ignored while typing in a field.
+            </span>
+          </span>
+          {/* Light and dark render a plain pill; hacker keeps the boxed chip. */}
+          <span className="cheat-code-switch__pill" aria-hidden="true" />
+          <span className="cheat-code-switch__state" aria-hidden="true">
+            {cheatEnabled ? "ON" : "OFF"}
+          </span>
+        </button>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={cheatExitEnabled}
+          disabled={!cheatEnabled}
+          className="cheat-code-switch cheat-code-switch--sub"
+          onClick={() => setCheatExitEnabled(!cheatExitEnabled)}
+        >
+          <span className="cheat-code-switch__body">
+            <span className="cheat-code-switch__title">Return with the code</span>
+            <span className="cheat-code-switch__description">
+              While hacker is active, typing “{CHEAT_CODE_PHRASE}” goes back to the theme
+              you used before (light or dark), power-down included.
+            </span>
+          </span>
+          <span className="cheat-code-switch__pill" aria-hidden="true" />
+          <span className="cheat-code-switch__state" aria-hidden="true">
+            {cheatExitEnabled ? "ON" : "OFF"}
+          </span>
+        </button>
       </section>
     </article>
   );

@@ -58,7 +58,7 @@ Live dashboard:
 - `/results/[executionId]` — summary, evidence, scoring, matrix comparison, and redacted artifact explorer
 - `/overview?scope=ID` — research interpretation for one exact experiment: coverage, outcomes, independent review readiness, and attention
 - `/help` — visual tables for status, coverage, scores, metric denominators and an interactive evidence walkthrough
-- `/settings` — appearance: light, dark, or hacker mode
+- `/settings` — appearance: light, dark, or hacker mode, plus the "cheatstick" cheat code switch
 
 The application uses a compact persistent sidebar on desktop and a keyboard-accessible
 navigation drawer on mobile. The desktop sidebar can collapse to a 64px icon rail and
@@ -69,10 +69,18 @@ Cloudflare-inspired research console, while hacker is an opt-in cinematic mode
 glitches). The header control switches light and dark and is hidden while hacker is
 active; Settings selects hacker and offers all three modes. The choice writes the
 local preference and cross-dissolves the workspace over its canvas in 320ms; a fixed
-head script applies it before paint. In hacker mode the bottom status bar exposes rain off / normal / max (max by
-default). Blocked storage falls back to the session and then memory, and
-reduced-motion preferences swap instantly, keep a static rain pattern, and disable
-the boot, glitch, and scramble effects. Phone and
+head script applies it before paint. Selecting hacker during a session plays a
+skippable ~2.1s splash, and leaving hacker plays a ~1.2s CRT power-down that lands
+on the target theme at its fully black frame; any key or click skips either run,
+both can be switched off, and reduced motion replaces them with a static
+acknowledgement and a plain fade (see DESIGN.md, "Session cinematics"). In hacker
+mode the bottom status bar exposes rain off / normal / max (max by default) next
+to splash and power-down on/off switches. Typing "cheatstick" anywhere outside a
+field also selects hacker; the shorthand can be switched off in Settings, where a
+sub-setting also lets the phrase return to the theme used before hacker. Blocked
+storage falls back to the session
+and then memory, and reduced-motion preferences swap instantly, keep a static rain
+pattern, and disable the boot, glitch, and scramble effects. Phone and
 coarse-pointer controls use 44px targets, including graph traversal and inventory
 actions. On wide screens the live monitor rail, its Coordinate, Conversation, and
 Outcomes panels, and the overall workspace height are resizable with pointer or

@@ -1,9 +1,10 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HackerCinema } from "@/components/hacker/hacker-cinema";
 import { SettingsPanel } from "@/components/settings/settings-panel";
+import { hasActiveHackerCinema, cancelHackerCinema } from "@/lib/hacker-cinema";
 import {
   THEME_KEY,
-  THEME_SWAP_MS,
   THEME_TRANSITION_CLASS,
   THEME_TRANSITION_MS,
 } from "@/lib/theme";
@@ -29,6 +30,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // No run may outlive a test: the module store is global.
+  cancelHackerCinema();
   vi.useRealTimers();
   vi.restoreAllMocks();
   localStorage.clear();
@@ -57,34 +60,38 @@ describe("settings appearance", () => {
     );
   });
 
-  it("selects hacker directly, applies it, persists it, and keeps focus on the radio", () => {
+  it("selects hacker behind the splash overlay, applies it at once, and keeps focus", () => {
     vi.useFakeTimers();
-    render(<SettingsPanel />);
+    render(
+      <>
+        <SettingsPanel />
+        <HackerCinema />
+      </>,
+    );
 
     const hacker = screen.getByRole("radio", { name: "Hacker" });
     fireEvent.click(hacker);
 
+    // Selecting hacker arms the session splash: the palette is applied
+    // immediately and hides underneath the opaque overlay until it dissolves.
     expect(hacker).toBeChecked();
     expect(hacker).toHaveFocus();
     expect(localStorage.getItem(THEME_KEY)).toBe("hacker");
-    expect(document.documentElement.dataset.theme).toBe("light");
-    expect(document.documentElement.dataset.themeIcon).toBe("hacker");
-    expect(document.documentElement).toHaveClass(THEME_TRANSITION_CLASS);
+    expect(document.documentElement.dataset.theme).toBe("hacker");
+    expect(document.documentElement).not.toHaveClass(THEME_TRANSITION_CLASS);
+    expect(document.documentElement.dataset.themeIcon).toBeUndefined();
+    expect(hasActiveHackerCinema()).toBe(true);
+    expect(screen.getByRole("status")).toHaveTextContent("Hacker mode enabled.");
     expect(screen.getByRole("group", { name: "Theme: hacker" })).toBeInTheDocument();
     expect(hacker).toHaveFocus();
 
+    // The run ends on its own; the palette was never partially applied.
     act(() => {
-      vi.advanceTimersByTime(THEME_SWAP_MS);
+      vi.advanceTimersByTime(2500);
     });
+    expect(hasActiveHackerCinema()).toBe(false);
+    expect(screen.queryByRole("status")).toBeNull();
     expect(document.documentElement.dataset.theme).toBe("hacker");
-    expect(document.documentElement).toHaveClass(THEME_TRANSITION_CLASS);
-    expect(hacker).toHaveFocus();
-
-    act(() => {
-      vi.advanceTimersByTime(THEME_TRANSITION_MS + 100);
-    });
-    expect(document.documentElement).not.toHaveClass(THEME_TRANSITION_CLASS);
-    expect(document.querySelector(".theme-canvas-fade")).toBeNull();
     expect(hacker).toHaveFocus();
     expect(hacker).toBeChecked();
   });
@@ -119,20 +126,15 @@ describe("settings appearance", () => {
       throw new Error("storage blocked");
     });
 
-    const firstRender = render(<SettingsPanel />);
+    render(<SettingsPanel />);
     const hacker = screen.getByRole("radio", { name: "Hacker" });
     fireEvent.click(hacker);
     expect(hacker).toHaveFocus();
 
-    act(() => {
-      vi.advanceTimersByTime(THEME_SWAP_MS);
-    });
+    // The session splash arms even without storage; the theme still applies
+    // at once underneath the overlay.
+    expect(hasActiveHackerCinema()).toBe(true);
     expect(document.documentElement.dataset.theme).toBe("hacker");
     expect(localStorage.getItem(THEME_KEY)).toBeNull();
-
-    firstRender.unmount();
-    render(<SettingsPanel />);
-    expect(screen.getByRole("radio", { name: "Hacker" })).toBeChecked();
-    expect(screen.getByRole("group", { name: "Theme: hacker" })).toBeInTheDocument();
   });
 });

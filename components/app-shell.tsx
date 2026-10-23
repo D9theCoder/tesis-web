@@ -5,10 +5,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Activity, ArrowUpRight, BookOpen, ChevronRight, LayoutDashboard, ListFilter, Menu, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
 import { HackerChrome } from "@/components/hacker/hacker-chrome";
+import { HackerCinema } from "@/components/hacker/hacker-cinema";
 import sidebarStyles from "@/components/app-shell.module.css";
 import { Button, Drawer } from "@/components/ui/primitives";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { persistSidebarPreference, readSidebarPreference, subscribeToSidebarPreference } from "@/lib/sidebar";
+import { useCheatCodeListener } from "@/lib/use-hacker";
 import { useTheme } from "@/lib/use-theme";
 
 const navigation = [
@@ -27,6 +29,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // mount so the client never disagrees with the server-rendered markup.
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const selected = navigation.find(item => item.href === "/" ? pathname === "/" : pathname.startsWith(item.href));
+  useCheatCodeListener();
 
   useEffect(() => {
     // Reading after mount keeps the server and first client renders expanded.
@@ -73,6 +76,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main id="main-content" className="app-main canvas" tabIndex={-1}>{children}</main>
     </div>
     <Drawer open={menuOpen} onClose={() => setMenuOpen(false)} title="TESIS navigation" side="left">{renderNavigation(false)}</Drawer>
+    {/* Session cinematics render above every layer and outlive the hacker
+        chrome they retire, so they mount beside it, not inside it. */}
+    <HackerCinema />
     <HackerChrome />
   </div>;
 }

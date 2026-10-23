@@ -35,6 +35,12 @@ type RainCanvasProps = {
   mode: RainMode;
   reducedMotion: boolean;
   active: boolean;
+  /**
+   * Extra per-frame speed multiplier. The power-down cinematic raises this to
+   * briefly accelerate the column heads; it rides a ref so changing it never
+   * rebuilds the rain scene.
+   */
+  speedBoost?: number;
 };
 
 type GlyphAtlas = {
@@ -162,8 +168,14 @@ function drawAtlasGlyph(
  * overlapping depth layers, pre-rendered glyph atlases, pointer proximity,
  * periodic full-column bursts, and a static reduced-motion fallback.
  */
-export function RainCanvas({ mode, reducedMotion, active }: RainCanvasProps): JSX.Element | null {
+export function RainCanvas({ mode, reducedMotion, active, speedBoost = 1 }: RainCanvasProps): JSX.Element | null {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // Read per frame; a cinematic speed change must not rebuild the scene.
+  const boostRef = useRef(speedBoost);
+
+  useEffect(() => {
+    boostRef.current = speedBoost;
+  }, [speedBoost]);
 
   useEffect(() => {
     if (!active) return;
@@ -348,7 +360,7 @@ export function RainCanvas({ mode, reducedMotion, active }: RainCanvasProps): JS
           column.headY,
           column.speed,
           deltaMs,
-          pointerSpeedFactor(proximity),
+          pointerSpeedFactor(proximity) * boostRef.current,
         );
 
         if (timestamp >= column.swapAt) {
