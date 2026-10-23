@@ -848,6 +848,9 @@ svg { flex-shrink: 0; }
   --hacker-amber: #ffb020;
   --hacker-panel: rgb(8 14 9 / .94);
   --hacker-panel-hero: rgb(8 14 9 / .82);
+  /* Inset between a page panel border and its content. The hero panel grows by
+     the same amount, so header and body share one panel width and one gutter. */
+  --hacker-panel-gutter: 20px;
   /* The fixed status bar must not cover the end of a keyboard-scrolled page. */
   scroll-padding-bottom: 52px;
 }
@@ -1272,7 +1275,11 @@ svg { flex-shrink: 0; }
 /* --- Page header hero ----------------------------------------------------- */
 /* The ::before panel extends only vertically, so it never adds padding, height,
    or horizontal overflow at 375px. isolation + z-index:-1 keeps the text above
-   it while the page canvas (and rain) stays visible around the panel. */
+   it while the page canvas (and rain) stays visible around the panel. On the
+   panelled pages the header sits inside the page gutter, so growing the panel
+   by exactly that gutter makes both panels share one width and one inset. The
+   hero's top edge matches the page panel's top edge so the two borders overlap
+   into a single line instead of drawing a double rule under the top bar. */
 :root[data-theme="hacker"] :is(.page-header, .runtime-toolbar) {
   position: relative;
   isolation: isolate;
@@ -1280,8 +1287,8 @@ svg { flex-shrink: 0; }
 :root[data-theme="hacker"] :is(.page-header, .runtime-toolbar)::before {
   content: "";
   position: absolute;
-  inset-block: -16px;
-  inset-inline: -20px;
+  inset-block: -20px -16px;
+  inset-inline: calc(-1 * var(--hacker-panel-gutter));
   z-index: -1;
   pointer-events: none;
   background: var(--hacker-panel-hero);
@@ -1299,18 +1306,16 @@ svg { flex-shrink: 0; }
   line-height: 1;
   pointer-events: none;
 }
-/* Long-form pages have no cards around their prose, so give the text column a
-   near-solid backing without changing its layout box. */
-:root[data-theme="hacker"] .help-page {
+/* Pages with prose or a full-width header but no cards around it get one
+   near-solid backing panel. The panel owns the horizontal gutter: prose, rules,
+   tabs, tables, and the hero band keep the same inset from the panel border
+   instead of sitting on it. */
+:root[data-theme="hacker"] :is(.help-page, .overview-page, .experiment-inventory-page, .settings-page, .runtime-shell) {
   position: relative;
   isolation: isolate;
+  padding-inline: var(--hacker-panel-gutter);
 }
-:root[data-theme="hacker"] :is(.overview-page, .experiment-inventory-page) {
-  position: relative;
-  isolation: isolate;
-}
-:root[data-theme="hacker"] .help-page::before,
-:root[data-theme="hacker"] :is(.overview-page, .experiment-inventory-page)::before {
+:root[data-theme="hacker"] :is(.help-page, .overview-page, .experiment-inventory-page, .settings-page, .runtime-shell)::before {
   content: "";
   position: absolute;
   inset-block: -20px;
@@ -1320,6 +1325,13 @@ svg { flex-shrink: 0; }
   background: var(--hacker-panel);
   border: 1px solid var(--hacker-line);
   border-radius: 2px;
+}
+/* The hero band hangs 16px below its header, so the header reserves that space
+   plus a small breathing gap before the next block; without it the band's
+   bottom rule sits almost flush against the section under it. */
+:root[data-theme="hacker"] :is(.overview-page, .experiment-inventory-page, .help-page, .settings-page) > .page-header,
+:root[data-theme="hacker"] .runtime-shell > .runtime-toolbar {
+  margin-bottom: calc(8px + var(--hacker-panel-gutter));
 }
 /* --- Attack Knowledge Graph ---------------------------------------------- */
 /* --- Attack Knowledge Graph ---------------------------------------------- */
@@ -1689,8 +1701,8 @@ svg { flex-shrink: 0; }
   :root[data-theme="hacker"] .hacker-statusbar__spacer { display: none; }
   :root[data-theme="hacker"] .hacker-statusbar { justify-content: space-between; }
   :root[data-theme="hacker"] .hacker-rain-control ~ .hacker-statusbar__label { display: none; }
-  /* Stay inside the 12px mobile gutter while keeping the hero's inner inset. */
-  :root[data-theme="hacker"] :is(.page-header, .runtime-toolbar)::before { inset-inline: -10px; }
+  /* Narrower panel gutter keeps the inset inside the 12px mobile page gutter. */
+  :root[data-theme="hacker"] { --hacker-panel-gutter: 12px; }
 }
 @media (max-width: 360px) {
   :root[data-theme="hacker"] .hacker-statusbar__group:has(.hacker-rain-control) .hacker-statusbar__label { display: none; }
