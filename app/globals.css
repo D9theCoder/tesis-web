@@ -149,14 +149,14 @@ svg { flex-shrink: 0; }
 .ui-badge-lime { color: var(--success); background: rgb(var(--success-rgb) / .08); }
 .ui-badge-red { color: var(--danger); background: rgb(var(--danger-rgb) / .08); }
 .ui-badge-violet { color: var(--review); background: rgb(var(--review-rgb) / .08); }
-.ui-button { display: inline-flex; justify-content: center; align-items: center; gap: 7px; padding: 7px 12px; min-height: 34px; border: 1px solid var(--border-strong); border-radius: 5px; font-size: 13px; font-weight: 500; line-height: 1.3; color: var(--text); background: var(--surface); transition: background-color 120ms ease; white-space: nowrap; text-decoration: none; }
+.ui-button { display: inline-flex; justify-content: center; align-items: center; gap: 7px; padding: 7px 12px; min-height: 36px; border: 1px solid var(--border-strong); border-radius: 5px; font-size: 13px; font-weight: 500; line-height: 1.3; color: var(--text); background: var(--surface); transition: background-color 120ms ease; white-space: nowrap; text-decoration: none; }
 .ui-button:hover:not(:disabled) { background: var(--surface-hover); }
 .ui-button-primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
 .ui-button-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accent), black 12%); }
 .ui-button-ghost { border-color: transparent; background: transparent; color: var(--secondary); }
 .ui-button-amber { border-color: rgb(var(--warning-rgb) / .35); background: rgb(var(--warning-rgb) / .07); color: var(--warning); }
 .ui-button-danger { border-color: rgb(var(--danger-rgb) / .35); color: var(--danger); }
-.ui-button-icon { width: 34px; min-width: 34px; height: 34px; padding: 6px; flex-shrink: 0; }
+.ui-button-icon { width: 34px; min-width: 34px; height: 34px; min-height: 34px; padding: 6px; flex-shrink: 0; }
 .ui-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; border-bottom: 1px solid var(--border); }
 .ui-tab { padding: 11px 15px; min-height: 42px; font-size: 13px; color: var(--muted); border-bottom: 2px solid transparent; }
 .ui-tab:hover { background: var(--surface-hover); }
@@ -597,9 +597,12 @@ svg { flex-shrink: 0; }
 .scope-selector { display: flex; gap: 16px 24px; align-items: flex-start; padding-bottom: 20px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
 .scope-selector > .field { flex: 1; min-width: 0; max-width: 760px; }
 .scope-selector select { width: 100%; text-overflow: ellipsis; }
-.scope-search { padding-top: 22px; color: var(--secondary); font-size: 13px; max-width: 440px; }
-.scope-search form { display: flex; align-items: flex-end; gap: 8px; padding-block: 12px; }
-.scope-search .field { min-width: 0; flex: 1; }
+.scope-search { color: var(--secondary); font-size: 13px; max-width: 440px; }
+.scope-search > summary { font-size: 12px; line-height: 1.5; }
+.scope-search > summary:hover { color: var(--accent); }
+.scope-search form { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+.scope-search form input { flex: 1; min-width: 0; }
+.scope-search > p { margin-top: 10px; }
 .scope-context { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px 24px; }
 .scope-context > div { min-width: 0; flex: 1; }
 .scope-context h2 { font-size: 20px; overflow-wrap: anywhere; }
@@ -705,6 +708,7 @@ svg { flex-shrink: 0; }
   .scope-selector { flex-direction: column; gap: 8px; }
   .scope-selector > .field { width: 100%; }
   .scope-search { padding: 0; max-width: 100%; width: 100%; }
+  .scope-search > summary { display: list-item; padding-block: 13px; }
   .scope-context > div { flex-basis: 100%; }
   .attention-group > summary { flex-wrap: wrap; gap: 10px; }
   .attention-group > summary > span:first-of-type { flex-basis: calc(100% - 24px); }
@@ -724,7 +728,7 @@ svg { flex-shrink: 0; }
   .readiness-counts { grid-template-columns: repeat(3,minmax(0,1fr)); }
 }
 @media (max-width: 600px), (any-pointer: coarse) {
-  .inventory-row-actions .ui-link, .scope-search summary, .row-diagnostics summary { display: inline-flex; align-items: center; min-height: 44px; }
+  .inventory-row-actions .ui-link, .row-diagnostics summary { display: inline-flex; align-items: center; min-height: 44px; }
   .experiment-row-title > a { display: inline-flex; align-items: center; min-height: 44px; }
   .overview-counts dt a { display: inline-flex; align-items: center; min-height: 44px; }
   .overview-counts > div:has(a) { padding-block: 0; align-items: center; }
