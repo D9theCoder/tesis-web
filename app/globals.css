@@ -222,7 +222,7 @@ svg { flex-shrink: 0; }
 .verification-details { flex-basis: 100%; max-height: 180px; overflow: auto; overflow-wrap: anywhere; }
 .runtime-catalog { margin-top: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 .runtime-catalog > summary { padding: 14px 18px; font-weight: 600; font-size: 13px; }
-.runtime-demonstration { padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 18px; }
+.runtime-demonstration { padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; margin-top: 10px; }
 .runtime-demonstration > summary { color: var(--muted); font-size: 12px; }
 .runtime-demonstration .page-actions { margin-top: 12px; }
 .akg-view { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--akg-bg); color: var(--akg-text); }
