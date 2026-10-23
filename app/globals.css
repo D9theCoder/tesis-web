@@ -1674,6 +1674,7 @@ svg { flex-shrink: 0; }
 }
 :root[data-theme="hacker"] .cheat-code-switch--sub {
   margin-left: 16px;
+  width: calc(100% - 16px);
 }
 
 /* --- Status bar ----------------------------------------------------------- */
