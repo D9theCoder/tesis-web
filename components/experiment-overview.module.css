@@ -1,0 +1,204 @@
+.root :global(.page-header) {
+  margin-bottom: 20px;
+}
+
+.root :global(.scope-context) {
+  gap: 6px 16px;
+}
+
+.root :global(.scope-context > div) {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.root :global(.scope-context h2) {
+  line-height: 1.25;
+}
+
+.root :global(.scope-context p) {
+  margin-top: 0;
+  line-height: 1.35;
+}
+
+.root :global(.scope-meta-row) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 12px;
+}
+
+.root :global(.scope-context .execution-identifier) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+  margin-top: 0;
+  line-height: 1.3;
+  width: max-content;
+  max-width: 100%;
+}
+
+.root :global(.scope-context .execution-identifier code) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: inherit;
+}
+
+.root :global(.scope-context .scope-freshness) {
+  flex: 1 1 300px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.root :global(.scope-selector) {
+  gap: 12px 20px;
+  padding-bottom: 16px;
+  margin-bottom: 18px;
+}
+
+.root :global(.research-conclusion) {
+  margin-block: 18px;
+  padding-block: 16px;
+}
+
+.root :global(.overview-evidence-grid) {
+  gap: 16px;
+}
+
+.root :global(.overview-evidence-grid .ui-card-header) {
+  padding: 10px 12px;
+}
+
+.root :global(.overview-evidence-grid .ui-card-content) {
+  padding: 12px;
+}
+
+.root :global(.overview-evidence-grid .helper-copy) {
+  line-height: 1.5;
+}
+
+.root :global(.overview-counts) {
+  margin-block: 6px 8px;
+}
+
+.root :global(.overview-counts > div) {
+  padding-block: 5px;
+}
+
+.root :global(.overview-counts .unattributed-count) {
+  margin-top: 4px;
+}
+
+@media (max-width: 600px), (any-pointer: coarse) {
+  .root :global(.overview-counts > div:has(a)) {
+    padding-block: 0;
+  }
+}
+
+.root :global(.overview-section-heading) {
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.root :global(.review-readiness),
+.root :global(.attention-section) {
+  margin-top: 24px;
+}
+
+.root :global(.review-workflows) {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.root :global(.review-workflows > div) {
+  padding: 12px 16px;
+}
+
+.root :global(.readiness-counts) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 16px;
+  margin-top: 8px;
+}
+
+.root :global(.readiness-counts > div) {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-block: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.root :global(.readiness-counts dt) {
+  color: var(--secondary);
+  line-height: 1.4;
+}
+
+.root :global(.readiness-counts dd) {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.root .emptyReviewState :global(dt),
+.root .emptyReviewState :global(dd) {
+  color: var(--muted);
+}
+
+.root .emptyReviewState :global(dd) {
+  font-weight: 400;
+}
+
+@media (min-width: 701px) and (max-width: 1200px), (max-width: 400px) {
+  .root :global(.readiness-counts) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.root :global(.attention-group > summary) {
+  gap: 16px;
+  padding-block: 12px;
+}
+
+.root :global(.attention-body) {
+  padding-bottom: 16px;
+}
+
+.root :global(.attention-body > ul > li) {
+  padding-block: 10px;
+}
+
+.root :global(.source-disclosure) {
+  margin-top: 20px;
+}
+
+.root :global(.source-disclosure > summary) {
+  padding: 10px 14px;
+}
+
+.root :global(.source-disclosure-body) {
+  padding: 0 14px 14px;
+}
+
+@media (max-width: 700px) {
+  .root :global(.scope-selector) {
+    gap: 8px;
+  }
+
+  .root :global(.attention-group > summary) {
+    gap: 10px;
+  }
+
+  .root :global(.attention-body) {
+    padding-left: 20px;
+  }
+}
+
+@media (max-width: 600px) {
+  .root :global(.page-header) {
+    margin-bottom: 18px;
+  }
+}

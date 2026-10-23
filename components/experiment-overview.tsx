@@ -10,6 +10,7 @@ import { useReadResource } from "@/lib/use-read-resource";
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@/components/ui/primitives";
 import { CopyButton } from "@/components/ui/copy-button";
 import { fmtIsoFromStr } from "@/lib/formatters";
+import styles from "./experiment-overview.module.css";
 
 const MEMORY_KEY = "tesis.overview.scope.v1";
 const subscribe = () => () => {};
@@ -27,7 +28,7 @@ export function ExperimentOverviewPage() {
   useEffect(() => {
     if (selected) { try { sessionStorage.setItem(MEMORY_KEY, selected.executionId); } catch { /* Storage is optional. */ } }
   }, [selected]);
-  return <div className="overview-page">
+  return <div className={`overview-page ${styles.root}`}>
     <header className="page-header"><div><h1 className="page-title">Research overview</h1><p className="page-description">Interpret one experiment’s coverage, security outcomes, and saved review state.</p></div><Button onClick={resource.refresh} disabled={resource.busy}><RefreshCw size={15} aria-hidden="true" />{resource.busy ? "Refreshing…" : "Refresh summary"}</Button></header>
     <ScopeSelector selected={selected?.executionId ?? explicit ?? ""} />
     {resource.error && <div role="alert" className="notice notice-error"><h2>Selected scope unavailable</h2><p>{resource.error}</p><p>No other experiment has been substituted. Choose a scope above or inspect the source in Results.</p><div className="page-actions"><Button onClick={resource.refresh} disabled={resource.busy}>Retry</Button><Link className="ui-link" href={inventoryHref({ view: "executions", q: explicit ?? "" })}>Find this identity in Results</Link></div></div>}
@@ -38,10 +39,12 @@ export function ExperimentOverviewPage() {
         <div>
           <h2 id="scope-title">{experimentLabel(selected)}</h2>
           <p>{selected.mode === "matrix" ? "Matrix experiment" : selected.hasArtifact ? "Standalone evidence" : "Declared standalone execution"} · {[selected.provider, selected.model].filter(Boolean).join(" / ") || "Provider / model unavailable"} · {selected.startedAt ? fmtIsoFromStr(selected.startedAt) : "Stored date unavailable"}</p>
-          <div className="execution-identifier"><code>{selected.executionId}</code><CopyButton value={selected.executionId} label="execution ID" /></div>
+          <div className="scope-meta-row">
+            <div className="execution-identifier"><code>{selected.executionId}</code><CopyButton value={selected.executionId} label="execution ID" /></div>
+            <p className="scope-freshness">Refreshed {fmtIsoFromStr(data.refreshedAt)} · {data.partial ? "Incomplete summary — inspect limitations below" : "Saved-source summary"}</p>
+          </div>
         </div>
         {selected.hasArtifact ? <Link className="ui-button ui-button-primary" href={resultHref(selected.executionId)}>Open results <ArrowRight size={15} aria-hidden="true" /></Link> : <Link className="ui-button" href={inventoryHref({ scope: selected.executionId, view: "executions" })}>Inspect declared identity</Link>}
-        <p className="scope-freshness">Refreshed {fmtIsoFromStr(data.refreshedAt)} · {data.partial ? "Incomplete summary — inspect limitations below" : "Saved-source summary"}</p>
       </section>
       <section className="research-conclusion" aria-label="Interpretation">
         <h2>{!selected.hasArtifact ? "Primary evidence unavailable — conclusions cannot be established" : data.unit === "coordinates" ? `${data.coverage?.represented ?? "Unknown"} represented coordinates; ${data.outcomes.confirmed ?? "unavailable"} attributed confirmed` : `Standalone outcome: ${selected.securityOutcome?.replace(/_/g, " ") ?? "unknown / unattributed"}`}</h2>
@@ -107,6 +110,6 @@ function ScopeSelector({ selected }: { selected: string }) {
 function ReviewReadiness({ data }: { data: ExperimentOverview }) {
   return <section className="review-readiness" aria-labelledby="readiness-title"><div className="overview-section-heading"><div><h2 id="readiness-title">Independent review readiness</h2><p className="helper-copy">{data.reviews.complete ? "Receipt scan completed for resolved members." : "Incomplete receipt scan — not complete readiness."} No score origins are averaged.</p></div><Link className="ui-link" href={resultHref(data.experiment!.run.executionId, undefined, data.unit === "coordinates" ? "matrix" : "scoring")}>Inspect reviews and compare</Link></div><div className="review-workflows">{(["human", "ai"] as const).map(mode => {
     const workflow = data.reviews[mode];
-    return <div key={mode}><h3>{mode === "human" ? "Human" : "AI"} workflow</h3><p className="helper-copy">{workflow.eligible} declared eligible / {workflow.total} {data.unit} · {workflow.eligibilityUnknown} eligibility unknown · {workflow.scanned} scanned</p><dl className="readiness-counts">{Object.entries(workflow.states).map(([state,count]) => <div key={state}><dt>{state.replace(/_/g, " ")}</dt><dd>{count}</dd></div>)}</dl></div>;
+    return <div key={mode}><h3>{mode === "human" ? "Human" : "AI"} workflow</h3><p className="helper-copy">{workflow.eligible} declared eligible / {workflow.total} {data.unit} · {workflow.eligibilityUnknown} eligibility unknown · {workflow.scanned} scanned</p><dl className="readiness-counts" aria-label={`${mode === "human" ? "Human" : "AI"} review states`}>{Object.entries(workflow.states).map(([state,count]) => <div key={state} className={count === 0 ? styles.emptyReviewState : undefined}><dt>{state.replace(/_/g, " ")}</dt><dd>{count}</dd></div>)}</dl></div>;
   })}</div><p className="helper-copy readiness-note">Each workflow counts the same member scope independently, not additional executions. Missing means no accepted saved workflow evidence; not selected requires the source’s scoring-mode declaration.</p></section>;
 }
