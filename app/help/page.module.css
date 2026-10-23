@@ -1,0 +1,89 @@
+.page:global(.visual-guide) :global(.page-header) {
+  margin-bottom: 6px;
+}
+
+.page:global(.visual-guide) :global(.page-description) {
+  margin-top: 2px;
+  line-height: 1.45;
+}
+
+.page:global(.visual-guide) :global(.help-section) {
+  margin-top: 20px;
+  scroll-margin-top: 120px;
+}
+
+.page:global(.visual-guide) :global(.guide-contents) {
+  position: sticky;
+  top: 57px;
+  z-index: 19;
+  gap: 4px 12px;
+  padding-block: 2px;
+  background: var(--canvas);
+}
+
+.page :global(.guide-contents a) {
+  color: var(--secondary);
+  text-decoration: none;
+}
+
+.page :global(.guide-contents a:hover),
+.page :global(.guide-contents a:focus-visible) {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.page:global(.visual-guide) :global(.guide-contents) + :global(.help-section) {
+  margin-top: 12px;
+}
+
+.page:global(.visual-guide) :global(.help-section > h2) {
+  margin-bottom: 6px;
+}
+
+.page:global(.visual-guide) :global(p),
+.page:global(.visual-guide) :global(li) {
+  line-height: 1.5;
+}
+
+.page:global(.visual-guide) :global(p) {
+  margin-block: 6px;
+}
+
+.page:global(.visual-guide) :global(.help-section > ul > li) {
+  padding-block: 3px;
+}
+
+.page :global(.guide-table) {
+  margin-block: 8px;
+}
+
+.page :global(.guide-table th),
+.page :global(.guide-table td) {
+  padding: 7px 10px;
+  line-height: 1.45;
+}
+
+.page :global(.guide-formula) {
+  padding: 8px;
+}
+
+@media (max-width: 600px) {
+  .page:global(.visual-guide) :global(.page-header) {
+    margin-bottom: 6px;
+  }
+
+  .page:global(.visual-guide) :global(.help-section) {
+    scroll-margin-top: 164px;
+  }
+
+  .page :global(.guide-table tbody tr) {
+    padding: 8px 10px;
+  }
+
+  .page :global(.guide-table th[scope="row"]),
+  .page :global(.guide-table td) {
+    padding: 4px 0;
+    line-height: 1.45;
+  }
+}

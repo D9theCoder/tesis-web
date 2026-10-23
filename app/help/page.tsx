@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { EvidenceWalkthrough } from "@/components/evidence-walkthrough";
+import styles from "./page.module.css";
 
 const outcomes = [
   ["confirmed", "Required evidence establishes the finding.", "Not a synonym for execution completed. Findings can survive a failed or interrupted execution."],
@@ -25,7 +26,7 @@ function ReferenceTable({ headers, rows }: { headers: string[]; rows: string[][]
   return <div className="table-container guide-table" tabIndex={0} role="region" aria-label={headers.join(", ")}><table className="data-table" role="table"><thead role="rowgroup"><tr role="row">{headers.map(header => <th key={header} scope="col" role="columnheader">{header}</th>)}</tr></thead><tbody role="rowgroup">{rows.map(row => <tr key={row[0]} role="row">{row.map((value, index) => index === 0 ? <th scope="row" role="rowheader" key={index}>{value}</th> : <td role="cell" data-label={headers[index]} key={index}>{value}</td>)}</tr>)}</tbody></table></div>;
 }
 export default function HelpPage() {
-  return <article className="help-page visual-guide">
+  return <article className={`help-page visual-guide ${styles.page}`}>
     <header className="page-header"><div><h1 className="page-title">Observer guide</h1><p className="page-description">Read the execution, judge the evidence, and keep uncertainty visible.</p></div></header>
     <nav className="guide-contents" aria-label="Guide sections">{[["status", "Status & outcome"], ["coverage", "Coverage"], ["scores", "Scores"], ["metrics", "Metric dictionary"], ["evidence", "Evidence"], ["workspace", "Workspace"]].map(([id, label]) => <a key={id} href={`#${id}`}>{label}</a>)}</nav>
     <section id="status" className="help-section"><h2>Execution is not security outcome</h2><p>Read two independent axes. A completed execution may establish no finding; an interrupted execution may retain a confirmed finding.</p>
