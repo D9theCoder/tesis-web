@@ -209,14 +209,19 @@ export function RainCanvas({ mode, reducedMotion, active, speedBoost = 1 }: Rain
       const rect = canvas.getBoundingClientRect();
       const cssWidth = canvas.clientWidth || rect.width || window.innerWidth || 1;
       const cssHeight = canvas.clientHeight || rect.height || window.innerHeight || 1;
-      width = Math.max(1, Math.round(cssWidth));
-      height = Math.max(1, Math.round(cssHeight));
-      dpr = clampDevicePixelRatio(window.devicePixelRatio || 1);
+      const nextWidth = Math.max(1, Math.round(cssWidth));
+      const nextHeight = Math.max(1, Math.round(cssHeight));
+      const nextDpr = clampDevicePixelRatio(window.devicePixelRatio || 1);
       canvasLeft = rect.left;
+      if (nextWidth === width && nextHeight === height && nextDpr === dpr) return false;
+      width = nextWidth;
+      height = nextHeight;
+      dpr = nextDpr;
       canvas.width = Math.max(1, Math.round(width * dpr));
       canvas.height = Math.max(1, Math.round(height * dpr));
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
       context.clearRect(0, 0, width, height);
+      return true;
     };
 
     const attachResize = (onResize: () => void) => {
@@ -232,7 +237,7 @@ export function RainCanvas({ mode, reducedMotion, active, speedBoost = 1 }: Rain
      * ---------------------------------------------------------------- */
     if (reducedMotion) {
       const paintStatic = () => {
-        configureCanvas();
+        if (!configureCanvas()) return;
         for (const layer of RAIN_LAYER_ORDER) {
           const preset = RAIN_LAYERS[layer];
           const atlases = buildLayerAtlases(preset, dpr);
@@ -554,36 +559,48 @@ export function RainCanvas({ mode, reducedMotion, active, speedBoost = 1 }: Rain
       pointerX = null;
     };
 
-    const rebuild = () => {
-      stopLoop();
-      if (burstTimer !== undefined) {
-        window.clearTimeout(burstTimer);
-        burstTimer = undefined;
+    const resizeScene = () => {
+      const previousDpr = dpr;
+      if (!configureCanvas()) return;
+      // A route can add/remove a scrollbar. Keep existing heads, glyphs and
+      // animation clocks when fitting the canvas to its new bounds.
+      for (const runtime of layers) {
+        if (dpr !== previousDpr) {
+          const atlases = buildLayerAtlases(runtime.preset, dpr);
+          if (!atlases) continue;
+          runtime.atlases = atlases;
+          runtime.cellWidth = atlases.body.cellWidth / dpr;
+          runtime.cellHeight = atlases.body.cellHeight / dpr;
+        }
+        const count = rainColumnCount(runtime.layer, width, intensity);
+        runtime.columns.length = Math.min(runtime.columns.length, count);
+        for (let index = 0; index < count; index += 1) {
+          const x = columnX(index, count, width);
+          const column = runtime.columns[index];
+          if (column) column.x = x;
+          else runtime.columns.push(createRainColumn({
+            x, viewportHeight: height, cellHeight: runtime.cellHeight,
+            preset: runtime.preset, intensity, now: nowMs(),
+          }));
+        }
+        if (runtime.layer !== "near" || nearVisible) drawLayer(runtime);
       }
-      if (burstEndTimer !== undefined) {
-        window.clearTimeout(burstEndTimer);
-        burstEndTimer = undefined;
-      }
-      burst = null;
-      configureCanvas();
-      if (!buildScene()) return;
-      scheduleBurst();
-      startLoop();
+      context.globalAlpha = 1;
     };
 
-    const scheduleRebuild = () => {
+    const scheduleResize = () => {
       if (disposed) return;
       if (resizeTimer !== undefined) window.clearTimeout(resizeTimer);
       resizeTimer = window.setTimeout(() => {
         resizeTimer = undefined;
-        if (!disposed) rebuild();
+        if (!disposed) resizeScene();
       }, RESIZE_DEBOUNCE_MS);
     };
 
     configureCanvas();
     if (!buildScene()) return;
 
-    attachResize(scheduleRebuild);
+    attachResize(scheduleResize);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("pointermove", handlePointerMove, { passive: true });
     window.addEventListener("blur", clearPointer);
@@ -608,7 +625,7 @@ export function RainCanvas({ mode, reducedMotion, active, speedBoost = 1 }: Rain
       if (burstEndTimer !== undefined) window.clearTimeout(burstEndTimer);
       resizeObserver?.disconnect();
       nearObserver?.disconnect();
-      window.removeEventListener("resize", scheduleRebuild);
+      window.removeEventListener("resize", scheduleResize);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("blur", clearPointer);

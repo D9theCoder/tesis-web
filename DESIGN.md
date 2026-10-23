@@ -245,6 +245,7 @@ The variant lives in `:root[data-theme="hacker"]` in `app/globals.css`. Light an
 ### Rain layer
 
 - One fixed full-viewport canvas behind the content, `pointer-events: none`, drawn by `components/hacker/rain-canvas.tsx` with glyph atlases from `lib/hacker-rain.ts`.
+- Client-side navigation keeps the rain scene running. Scrollbar and viewport size changes retain existing columns, glyphs, and animation timing; glyph atlases are rebuilt only when pixel density changes.
 - Three overlapping depths: far (10px, dim, slower, ~30fps movement), mid (14px, normal green, ~30fps), near (22px, bright, full refresh). The translucent trail fill keeps the depth layers visually distinct.
 - Each column has a bright leading glyph, a fading trail, a random length and speed, and a random reset off screen. Half-width katakana, digits, hex letters, brackets, slashes, and shade blocks are the complete vocabulary; a few trail glyphs swap every few frames.
 - Columns near the pointer brighten and speed up slightly. Every 6–11s one random column flashes along its full height for about half a second.
