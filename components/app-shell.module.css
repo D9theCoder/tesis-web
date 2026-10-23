@@ -35,6 +35,12 @@
   white-space: nowrap;
 }
 
+@media (max-width: 600px), (any-pointer: coarse) {
+  .sidebarToggle {
+    min-height: 44px;
+  }
+}
+
 @media (min-width: 901px) {
   .shell :global(.app-sidebar),
   .shell :global(.app-workspace) {
