@@ -568,13 +568,37 @@ svg { flex-shrink: 0; }
 .density-compact .data-table td { padding-block: 6px; vertical-align: middle; }
 .density-compact .table-secondary, .density-compact .evidence-table td > span, .density-compact .evidence-table td small { display: block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .density-comfortable .evidence-table td > span { display: block; max-width: 270px; white-space: normal; }
-.activity-timeline { margin-top: 24px; }
-.activity-list { margin: 0; padding: 0 20px 0 44px; }
-.activity-list > li { padding: 18px 0; border-bottom: 1px solid var(--border); }
-.activity-list time { display: block; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; margin-bottom: 6px; }
-.activity-list p { margin-block: 6px; }
-.activity-list small { color: var(--muted); overflow-wrap: anywhere; }
+.activity-timeline { margin-top: 20px; }
+.activity-timeline > .ui-card-header { padding: 8px 12px; }
+.activity-timeline > .table-footer { padding: 6px 12px; border-top: 0; }
+.activity-list { margin: 0; padding: 0 12px; }
+.activity-list > li { display: grid; gap: 2px 12px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.activity-list > li:last-child { border-bottom: 0; }
+.activity-event-primary { display: grid; grid-template-columns: 76px 132px minmax(0, 1fr); align-items: baseline; gap: 8px; min-width: 0; }
+.activity-event-primary time { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.activity-event-primary strong, .activity-event-primary p { min-width: 0; overflow-wrap: anywhere; }
+.activity-event-primary strong { font-size: 13px; }
+.activity-event-primary p { margin: 0; line-height: 1.45; }
+.activity-event-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; min-width: 0; }
+.activity-list small { color: var(--muted); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.activity-event-meta details { min-width: 0; }
+.activity-event-meta details > summary { display: inline-flex; align-items: center; min-height: 24px; font-size: 12px; }
+.activity-event-meta details[open] { flex-basis: 100%; }
 .activity-list pre { max-height: 320px; overflow: auto; font-size: 12px; }
+@media (any-pointer: coarse) {
+  .activity-event-meta details > summary { min-height: 44px; }
+}
+@media (max-width: 600px) {
+  .runtime-summary .summary-item { padding: 10px 12px; }
+  .activity-list { padding-inline: 12px; }
+  .activity-list > li { gap: 2px; padding-block: 6px; }
+  .activity-event-primary { grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; }
+  .activity-event-primary time { grid-column: 1; }
+  .activity-event-primary strong { grid-column: 2; justify-self: start; }
+  .activity-event-primary p { grid-column: 1 / -1; }
+  .activity-event-meta { gap: 4px 8px; }
+  .activity-event-meta details > summary { min-height: 44px; }
+}
 .visual-guide { max-width: 1100px; }
 .visual-guide .help-section { scroll-margin-top: 80px; margin-top: 40px; }
 .visual-guide .help-section > h2 { font-size: 22px; margin-bottom: 12px; }

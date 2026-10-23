@@ -56,8 +56,12 @@ export function ActivityTimeline({ executionId, simulationEvents }: { executionI
         <Button disabled={busy || (current + 1 >= localPages && !response?.hasMore)} onClick={next}>Next steps</Button>
       </div></div>
       <ol className="activity-list" start={current * 25 + 1}>{events.slice(current * 25, (current + 1) * 25).map((event, index) => <li key={`${response?.nextCursor}-${current}-${index}`}>
-        <time>{event.timestamp ? fmtClock(event.timestamp) : "Time unavailable"}</time>
-        <div><strong>{event.event_type.replaceAll(".", " · ")}</strong><p>{event.message ?? "No event message recorded"}</p>
+        <div className="activity-event-primary">
+          <time>{event.timestamp ? fmtClock(event.timestamp) : "Time unavailable"}</time>
+          <strong>{event.event_type.replaceAll(".", " · ")}</strong>
+          <p>{event.message ?? "No event message recorded"}</p>
+        </div>
+        <div className="activity-event-meta">
           <small>Execution <code>{eventExecutionId(event) ?? executionId}</code>{event.node && <> · Node {event.node}</>}{event.method && <> · Method {event.method}</>}</small>
           <details><summary>Inspect recorded evidence</summary><pre>{JSON.stringify(event.data ?? {}, null, 2)}</pre></details>
         </div>
