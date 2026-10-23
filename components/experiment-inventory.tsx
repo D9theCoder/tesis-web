@@ -9,6 +9,7 @@ import { useReadResource } from "@/lib/use-read-resource";
 import { Badge, Button, Card } from "@/components/ui/primitives";
 import { CopyButton } from "@/components/ui/copy-button";
 import { fmtIsoFromStr } from "@/lib/formatters";
+import styles from "./experiment-inventory.module.css";
 
 export function ExperimentInventoryPage() {
   const search = useSearchParams(), router = useRouter();
@@ -20,7 +21,7 @@ export function ExperimentInventoryPage() {
   function change(values: Partial<InventoryQuery>) {
     router.push(inventoryHref({ cursor: 0, ...values }, raw), { scroll: false });
   }
-  return <div className="experiment-inventory-page">
+  return <div className={`experiment-inventory-page ${styles.page}`}>
     <header className="page-header"><div><h1 className="page-title">Experiment results</h1><p className="page-description">Find a saved experiment. Open its coordinates to compare scores and inspect evidence.</p></div><Button disabled={resource.busy} onClick={resource.refresh}><RefreshCw size={15} aria-hidden="true" />{resource.busy ? "Refreshing…" : "Refresh inventory"}</Button></header>
     <nav className="inventory-views" aria-label="Inventory level">{([ ["experiments", "Experiments"], ["executions", "All executions"], ["unresolved", "Unresolved identities"] ] as const).map(([view,label]) => <Link key={view} href={inventoryHref({ view, cursor: 0 }, raw)} aria-current={query.view === view ? "page" : undefined}>{label}<span>{data ? view === "experiments" ? data.experiments : view === "executions" ? data.executions : data.unresolved : "—"}</span></Link>)}</nav>
     <p className="inventory-explanation">{query.view === "experiments" ? "One row per matrix or standalone experiment. Coordinates stay inside their parent; unresolved identities remain accessible above." : query.view === "executions" ? "Raw identity inventory, including matrix parents, coordinates, and unresolved sources. These totals are not a research denominator." : "Ambiguous sources and unresolved parent relationships. These records are not silently grouped into an experiment."}</p>

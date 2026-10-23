@@ -1,0 +1,54 @@
+.page {
+  min-width: 0;
+}
+
+.page :global(.page-header) {
+  margin-bottom: 16px;
+}
+
+.page :global(.inventory-explanation) {
+  margin-block: 8px 12px;
+}
+
+.page :global(.scope-filter) {
+  margin-bottom: 12px;
+}
+
+.page :global(.filter-bar.inventory-search) {
+  padding: 12px 16px;
+}
+
+.page :global(.inventory-toolbar) {
+  padding: 0 16px 8px;
+}
+
+.page :global(.inventory-options .filter-bar) {
+  padding-top: 10px;
+}
+
+.page :global(.source-disclosure) {
+  margin-top: 16px;
+}
+
+@media (max-width: 1100px) {
+  .page :global(.experiment-table tbody tr) {
+    gap: 12px 16px;
+    padding: 14px;
+  }
+}
+
+@media (max-width: 700px) {
+  .page :global(.filter-bar.inventory-search) {
+    gap: 10px 8px;
+    padding: 10px 12px;
+  }
+
+  .page :global(.inventory-toolbar) {
+    padding: 0 12px 8px;
+  }
+
+  .page :global(.experiment-table tbody tr) {
+    gap: 12px;
+    padding: 12px;
+  }
+}

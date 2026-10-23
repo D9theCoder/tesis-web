@@ -25,6 +25,7 @@ import { ResultsSummary } from "@/components/results/status-details";
 import { normalizeResult } from "@/lib/result-normalizer";
 import { evidenceForReference } from "@/lib/evidence-ref";
 import { useReadResource } from "@/lib/use-read-resource";
+import styles from "./results.module.css";
 
 async function loadSelectedCoordinate(query: string, signal: AbortSignal) {
   const [parent, coordinate] = JSON.parse(query) as [string, string | null];
@@ -148,7 +149,7 @@ function ResultsExplorer({ executionId }: { executionId: string }) {
   tabs.push({ value: "json", label: "JSON" });
 
   return (
-    <div className="results-page flex h-full min-h-0 flex-col">
+    <div className={`results-page ${styles.page} flex h-full min-h-0 flex-col`}>
       <header className="page-header results-page-header">
         <div className="breadcrumbs" aria-label="Breadcrumb">
           <Link href="/results" className="ui-link inline-flex items-center gap-1">
