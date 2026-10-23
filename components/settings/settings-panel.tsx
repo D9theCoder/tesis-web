@@ -2,6 +2,7 @@
 
 import { useCallback, useRef } from "react";
 import { Moon, Sun, Terminal, type LucideIcon } from "lucide-react";
+import styles from "./settings-panel.module.css";
 import type { Theme } from "@/lib/theme";
 import { CHEAT_CODE_PHRASE } from "@/lib/hacker-settings";
 import { setTheme, useTheme } from "@/lib/use-theme";
@@ -51,7 +52,7 @@ export function SettingsPanel() {
   }, []);
 
   return (
-    <article className="settings-page">
+    <article className={`settings-page ${styles.settingsPage}`}>
       <header className="page-header">
         <div>
           <h1 className="page-title">Settings</h1>
@@ -63,12 +64,15 @@ export function SettingsPanel() {
         <h2 className="settings-section-heading" id="settings-appearance">
           Appearance
         </h2>
-        <fieldset className="theme-options" aria-label={`Theme: ${theme}`}>
+        <fieldset
+          className={`theme-options ${styles.themeOptions}`}
+          aria-label={`Theme: ${theme}`}
+        >
           {THEME_OPTIONS.map(option => {
             const Icon = option.icon;
             const descriptionId = `theme-option-${option.value}-description`;
             return (
-              <label key={option.value} className="theme-option">
+              <label key={option.value} className={styles.themeOption}>
                 <input
                   ref={input => {
                     inputs.current[option.value] = input;
@@ -80,14 +84,14 @@ export function SettingsPanel() {
                   onChange={() => selectTheme(option.value)}
                   aria-label={option.label}
                   aria-describedby={descriptionId}
-                  className="theme-option-input"
+                  className={styles.themeRadio}
                 />
-                <span className="theme-option-icon" aria-hidden="true">
-                  <Icon size={18} />
+                <span className={styles.themeIcon} aria-hidden="true">
+                  <Icon size={16} />
                 </span>
-                <span className="theme-option-body">
-                  <span className="theme-option-title">{option.label}</span>
-                  <span id={descriptionId} className="theme-option-description">
+                <span className={styles.themeOptionBody}>
+                  <span className={styles.themeOptionTitle}>{option.label}</span>
+                  <span id={descriptionId} className={styles.themeOptionDescription}>
                     {option.description}
                   </span>
                 </span>
