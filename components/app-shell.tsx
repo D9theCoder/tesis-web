@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, ArrowUpRight, BookOpen, ChevronRight, Eye, LayoutDashboard, ListFilter, Menu, Moon, Sun } from "lucide-react";
+import { Activity, ArrowUpRight, BookOpen, ChevronRight, Eye, LayoutDashboard, ListFilter, Menu } from "lucide-react";
 import { Badge, Button, Drawer } from "@/components/ui/primitives";
-import { THEME_KEY } from "@/lib/theme";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const navigation = [
   { href: "/", label: "Live monitor", icon: Activity },
@@ -13,24 +13,10 @@ const navigation = [
   { href: "/results", label: "Results", icon: ListFilter },
   { href: "/help", label: "Guide", icon: BookOpen },
 ];
-let sessionTheme: string | null = null;
-const subscribeTheme = (callback: () => void) => {
-  const changed = () => { sessionTheme = null; callback(); };
-  window.addEventListener("storage", changed);
-  window.addEventListener("tesis-theme", callback);
-  return () => { window.removeEventListener("storage", changed); window.removeEventListener("tesis-theme", callback); };
-};
-const getTheme = () => {
-  if (sessionTheme) return sessionTheme;
-  try { return (localStorage.getItem(THEME_KEY) ?? localStorage.getItem("tesis-theme")) === "dark" ? "dark" : "light"; } catch { return "light"; }
-};
-const serverTheme = () => "light";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
-  const theme = useSyncExternalStore(subscribeTheme, getTheme, serverTheme);
-  useEffect(() => { document.documentElement.dataset.theme = getTheme(); }, [theme]);
   const selected = navigation.find(item => item.href === "/" ? pathname === "/" : pathname.startsWith(item.href));
   const nav = <nav className="app-navigation" aria-label="Main navigation">{navigation.map(item => {
     const Icon = item.icon;
@@ -51,12 +37,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <span>Workspace</span><ChevronRight size={14} /><strong>{selected?.label ?? "Results"}</strong>
         </div>
         <div className="topbar-actions"><Badge variant="outline"><Eye size={13} /> Read-only</Badge>
-          <Button className="ui-button-icon" variant="ghost" aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`} onClick={() => {
-            const next = theme === "light" ? "dark" : "light";
-            sessionTheme = next;
-            try { localStorage.setItem(THEME_KEY, next); } catch { /* Retain the selection for this session. */ }
-            window.dispatchEvent(new Event("tesis-theme"));
-          }}>{theme === "light" ? <Moon size={17} /> : <Sun size={17} />}</Button>
+          <ThemeToggle />
           <Link href="/help" className="topbar-help">Guide <ArrowUpRight size={14} /></Link>
         </div>
       </header>

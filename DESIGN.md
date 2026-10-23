@@ -177,7 +177,7 @@ components:
 
 TESIS Web Observer should read like a trusted research console for people following an experiment and inspecting its record. Its Cloudflare-inspired enterprise character comes from cool neutral surfaces, clear blue interactions, concise sans-serif type, compact navigation, and dense but readable data. Light is the default; the existing dark theme keeps the same semantic color roles.
 
-The live monitor leads with the current run, model conversation, Attack Knowledge Graph (AKG), and factual status panels. Completed results and comparison stay easy to reach, with source details, review origin, and evidence kept close to each conclusion. Borders and surface tone define structure, while movement stays quiet.
+The live monitor leads with the current run, model conversation, Attack Knowledge Graph (AKG), and factual status panels. Completed results and comparison stay easy to reach, with source details, review origin, and evidence kept close to each conclusion. Borders and surface tone define structure, while movement stays quiet. The header theme toggle is the one authored motion moment: the workspace cross-dissolves over a fading canvas scrim in 320ms while the sun and moon rotate in place, and reduced-motion preferences swap instantly. The sticky header keeps an opaque surface and fades its previous tone separately, so scrolling content never shows through it.
 
 **Key Characteristics:**
 - Current-run monitoring with the model stream, AKG, and status panels.
@@ -269,7 +269,7 @@ Cards and primary panels use gently rounded corners (8px). Navigation and AKG no
 - **Default / Outline:** Surface background, primary text, a 1px strong border, 5px corners, and 7px by 12px padding; the outline variant shares the same base treatment.
 - **Primary:** Accent blue surface with a contrasting surface-colored label; hover deepens the accent.
 - **Ghost:** Transparent at rest with secondary text; hover uses the surface-hover color.
-- **Focus / Disabled:** Focus uses a 2px accent outline with a 3px offset. Disabled controls use reduced opacity and a not-allowed cursor. Buttons have no transition in the current stylesheet.
+- **Focus / Disabled:** Focus uses a 2px accent outline with a 3px offset. Disabled controls use reduced opacity and a not-allowed cursor. Buttons have no transition outside the theme switch.
 - **Sizing:** 34px minimum height for fine-pointer desktop use and 44px for small screens or coarse pointers.
 - **Icon controls:** Use square 34px controls for fine-pointer desktop use and 44px touch targets for small screens or coarse pointers. Preserve an accessible action name.
 

@@ -61,8 +61,10 @@ Live dashboard:
 
 The application uses a compact persistent sidebar on desktop and a keyboard-accessible
 navigation drawer on mobile. Light is the default theme; the header theme control
-switches to dark and retains the local preference. A fixed head script applies
-that preference before paint; blocked storage falls back to light. Phone and
+cross-dissolves the workspace over its canvas in 320ms and rotates the
+sun/moon glyphs in place while retaining the local preference. A fixed head script applies that
+preference before paint; blocked storage falls back to light, and reduced-motion
+preferences swap instantly. Phone and
 coarse-pointer controls use 44px targets, including graph traversal and inventory
 actions. The current-run live monitor remains the primary entry point. Results
 groups exact validated coordinates under their matrix parent before filtering

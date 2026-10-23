@@ -39,6 +39,7 @@
   --review: rgb(var(--review-rgb));
   --sidebar-width: 216px;
   --radius: 8px;
+  --theme-switch-duration: 320ms;
   --akg-bg: var(--surface-subtle);
   --akg-card: var(--surface);
   --akg-border: var(--border-strong);
@@ -97,7 +98,7 @@ svg { flex-shrink: 0; }
 .text-graphite-600 { color: var(--muted); }
 .canvas { background: var(--canvas); }
 
-.app-shell { min-height: 100dvh; }
+.app-shell { position: relative; z-index: 1; min-height: 100dvh; }
 .app-sidebar { width: var(--sidebar-width); position: fixed; inset: 0 auto 0 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 30; }
 .app-brand { height: 72px; padding: 18px 22px; color: var(--text); display: flex; align-items: center; gap: 11px; font-size: 18px; font-weight: 700; letter-spacing: .015em; text-decoration: none; }
 .brand-mark { width: 29px; height: 29px; border-radius: 6px; background: #f58220; color: #281a09; display: grid; place-items: center; font-size: 18px; }
@@ -116,6 +117,16 @@ svg { flex-shrink: 0; }
 .topbar-context { color: var(--muted); }
 .topbar-context strong { color: var(--text); font-weight: 500; }
 .topbar-help { display: flex; align-items: center; gap: 4px; color: var(--muted); text-decoration: none; }
+.theme-toggle-icon { width: 17px; height: 17px; flex: 0 0 17px; display: grid; place-items: center; }
+.theme-toggle-icon > .theme-icon { grid-area: 1 / 1; width: 17px; height: 17px; display: grid; place-items: center; transition: opacity var(--theme-switch-duration) ease-in-out, transform var(--theme-switch-duration) ease-in-out; }
+.theme-toggle-icon .theme-icon-moon { opacity: 1; transform: rotate(0deg) scale(1); }
+.theme-toggle-icon .theme-icon-sun { opacity: 0; transform: rotate(-90deg) scale(.72); }
+:root[data-theme="dark"] .theme-toggle-icon .theme-icon-moon { opacity: 0; transform: rotate(90deg) scale(.72); }
+:root[data-theme="dark"] .theme-toggle-icon .theme-icon-sun { opacity: 1; transform: rotate(0deg) scale(1); }
+:root[data-theme-icon="dark"] .theme-toggle-icon .theme-icon-moon { opacity: 0; transform: rotate(90deg) scale(.72); }
+:root[data-theme-icon="dark"] .theme-toggle-icon .theme-icon-sun { opacity: 1; transform: rotate(0deg) scale(1); }
+:root[data-theme-icon="light"] .theme-toggle-icon .theme-icon-moon { opacity: 1; transform: rotate(0deg) scale(1); }
+:root[data-theme-icon="light"] .theme-toggle-icon .theme-icon-sun { opacity: 0; transform: rotate(-90deg) scale(.72); }
 .mobile-menu { display: none !important; }
 .app-main { min-width: 0; padding: 28px 28px 40px; }
 .skip-link { position: fixed; left: 12px; top: -80px; z-index: 200; padding: 12px 16px; background: var(--surface); border: 2px solid var(--accent); border-radius: 6px; }
@@ -717,4 +728,52 @@ svg { flex-shrink: 0; }
   .experiment-row-title > a { display: inline-flex; align-items: center; min-height: 44px; }
   .overview-counts dt a { display: inline-flex; align-items: center; min-height: 44px; }
   .overview-counts > div:has(a) { padding-block: 0; align-items: center; }
+}
+
+/* Compositor-only theme cross-dissolve. The workspace dips while a canvas
+   scrim fades; lib/theme.ts swaps data-theme at the invisible midpoint. */
+@keyframes theme-content-dip {
+  0% { opacity: 1; }
+  50% { opacity: .18; }
+  100% { opacity: 1; }
+}
+@keyframes theme-canvas-fade {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+/* The header surface sits one step above the canvas, so its old color has to
+   clear faster than the canvas scrim to stay level with the workspace. The
+   stops track the composited page background as the contents dip. */
+@keyframes theme-header-fade {
+  0% { opacity: 1; }
+  50% { opacity: .41; }
+  57% { opacity: .295; }
+  62.5% { opacity: .205; }
+  67% { opacity: .131; }
+  77.5% { opacity: .032; }
+  100% { opacity: 0; }
+}
+:root.theme-fading .app-sidebar,
+:root.theme-fading .app-main,
+:root.theme-fading .topbar-context,
+:root.theme-fading .topbar-actions {
+  animation: theme-content-dip var(--theme-switch-duration) ease-in-out both;
+}
+/* The sticky header keeps an opaque surface while its old color fades out, so
+   scrolled content never shows through it. Its contents dip separately. */
+:root.theme-fading .app-topbar::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 -1px 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--theme-old-surface, var(--surface));
+  animation: theme-header-fade var(--theme-switch-duration) linear both;
+}
+.theme-canvas-fade {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  animation: theme-canvas-fade var(--theme-switch-duration) ease-in-out both;
 }

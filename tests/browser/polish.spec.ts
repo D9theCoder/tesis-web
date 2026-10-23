@@ -45,6 +45,7 @@ test.describe("dashboard polish", () => {
       await capture("monitor");
       await page.getByRole("button", { name: "Switch to dark theme" }).click();
       await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+      await expect(page.locator("html")).not.toHaveClass(/theme-fading/);
       expect(await page.locator(".react-flow__attribution").evaluate(element => getComputedStyle(element).backgroundColor))
         .toBe(await page.locator(".akg-canvas .react-flow").evaluate(element => getComputedStyle(element).backgroundColor));
       await capture("dark");

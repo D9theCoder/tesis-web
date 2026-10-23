@@ -29,6 +29,7 @@ test.describe("enterprise observer workspace", () => {
       await capture("");
       await page.getByRole("button", { name: "Switch to dark theme" }).click();
       await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+      await expect(page.locator("html")).not.toHaveClass(/theme-fading/);
       await capture("-dark");
       await page.getByRole("button", { name: "Switch to light theme" }).click();
 

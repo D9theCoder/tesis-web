@@ -19,6 +19,7 @@ test.describe("technical audit regressions", () => {
       const input = page.getByRole("searchbox");
       for (const theme of ["light", "dark"]) {
         if (theme === "dark") await page.getByRole("button", { name: "Switch to dark theme" }).click();
+        await expect(page.locator("html")).not.toHaveClass(/theme-fading/);
         const contrast = await input.evaluate(el => {
           const luminance = (color: string) => color.match(/[\d.]+/g)!.slice(0, 3).map(Number)
             .map(channel => channel / 255).map(channel => channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4)
