@@ -1,0 +1,98 @@
+/*
+ * Desktop sidebar collapse rail.
+ *
+ * All collapsed styling lives behind the 901px breakpoint because that is
+ * where the fixed sidebar exists; at 900px and below the sidebar is hidden and
+ * navigation moves into the Drawer, so the collapsed class must have no effect.
+ */
+
+/* The toggle owns the auto top margin that pins it to the sidebar's bottom. */
+.sidebarToggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  min-height: 40px;
+  margin: auto 12px 8px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: left;
+}
+
+.sidebarToggle:hover {
+  background: var(--surface-hover);
+  color: var(--secondary);
+}
+
+.toggleLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (min-width: 901px) {
+  .shell :global(.app-sidebar),
+  .shell :global(.app-workspace) {
+    transition: width 200ms ease, margin-left 200ms ease;
+  }
+
+  /* Override the token on the shell so the fixed rail and the workspace margin
+     stay in sync instead of changing the root value for every consumer. */
+  .shell.collapsed {
+    --sidebar-width: 64px;
+  }
+
+  .shell.collapsed :global(.app-sidebar .app-brand) {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  /* Hide the wordmark and caption but keep the mark as the compact identity. */
+  .shell.collapsed :global(.app-sidebar .app-brand > span:last-child) {
+    display: none;
+  }
+
+  /* Keep the workspace avatar as the compact row while preserving its height. */
+  .shell.collapsed :global(.app-sidebar .workspace-label) {
+    justify-content: center;
+    min-height: 62px;
+    margin-inline: 12px;
+    padding: 12px 0;
+  }
+
+  .shell.collapsed :global(.app-sidebar .workspace-label > span:last-child) {
+    display: none;
+  }
+
+  .shell.collapsed :global(.app-sidebar .app-navigation a) {
+    justify-content: center;
+    gap: 0;
+    padding-inline: 0;
+  }
+
+  .shell.collapsed :global(.app-sidebar .app-navigation a span) {
+    display: none;
+  }
+
+  .shell.collapsed .sidebarToggle {
+    justify-content: center;
+    gap: 0;
+    padding-inline: 0;
+  }
+
+  .shell.collapsed .toggleLabel {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell :global(.app-sidebar),
+  .shell :global(.app-workspace) {
+    transition: none;
+  }
+}

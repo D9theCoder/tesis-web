@@ -81,7 +81,8 @@ The existing product name is TESIS Web Observer, also rendered as TESIS Observer
 in the interface. Preserve TESIS and AKG terminology and accurate research
 claims. The user confirms a Cloudflare-inspired enterprise dashboard: restrained
 colors, professional typography, dense readable data, compact navigation, and
-consistent components. Light with optional dark is the confirmed theme direction.
+consistent components. Light and dark are the working themes; hacker is an
+opt-in third variant selected on Settings, never chosen automatically.
 The current-run live monitor remains primary, including the model stream, AKG,
 and status panels; completed-results review remains equally accessible.
 

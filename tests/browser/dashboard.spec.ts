@@ -27,11 +27,11 @@ test.describe("enterprise observer workspace", () => {
       await expect(page.locator(".akg-view")).toHaveAttribute("data-layout-ready", "true");
       await noOverflow();
       await capture("");
-      await page.getByRole("button", { name: "Switch to dark theme" }).click();
+      await page.getByRole("button", { name: "Theme: light. Switch to dark." }).click();
       await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
       await expect(page.locator("html")).not.toHaveClass(/theme-fading/);
       await capture("-dark");
-      await page.getByRole("button", { name: "Switch to light theme" }).click();
+      await page.getByRole("button", { name: "Theme: dark. Switch to light." }).click();
 
       for (const [route, label] of [
         ["/results", "catalog"], ["/overview", "overview"], ["/help", "guide"],

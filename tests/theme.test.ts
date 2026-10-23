@@ -33,6 +33,23 @@ describe("theme before hydration", () => {
     expect(document.documentElement.dataset.theme).toBe("light");
     blocked.mockRestore();
   });
+  it("follows the system preference on a first visit and never auto-selects hacker", () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+    window.eval(THEME_INIT_SCRIPT);
+    expect(document.documentElement.dataset.theme).toBe("dark");
+  });
+  it("restores a stored hacker theme over the system preference", () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false })));
+    localStorage.setItem(THEME_KEY, "hacker");
+    window.eval(THEME_INIT_SCRIPT);
+    expect(document.documentElement.dataset.theme).toBe("hacker");
+  });
+  it("ignores an unrecognized stored value and follows the system preference", () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+    localStorage.setItem(THEME_KEY, "midnight");
+    window.eval(THEME_INIT_SCRIPT);
+    expect(document.documentElement.dataset.theme).toBe("dark");
+  });
 });
 
 describe("theme switching", () => {
@@ -63,5 +80,20 @@ describe("theme switching", () => {
     expect(document.documentElement.dataset.theme).toBe("dark");
     expect(document.documentElement).not.toHaveClass(THEME_TRANSITION_CLASS);
     expect(document.querySelector(".theme-canvas-fade")).toBeNull();
+  });
+  it("replaces an in-flight dissolve when another mode is chosen", () => {
+    vi.useFakeTimers();
+    applyTheme("dark", true);
+    applyTheme("hacker", true);
+    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(document.documentElement.dataset.themeIcon).toBe("hacker");
+    vi.advanceTimersByTime(THEME_SWAP_MS);
+    expect(document.documentElement.dataset.theme).toBe("hacker");
+  });
+  it("applies hacker instantly and persists it", () => {
+    applyTheme("hacker");
+    persistTheme("hacker");
+    expect(document.documentElement.dataset.theme).toBe("hacker");
+    expect(localStorage.getItem(THEME_KEY)).toBe("hacker");
   });
 });

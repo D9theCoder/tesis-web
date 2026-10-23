@@ -104,13 +104,12 @@ svg { flex-shrink: 0; }
 .brand-mark { width: 29px; height: 29px; border-radius: 6px; background: #f58220; color: #281a09; display: grid; place-items: center; font-size: 18px; }
 .brand-caption { display: block; font-size: 11px; color: var(--muted); font-weight: 500; letter-spacing: .01em; }
 .workspace-label { display: flex; gap: 10px; align-items: center; margin: 2px 12px 24px; padding: 12px 8px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 600; }
-.workspace-label small, .sidebar-footer small { display: block; font-size: 11px; font-weight: 400; color: var(--muted); margin-top: 2px; }
+.workspace-label small { display: block; font-size: 11px; font-weight: 400; color: var(--muted); margin-top: 2px; }
 .workspace-avatar { border: 1px solid var(--border); width: 30px; height: 30px; border-radius: 6px; display: grid; place-items: center; color: var(--secondary); background: var(--surface-subtle); }
 .app-navigation { display: flex; flex-direction: column; gap: 4px; padding: 0 12px; }
 .app-navigation a { display: flex; align-items: center; gap: 10px; color: var(--secondary); padding: 10px 12px; min-height: 40px; border-radius: 6px; font-size: 13px; text-decoration: none; }
 .app-navigation a:hover { background: var(--surface-hover); }
 .app-navigation a.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-.sidebar-footer { margin-top: auto; padding: 20px; display: flex; align-items: flex-start; gap: 9px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--border); }
 .app-workspace { margin-left: var(--sidebar-width); min-width: 0; }
 .app-topbar { min-height: 56px; position: sticky; top: 0; z-index: 20; padding: 8px 24px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .topbar-context, .topbar-actions { display: flex; align-items: center; gap: 10px; font-size: 12px; }
@@ -119,14 +118,23 @@ svg { flex-shrink: 0; }
 .topbar-help { display: flex; align-items: center; gap: 4px; color: var(--muted); text-decoration: none; }
 .theme-toggle-icon { width: 17px; height: 17px; flex: 0 0 17px; display: grid; place-items: center; }
 .theme-toggle-icon > .theme-icon { grid-area: 1 / 1; width: 17px; height: 17px; display: grid; place-items: center; transition: opacity var(--theme-switch-duration) ease-in-out, transform var(--theme-switch-duration) ease-in-out; }
+/* The header control never offers hacker; it cycles light <-> dark and shows the
+   next action: light shows the moon, dark shows the sun. Hacker also shows the
+   sun because its next action is light. While the cross-dissolve runs,
+   data-theme-icon names the target theme: light and dark reveal that theme's
+   next-action glyph, while a hacker target hides both instead of implying a
+   third header icon. The default-hidden rule also keeps any other glyph out of
+   the fixed 17px box. */
+.theme-toggle-icon > .theme-icon { opacity: 0; transform: rotate(90deg) scale(.72); }
 .theme-toggle-icon .theme-icon-moon { opacity: 1; transform: rotate(0deg) scale(1); }
-.theme-toggle-icon .theme-icon-sun { opacity: 0; transform: rotate(-90deg) scale(.72); }
-:root[data-theme="dark"] .theme-toggle-icon .theme-icon-moon { opacity: 0; transform: rotate(90deg) scale(.72); }
+:root[data-theme="dark"] .theme-toggle-icon .theme-icon-moon { opacity: 0; transform: rotate(-90deg) scale(.72); }
 :root[data-theme="dark"] .theme-toggle-icon .theme-icon-sun { opacity: 1; transform: rotate(0deg) scale(1); }
-:root[data-theme-icon="dark"] .theme-toggle-icon .theme-icon-moon { opacity: 0; transform: rotate(90deg) scale(.72); }
-:root[data-theme-icon="dark"] .theme-toggle-icon .theme-icon-sun { opacity: 1; transform: rotate(0deg) scale(1); }
+:root[data-theme="hacker"] .theme-toggle-icon .theme-icon-moon { opacity: 0; transform: rotate(-90deg) scale(.72); }
+:root[data-theme="hacker"] .theme-toggle-icon .theme-icon-sun { opacity: 1; transform: rotate(0deg) scale(1); }
+:root[data-theme-icon] .theme-toggle-icon > .theme-icon { opacity: 0; transform: rotate(-90deg) scale(.72); }
 :root[data-theme-icon="light"] .theme-toggle-icon .theme-icon-moon { opacity: 1; transform: rotate(0deg) scale(1); }
-:root[data-theme-icon="light"] .theme-toggle-icon .theme-icon-sun { opacity: 0; transform: rotate(-90deg) scale(.72); }
+:root[data-theme-icon="dark"] .theme-toggle-icon .theme-icon-sun { opacity: 1; transform: rotate(0deg) scale(1); }
+:root[data-theme-icon="hacker"] .theme-toggle-icon > .theme-icon { opacity: 0; transform: rotate(-90deg) scale(.72); }
 .mobile-menu { display: none !important; }
 .app-main { min-width: 0; padding: 28px 28px 40px; }
 .skip-link { position: fixed; left: 12px; top: -80px; z-index: 200; padding: 12px 16px; background: var(--surface); border: 2px solid var(--accent); border-radius: 6px; }
@@ -780,4 +788,915 @@ svg { flex-shrink: 0; }
   z-index: 0;
   pointer-events: none;
   animation: theme-canvas-fade var(--theme-switch-duration) ease-in-out both;
+}
+
+/* ==========================================================================
+   HACKER THEME — third mode
+   Green phosphor on near-black, monospace, CRT scanlines, rain, and ASCII
+   chrome. Every page override is scoped to :root[data-theme="hacker"], so the
+   light and dark palettes above are preserved. The .hacker-* chrome classes are
+   inert outside hacker mode and are rendered by HackerChrome when present.
+   ========================================================================== */
+:root[data-theme="hacker"] {
+  color-scheme: dark;
+  --canvas-rgb: 5 8 5;
+  --surface-rgb: 8 14 9;
+  --surface-subtle-rgb: 11 20 12;
+  --surface-hover-rgb: 16 31 17;
+  --text-rgb: 51 255 102;
+  --secondary-rgb: 148 226 164;
+  --muted-rgb: 120 190 135;
+  --border-rgb: 38 92 52;
+  --border-strong-rgb: 52 128 70;
+  --control-border-rgb: 72 165 92;
+  --accent-rgb: 51 255 102;
+  --success-rgb: 128 255 158;
+  --warning-rgb: 255 176 32;
+  --danger-rgb: 255 176 32;
+  --review-rgb: 167 255 196;
+  --canvas: #050805;
+  --surface: rgb(8 14 9 / .94);
+  --surface-subtle: rgb(11 20 12 / .92);
+  --surface-hover: rgb(16 31 17 / .96);
+  --text: rgb(var(--text-rgb));
+  --secondary: rgb(var(--secondary-rgb));
+  --muted: rgb(var(--muted-rgb));
+  --border: rgb(var(--border-rgb));
+  --border-strong: rgb(var(--border-strong-rgb));
+  --control-border: rgb(var(--control-border-rgb));
+  --accent: rgb(var(--accent-rgb));
+  --accent-soft: rgb(51 255 102 / .08);
+  --success: rgb(var(--success-rgb));
+  --warning: rgb(var(--warning-rgb));
+  --danger: rgb(var(--danger-rgb));
+  --review: rgb(var(--review-rgb));
+  --radius: 2px;
+  --akg-bg: #050805;
+  --akg-card: rgb(8 14 9 / .96);
+  --akg-border: #348046;
+  --akg-text: #33ff66;
+  --akg-muted: #78be87;
+  --akg-edge: #3fa85a;
+  --akg-current: #ffb020;
+  --akg-traversed: #33ff66;
+  --akg-achieved: #80ff9e;
+  --akg-failed: #ffb020;
+  --hacker-ink: #050805;
+  --hacker-line: rgb(51 255 102 / .34);
+  --hacker-line-strong: rgb(51 255 102 / .58);
+  --hacker-glow: rgb(51 255 102 / .35);
+  --hacker-amber: #ffb020;
+  --hacker-panel: rgb(8 14 9 / .94);
+  --hacker-panel-hero: rgb(8 14 9 / .82);
+  /* The fixed status bar must not cover the end of a keyboard-scrolled page. */
+  scroll-padding-bottom: 52px;
+}
+
+/* --- Hacker chrome primitives (inert unless the theme is active) ---------- */
+
+.hacker-rain {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+.hacker-scanlines,
+.hacker-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: none;
+  pointer-events: none;
+}
+.hacker-vignette { z-index: 46; }
+.hacker-statusbar { display: none; }
+.hacker-boot { position: fixed; inset: 0; z-index: 200; display: none; place-items: center; padding: 20px; }
+:root:not([data-theme="hacker"]) .hacker-rain,
+:root:not([data-theme="hacker"]) .hacker-scanlines,
+:root:not([data-theme="hacker"]) .hacker-vignette,
+:root:not([data-theme="hacker"]) .hacker-statusbar,
+:root:not([data-theme="hacker"]) .hacker-boot { display: none; }
+:root[data-theme="hacker"] .hacker-rain { display: block; }
+:root[data-theme="hacker"] .hacker-scanlines {
+  display: block;
+  background: repeating-linear-gradient(
+    180deg,
+    rgb(0 0 0 / .22) 0,
+    rgb(0 0 0 / .22) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  opacity: .22;
+  animation: none;
+}
+:root[data-theme="hacker"] .hacker-vignette {
+  display: block;
+  background: radial-gradient(ellipse 115% 95% at 50% 45%, transparent 55%, rgb(0 0 0 / .42) 100%);
+  animation: none;
+}
+
+/* --- Shell, navigation, and page chrome ---------------------------------- */
+
+:root[data-theme="hacker"] body {
+  background: var(--canvas);
+  color: var(--text);
+  font-family: var(--font-mono);
+}
+:root[data-theme="hacker"] .font-sans,
+:root[data-theme="hacker"] .font-display,
+:root[data-theme="hacker"] .text-condensed,
+:root[data-theme="hacker"] .ui-badge { font-family: var(--font-mono); }
+/* Rain is a fixed canvas at z-index 0. Lift the workspace (and therefore its
+   text) above it while keeping the workspace itself transparent; only content
+   surfaces paint. The sidebar already has its own z-index (30). */
+:root[data-theme="hacker"] .app-workspace { position: relative; z-index: 2; }
+:root[data-theme="hacker"] .canvas,
+:root[data-theme="hacker"] .app-main { background: transparent; }
+
+:root[data-theme="hacker"] .app-sidebar {
+  background: var(--hacker-panel);
+  border-right: 1px solid var(--hacker-line-strong);
+  /* The fixed status bar sits over the bottom of the viewport; keep the
+     sidebar footer above it. */
+  padding-bottom: 42px;
+}
+:root[data-theme="hacker"] .app-topbar {
+  background: var(--hacker-panel);
+  border-bottom: 1px solid var(--hacker-line-strong);
+}
+:root[data-theme="hacker"] .app-main {
+  /* Clear the fixed status bar (~33px desktop) in addition to the base pad. */
+  padding-bottom: 76px;
+}
+:root[data-theme="hacker"] .app-brand {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  letter-spacing: .08em;
+  text-shadow: 0 0 12px var(--hacker-glow);
+}
+:root[data-theme="hacker"] .brand-mark {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  color: var(--hacker-ink);
+  text-shadow: none;
+  box-shadow: 0 0 14px var(--hacker-glow);
+}
+:root[data-theme="hacker"] .brand-caption {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  text-shadow: none;
+}
+:root[data-theme="hacker"] .workspace-label {
+  border-color: var(--hacker-line);
+  color: var(--secondary);
+}
+:root[data-theme="hacker"] .workspace-label small { color: var(--muted); }
+:root[data-theme="hacker"] .workspace-avatar {
+  background: rgb(51 255 102 / .06);
+  border-color: var(--hacker-line-strong);
+  border-radius: 2px;
+  color: var(--accent);
+}
+:root[data-theme="hacker"] .app-navigation a {
+  color: var(--secondary);
+  border: 1px solid transparent;
+  border-radius: 2px;
+}
+:root[data-theme="hacker"] .app-navigation a > span {
+  font-size: 12px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+:root[data-theme="hacker"] .app-navigation a > span::before {
+  content: "[";
+  margin-right: 6px;
+  color: var(--muted);
+}
+:root[data-theme="hacker"] .app-navigation a > span::after {
+  content: "]";
+  margin-left: 6px;
+  color: var(--muted);
+}
+:root[data-theme="hacker"] .app-navigation a:hover {
+  background: rgb(51 255 102 / .06);
+  border-color: var(--hacker-line);
+  color: var(--text);
+}
+:root[data-theme="hacker"] .app-navigation a.active {
+  background: var(--accent-soft);
+  border-color: var(--hacker-line-strong);
+  color: var(--accent);
+}
+:root[data-theme="hacker"] .app-navigation a.active > span::before,
+:root[data-theme="hacker"] .app-navigation a.active > span::after { color: var(--accent); }
+
+:root[data-theme="hacker"] .topbar-context { color: var(--muted); }
+:root[data-theme="hacker"] .topbar-context > span {
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+:root[data-theme="hacker"] .topbar-context > span::before {
+  content: "[";
+  margin-right: 5px;
+  color: var(--muted);
+}
+:root[data-theme="hacker"] .topbar-context > span::after {
+  content: "]";
+  margin-left: 5px;
+  color: var(--muted);
+}
+:root[data-theme="hacker"] .topbar-context strong { color: var(--text); font-weight: 600; }
+:root[data-theme="hacker"] .topbar-help {
+  color: var(--secondary);
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+:root[data-theme="hacker"] .topbar-help:hover { color: var(--accent); text-decoration: underline; }
+:root[data-theme="hacker"] .theme-toggle { display: none; }
+
+/* Headings carry the only text glow. Body copy, links, controls, and cells
+   never receive a text shadow. */
+:root[data-theme="hacker"] :is(h1, h2, h3, h4) {
+  color: var(--text);
+  letter-spacing: 0;
+  text-shadow: 0 0 10px var(--hacker-glow);
+}
+:root[data-theme="hacker"] :is(.page-title, .ui-card-title, .ui-drawer-title, .settings-section-heading) {
+  letter-spacing: 0;
+  text-shadow: 0 0 10px var(--hacker-glow);
+}
+:root[data-theme="hacker"] .page-description,
+:root[data-theme="hacker"] .helper-copy,
+:root[data-theme="hacker"] .help-section p,
+:root[data-theme="hacker"] .help-section li { text-shadow: none; }
+:root[data-theme="hacker"] :is(.ui-card-title, .settings-section-heading)::before,
+:root[data-theme="hacker"] :is(.ui-card-title, .settings-section-heading)::after {
+  color: var(--muted);
+  text-shadow: none;
+}
+:root[data-theme="hacker"] :is(.ui-card-title, .settings-section-heading)::before { content: "[ "; }
+:root[data-theme="hacker"] :is(.ui-card-title, .settings-section-heading)::after { content: " ]"; }
+
+:root[data-theme="hacker"] a { color: var(--accent); text-decoration-color: var(--hacker-line-strong); }
+:root[data-theme="hacker"] a:hover { color: var(--success); text-decoration-color: var(--success); }
+:root[data-theme="hacker"] .ui-link { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+
+/* --- Controls, focus, selection, and scrollbars -------------------------- */
+
+:root[data-theme="hacker"] .ui-button {
+  background: var(--surface);
+  border-color: var(--control-border);
+  border-radius: 2px;
+  color: var(--text);
+}
+:root[data-theme="hacker"] .ui-button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}
+:root[data-theme="hacker"] .ui-button-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--hacker-ink);
+  font-weight: 700;
+  text-shadow: none;
+}
+:root[data-theme="hacker"] .ui-button-primary:hover:not(:disabled) {
+  background: var(--success);
+  border-color: var(--success);
+  color: var(--hacker-ink);
+}
+:root[data-theme="hacker"] .ui-button-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--secondary);
+}
+:root[data-theme="hacker"] .ui-button-ghost:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--hacker-line);
+  color: var(--accent);
+}
+:root[data-theme="hacker"] .ui-button-amber {
+  background: rgb(255 176 32 / .08);
+  border-color: rgb(255 176 32 / .4);
+  color: var(--warning);
+}
+:root[data-theme="hacker"] .ui-button-amber:hover:not(:disabled) {
+  background: rgb(255 176 32 / .14);
+  border-color: var(--hacker-amber);
+}
+:root[data-theme="hacker"] .ui-button-danger {
+  background: transparent;
+  border-color: rgb(255 176 32 / .4);
+  color: var(--warning);
+}
+:root[data-theme="hacker"] .ui-button-danger:hover:not(:disabled) {
+  background: rgb(255 176 32 / .1);
+  border-color: var(--hacker-amber);
+}
+
+:root[data-theme="hacker"] .ui-badge {
+  background: rgb(51 255 102 / .06);
+  border-color: var(--hacker-line);
+  border-radius: 2px;
+  color: var(--secondary);
+  font-size: 10px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+:root[data-theme="hacker"] .ui-badge-amber {
+  background: rgb(255 176 32 / .08);
+  border-color: rgb(255 176 32 / .35);
+  color: var(--warning);
+}
+:root[data-theme="hacker"] .ui-badge-cyan {
+  background: var(--accent-soft);
+  border-color: var(--hacker-line);
+  color: var(--accent);
+}
+:root[data-theme="hacker"] .ui-badge-lime {
+  background: rgb(128 255 158 / .08);
+  border-color: rgb(128 255 158 / .3);
+  color: var(--success);
+}
+:root[data-theme="hacker"] .ui-badge-red {
+  background: rgb(255 176 32 / .08);
+  border-color: rgb(255 176 32 / .35);
+  color: var(--danger);
+}
+:root[data-theme="hacker"] .ui-badge-violet {
+  background: rgb(167 255 196 / .07);
+  border-color: rgb(167 255 196 / .28);
+  color: var(--review);
+}
+
+:root[data-theme="hacker"] .ui-tabs { border-bottom-color: var(--hacker-line); }
+:root[data-theme="hacker"] .ui-tab {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+:root[data-theme="hacker"] .ui-tab:hover { background: var(--accent-soft); color: var(--text); }
+:root[data-theme="hacker"] .ui-tab-active,
+:root[data-theme="hacker"] .ui-tab[aria-selected="true"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+:root[data-theme="hacker"] .ui-tab-count {
+  background: var(--surface-hover);
+  border-radius: 2px;
+  color: var(--secondary);
+  font-variant-numeric: tabular-nums;
+}
+:root[data-theme="hacker"] .ui-tooltip {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  color: var(--hacker-ink);
+  text-shadow: none;
+}
+
+:root[data-theme="hacker"] :is(.form-control, .field input, .field select, .filter-bar input, .filter-bar select) {
+  background: var(--surface);
+  border-color: var(--control-border);
+  border-radius: 2px;
+  caret-color: var(--accent);
+  color: var(--text);
+}
+:root[data-theme="hacker"] input::placeholder,
+:root[data-theme="hacker"] textarea::placeholder { color: var(--muted); opacity: 1; }
+:root[data-theme="hacker"] select option { background-color: #080e09; color: var(--text); }
+
+:root[data-theme="hacker"] :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 1px var(--hacker-ink), 0 0 14px rgb(51 255 102 / .4);
+}
+:root[data-theme="hacker"] ::selection { background: var(--accent); color: var(--hacker-ink); }
+:root[data-theme="hacker"] * {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(51 255 102 / .4) #050805;
+}
+:root[data-theme="hacker"] ::-webkit-scrollbar { width: 10px; height: 10px; }
+:root[data-theme="hacker"] ::-webkit-scrollbar-track { background: #050805; }
+:root[data-theme="hacker"] ::-webkit-scrollbar-thumb {
+  background: rgb(51 255 102 / .32);
+  border: 2px solid #050805;
+  border-radius: 0;
+}
+:root[data-theme="hacker"] ::-webkit-scrollbar-thumb:hover { background: rgb(51 255 102 / .5); }
+
+/* --- Content surfaces, drawers, and tables ------------------------------- */
+
+:root[data-theme="hacker"] :is(.ui-card, .summary-grid, .akg-panel, .runtime-sidebar > section, .runtime-catalog, .runtime-demonstration, .coordinate-browser, .evidence-review, .result-skeleton, .source-disclosure, .result-details-disclosure, .ui-drawer-sheet) {
+  background: var(--hacker-panel);
+  border-color: var(--hacker-line);
+  border-radius: 2px;
+}
+:root[data-theme="hacker"] :is(.ui-card-header, .section-heading, .runtime-panel-header, .filter-bar, .snapshot-context, .table-footer, .ui-drawer-header) {
+  border-color: var(--hacker-line);
+}
+:root[data-theme="hacker"] .ui-drawer-backdrop { background: rgb(0 0 0 / .72); }
+:root[data-theme="hacker"] .ui-drawer-right { border-left-color: var(--hacker-line-strong); }
+:root[data-theme="hacker"] .ui-drawer-left { border-right-color: var(--hacker-line-strong); }
+:root[data-theme="hacker"] .ui-drawer-bottom { border-top-color: var(--hacker-line-strong); }
+:root[data-theme="hacker"] .notice { background: var(--surface-subtle); border-color: var(--hacker-line); color: var(--secondary); }
+:root[data-theme="hacker"] .notice-error,
+:root[data-theme="hacker"] .runtime-error {
+  background: rgb(255 176 32 / .06);
+  border-color: rgb(255 176 32 / .3);
+  color: var(--warning);
+}
+
+/* ASCII corner marks. They sit just outside the border so they read as HUD
+   registration marks; the two scroll-clipped panels use inside marks. */
+:root[data-theme="hacker"] :is(.ui-card, .settings-section, .summary-grid, .akg-panel, .runtime-sidebar > section, .coordinate-browser, .evidence-review, .source-disclosure, .result-details-disclosure, .runtime-catalog) {
+  position: relative;
+}
+:root[data-theme="hacker"] :is(.ui-card, .settings-section, .summary-grid, .akg-panel, .runtime-sidebar > section, .coordinate-browser, .evidence-review, .source-disclosure, .result-details-disclosure, .runtime-catalog)::before,
+:root[data-theme="hacker"] :is(.ui-card, .settings-section, .summary-grid, .akg-panel, .runtime-sidebar > section, .coordinate-browser, .evidence-review, .source-disclosure, .result-details-disclosure, .runtime-catalog)::after {
+  content: "+";
+  position: absolute;
+  z-index: 2;
+  color: var(--hacker-line-strong);
+  font: 10px/1 var(--font-mono);
+  text-shadow: none;
+  pointer-events: none;
+}
+:root[data-theme="hacker"] :is(.ui-card, .settings-section, .summary-grid, .akg-panel, .runtime-sidebar > section, .coordinate-browser, .evidence-review, .source-disclosure, .result-details-disclosure, .runtime-catalog)::before {
+  top: -6px;
+  right: 6px;
+}
+:root[data-theme="hacker"] :is(.ui-card, .settings-section, .summary-grid, .akg-panel, .runtime-sidebar > section, .coordinate-browser, .evidence-review, .source-disclosure, .result-details-disclosure, .runtime-catalog)::after {
+  bottom: -6px;
+  left: 6px;
+}
+:root[data-theme="hacker"] .akg-panel::before,
+:root[data-theme="hacker"] .runtime-sidebar > section::before { top: 3px; right: 8px; }
+:root[data-theme="hacker"] .akg-panel::after,
+:root[data-theme="hacker"] .runtime-sidebar > section::after { bottom: 3px; left: 8px; }
+
+:root[data-theme="hacker"] .table-container { background: var(--hacker-panel); }
+:root[data-theme="hacker"] .data-table th {
+  background: var(--surface-subtle);
+  color: var(--secondary);
+}
+:root[data-theme="hacker"] .data-table thead th {
+  border-bottom-color: var(--hacker-line-strong);
+  font-size: 11px;
+  letter-spacing: .05em;
+}
+:root[data-theme="hacker"] .data-table td { border-bottom-color: var(--hacker-line); }
+:root[data-theme="hacker"] .data-table tbody tr:hover { background: rgb(51 255 102 / .05); }
+:root[data-theme="hacker"] .data-table tbody tr.selected,
+:root[data-theme="hacker"] .data-table tbody tr[aria-selected="true"] {
+  background: rgb(51 255 102 / .1);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+:root[data-theme="hacker"] .summary-item > span,
+:root[data-theme="hacker"] .summary-item > dt,
+:root[data-theme="hacker"] .summary-item > p:first-child {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+/* --- Page header hero ----------------------------------------------------- */
+/* The ::before panel extends only vertically, so it never adds padding, height,
+   or horizontal overflow at 375px. isolation + z-index:-1 keeps the text above
+   it while the page canvas (and rain) stays visible around the panel. */
+:root[data-theme="hacker"] :is(.page-header, .runtime-toolbar) {
+  position: relative;
+  isolation: isolate;
+}
+:root[data-theme="hacker"] :is(.page-header, .runtime-toolbar)::before {
+  content: "";
+  position: absolute;
+  inset-block: -16px;
+  inset-inline: -20px;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--hacker-panel-hero);
+  border: 1px solid var(--hacker-line);
+  border-radius: 2px;
+}
+:root[data-theme="hacker"] .page-header::after {
+  content: "+";
+  position: absolute;
+  top: -16px;
+  right: 8px;
+  z-index: 0;
+  color: var(--hacker-line-strong);
+  font-size: 12px;
+  line-height: 1;
+  pointer-events: none;
+}
+/* Long-form pages have no cards around their prose, so give the text column a
+   near-solid backing without changing its layout box. */
+:root[data-theme="hacker"] .help-page {
+  position: relative;
+  isolation: isolate;
+}
+:root[data-theme="hacker"] :is(.overview-page, .experiment-inventory-page) {
+  position: relative;
+  isolation: isolate;
+}
+:root[data-theme="hacker"] .help-page::before,
+:root[data-theme="hacker"] :is(.overview-page, .experiment-inventory-page)::before {
+  content: "";
+  position: absolute;
+  inset-block: -20px;
+  inset-inline: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--hacker-panel);
+  border: 1px solid var(--hacker-line);
+  border-radius: 2px;
+}
+/* --- Attack Knowledge Graph ---------------------------------------------- */
+/* --- Attack Knowledge Graph ---------------------------------------------- */
+
+:root[data-theme="hacker"] .akg-view-switch {
+  background: var(--hacker-panel);
+  border-color: var(--hacker-line);
+  border-radius: 2px;
+}
+:root[data-theme="hacker"] .akg-toolbar { border-bottom-color: var(--hacker-line); }
+:root[data-theme="hacker"] .akg-toolbar button {
+  border-radius: 2px;
+  color: var(--secondary);
+}
+:root[data-theme="hacker"] .akg-toolbar button:hover,
+:root[data-theme="hacker"] .akg-toolbar button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+:root[data-theme="hacker"] .akg-node {
+  background: var(--akg-card);
+  border-color: var(--akg-border);
+  border-radius: 2px;
+}
+:root[data-theme="hacker"] .akg-node.is-selected { outline-color: var(--accent); }
+:root[data-theme="hacker"] .akg-node-kind {
+  color: var(--akg-muted);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+:root[data-theme="hacker"] .akg-surface-group {
+  background: rgb(51 255 102 / .03);
+  border-color: var(--hacker-line);
+  border-radius: 2px;
+}
+:root[data-theme="hacker"] .akg-traversal { border-top-color: var(--hacker-line); }
+:root[data-theme="hacker"] .akg-details {
+  background: var(--hacker-panel);
+  border-color: var(--hacker-line-strong);
+  border-radius: 2px;
+}
+:root[data-theme="hacker"] .akg-legend { border-bottom-color: var(--hacker-line); }
+
+/* --- Settings page (base styles for every theme) -------------------------- */
+/* Geometry lives in the base rules so switching to hacker changes color and
+   type only; the theme cards never jump size. */
+.settings-page { max-width: 960px; min-width: 0; }
+.settings-section {
+  margin-top: 20px;
+  padding: 20px 22px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.settings-section-heading {
+  margin: 0 0 6px;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1.35;
+}
+.theme-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+}
+.theme-option {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  min-width: 0;
+  min-height: 96px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-subtle);
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.theme-option:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+.theme-option:has(.theme-option-input:checked) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.theme-option:has(.theme-option-input:checked) .theme-option-title { color: var(--accent); }
+.theme-option:has(.theme-option-input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.theme-option-input {
+  position: absolute;
+  inset-block-start: 14px;
+  inset-inline-start: 14px;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.theme-option-input:focus-visible { outline: none; }
+.theme-option-input:checked + .theme-option-icon {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.theme-option-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.theme-option-title {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.theme-option-description {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.theme-option-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--secondary);
+}
+@media (max-width: 700px) {
+  .theme-options { grid-template-columns: minmax(0, 1fr); }
+  .theme-option { min-height: 0; }
+}
+@media (max-width: 600px) {
+  .settings-section { padding: 16px; }
+}
+
+/* --- Settings page (hacker skin) ----------------------------------------- */
+
+:root[data-theme="hacker"] .settings-page { font-family: var(--font-mono); }
+:root[data-theme="hacker"] .settings-section {
+  background: var(--hacker-panel);
+  border-color: var(--hacker-line-strong);
+  border-radius: 2px;
+}
+:root[data-theme="hacker"] .theme-option {
+  background: rgb(11 20 12 / .92);
+  border-color: var(--hacker-line);
+  border-radius: 2px;
+}
+:root[data-theme="hacker"] .theme-option:hover {
+  background: var(--surface-hover);
+  border-color: var(--hacker-line-strong);
+}
+:root[data-theme="hacker"] .theme-option:has(.theme-option-input:checked) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+:root[data-theme="hacker"] .theme-option:has(.theme-option-input:focus-visible) {
+  box-shadow: 0 0 14px rgb(51 255 102 / .35);
+}
+:root[data-theme="hacker"] .theme-option-title { color: var(--accent); }
+:root[data-theme="hacker"] .theme-option-description { color: var(--muted); }
+:root[data-theme="hacker"] .theme-option-icon {
+  background: rgb(5 8 5 / .8);
+  border-color: var(--hacker-line-strong);
+  border-radius: 2px;
+  color: var(--accent);
+}
+
+/* --- Status bar ----------------------------------------------------------- */
+
+:root[data-theme="hacker"] .hacker-statusbar {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 55;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 16px;
+  min-height: 30px;
+  max-width: 100vw;
+  padding: 3px 16px;
+  overflow: hidden;
+  background: var(--hacker-panel);
+  border-top: 1px solid var(--hacker-line-strong);
+  color: var(--secondary);
+  font: 11px/1.35 var(--font-mono);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.hacker-statusbar__group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.hacker-statusbar__label { color: var(--muted); white-space: nowrap; }
+.hacker-statusbar__clock {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.hacker-statusbar__spacer { flex: 1 1 12px; min-width: 0; }
+.hacker-rain-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 1px;
+  border: 1px solid var(--hacker-line);
+  border-radius: 2px;
+  background: rgb(5 8 5 / .7);
+}
+.hacker-rain-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--secondary);
+  font: 600 10px/1 var(--font-mono);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.hacker-rain-option:hover {
+  border-color: var(--hacker-line-strong);
+  color: var(--text);
+}
+.hacker-rain-option[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--hacker-ink);
+}
+.hacker-rain-option[aria-pressed="true"]:hover {
+  background: var(--success);
+  border-color: var(--success);
+  color: var(--hacker-ink);
+}
+.hacker-rain-option:focus-visible { outline-offset: 1px; }
+
+/* --- Boot sequence -------------------------------------------------------- */
+
+:root[data-theme="hacker"] .hacker-boot {
+  display: grid;
+  place-items: center;
+  background: rgb(5 8 5 / .97);
+  color: var(--text);
+  font-family: var(--font-mono);
+}
+.hacker-boot-frame {
+  width: min(720px, 100%);
+  max-width: 720px;
+  max-height: calc(100dvh - 40px);
+  overflow: auto;
+  padding: 22px 24px;
+  background: var(--hacker-panel);
+  border: 1px solid var(--hacker-line-strong);
+  border-radius: 2px;
+  box-shadow: 0 0 28px rgb(51 255 102 / .12);
+}
+.hacker-boot-log {
+  display: grid;
+  gap: 3px;
+  max-height: min(320px, 48dvh);
+  margin-top: 12px;
+  padding: 10px 0;
+  overflow: auto;
+  border-block: 1px solid var(--hacker-line);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.hacker-boot-line { color: var(--muted); overflow-wrap: anywhere; }
+.hacker-boot-prompt {
+  margin-top: 14px;
+  color: var(--hacker-amber);
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.hacker-boot-prompt::after {
+  content: "▮";
+  margin-left: 8px;
+  color: var(--accent);
+  animation: hacker-blink 1.1s steps(1, end) infinite;
+}
+@keyframes hacker-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+/* --- Glitch --------------------------------------------------------------- */
+/* 300ms, small displacement and split-color shadow only; no full-screen flash. */
+.hacker-glitch { animation: hacker-glitch 300ms steps(2, end) 1; }
+@keyframes hacker-glitch {
+  0% { transform: translate(0, 0) skewX(0deg); text-shadow: none; }
+  20% {
+    transform: translate(-1px, 1px) skewX(-1.2deg);
+    text-shadow: 1px 0 rgb(51 255 102 / .55), -1px 0 rgb(255 176 32 / .45);
+  }
+  45% {
+    transform: translate(1px, -1px) skewX(1deg);
+    text-shadow: -1px 0 rgb(51 255 102 / .5), 1px 0 rgb(255 176 32 / .4);
+  }
+  70% {
+    transform: translate(-1px, 0) skewX(-.6deg);
+    text-shadow: 1px 0 rgb(51 255 102 / .4), -1px 0 rgb(255 176 32 / .35);
+  }
+  100% { transform: translate(0, 0) skewX(0deg); text-shadow: none; }
+}
+
+/* --- Hacker responsive rules --------------------------------------------- */
+
+@media (max-width: 600px), (any-pointer: coarse) {
+  :root[data-theme="hacker"] .hacker-statusbar {
+    min-height: 44px;
+    padding-block: 0;
+    padding-inline: 8px;
+    flex-wrap: nowrap;
+    gap: 0 8px;
+  }
+  :root[data-theme="hacker"] .hacker-statusbar__group { min-height: 44px; }
+  :root[data-theme="hacker"] .hacker-statusbar__group:first-child {
+    flex: 0 1 auto;
+    overflow: hidden;
+  }
+  :root[data-theme="hacker"] .hacker-statusbar__group:first-child * {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  :root[data-theme="hacker"] .hacker-rain-control { flex-shrink: 0; padding: 0; }
+  :root[data-theme="hacker"] .hacker-rain-option {
+    min-width: 44px;
+    height: 44px;
+    padding-inline: 4px;
+  }
+  :root[data-theme="hacker"] .theme-option { min-height: 44px; }
+  /* Keep the fixed bar clear of the sidebar footer and the end of the page. */
+  :root[data-theme="hacker"] .app-sidebar { padding-bottom: 54px; }
+  :root[data-theme="hacker"] .app-main { padding-bottom: 84px; }
+}
+/* At 375px the status bar keeps only the rain control and the clock; the
+   redundant first status group is dropped and the reduced-motion note is
+   hidden so the three 44px rain options are never clipped. */
+@media (max-width: 600px) {
+  :root[data-theme="hacker"] .hacker-statusbar__group { display: none; }
+  :root[data-theme="hacker"] .hacker-statusbar__group:has(.hacker-statusbar__clock),
+  :root[data-theme="hacker"] .hacker-statusbar__group:has(.hacker-rain-control) {
+    display: inline-flex;
+    flex: 0 0 auto;
+  }
+  :root[data-theme="hacker"] .hacker-statusbar__spacer { display: none; }
+  :root[data-theme="hacker"] .hacker-statusbar { justify-content: space-between; }
+  :root[data-theme="hacker"] .hacker-rain-control ~ .hacker-statusbar__label { display: none; }
+  /* Stay inside the 12px mobile gutter while keeping the hero's inner inset. */
+  :root[data-theme="hacker"] :is(.page-header, .runtime-toolbar)::before { inset-inline: -10px; }
+}
+@media (max-width: 360px) {
+  :root[data-theme="hacker"] .hacker-statusbar__group:has(.hacker-rain-control) .hacker-statusbar__label { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hacker-glitch { animation: none; transform: none; }
+  .hacker-boot-prompt::after { animation: none; opacity: 1; }
 }

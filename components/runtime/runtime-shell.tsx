@@ -20,6 +20,7 @@ import {
 import { CoordinatePanel } from "@/components/runtime/coordinate-panel";
 import { ConversationPanel } from "@/components/runtime/conversation-panel";
 import { OutcomePanel } from "@/components/runtime/outcome-panel";
+import { ResizableRuntimeDashboard } from "@/components/runtime/resizable-dashboard";
 import { fmtDuration, normalizeRunStatus } from "@/lib/formatters";
 import { AKG_SNAPSHOT } from "@/lib/akg-static";
 import { normalizeAkgSnapshot } from "@/lib/akg-snapshot";
@@ -426,37 +427,33 @@ export function RuntimeShell() {
           )}
         </div>
       )}
-      <div className="runtime-dashboard">
-        <section className="akg-panel" aria-label="AKG Traversal">
-          <div className="snapshot-context">Snapshot: {mock ? "mock capture" : akg.source ?? "static fallback"} <code>{activeRun?.executionId}</code></div>
-          {activeRun?.matrixExecutionId && <button className="ui-button" onClick={() => void selectExecution(activeRun.matrixExecutionId!)}>Return to matrix {activeRun.matrixExecutionId}</button>}
-          {state.mode === "matrix" && Object.keys(state.children).length > 0 && <div className="flex flex-wrap gap-2 p-2 text-xs">
-            {Object.values(state.children).map(child => <button key={child.executionId} className="ui-button" onClick={() => child.executionId && void selectExecution(child.executionId)}>{child.executionId} · {child.executionStatus ?? child.status}</button>)}
-          </div>}
-          <AkgGraph
-            key={mock ? `mock-${mock.id}-${!!mock.simulation}` : "live"}
-            snapshot={mock?.snapshot ?? akg}
-            currentNode={state.currentNode}
-            selectedMethod={state.selectedMethod}
-            akgPath={state.akgPath}
-            confirmedVulns={state.confirmedVulns}
-            achievedOutcomes={state.achievedOutcomes}
-            viableMethods={state.viableMethods}
-            onLayoutReady={mock?.simulation ? layoutReady : undefined}
-          />
-        </section>
-        <aside className="runtime-sidebar">
-          <section aria-label="Coordinate">
-            <CoordinatePanel state={state} />
-          </section>
-          <section aria-label="Conversation">
-            <ConversationPanel state={state} />
-          </section>
-          <section aria-label="Outcomes">
-            <OutcomePanel state={state} />
-          </section>
-        </aside>
-      </div>
+      <ResizableRuntimeDashboard
+        graph={
+          <>
+            <div className="snapshot-context">Snapshot: {mock ? "mock capture" : akg.source ?? "static fallback"} <code>{activeRun?.executionId}</code></div>
+            {activeRun?.matrixExecutionId && <button className="ui-button" onClick={() => void selectExecution(activeRun.matrixExecutionId!)}>Return to matrix {activeRun.matrixExecutionId}</button>}
+            {state.mode === "matrix" && Object.keys(state.children).length > 0 && <div className="flex flex-wrap gap-2 p-2 text-xs">
+              {Object.values(state.children).map(child => <button key={child.executionId} className="ui-button" onClick={() => child.executionId && void selectExecution(child.executionId)}>{child.executionId} · {child.executionStatus ?? child.status}</button>)}
+            </div>}
+            <AkgGraph
+              key={mock ? `mock-${mock.id}-${!!mock.simulation}` : "live"}
+              snapshot={mock?.snapshot ?? akg}
+              currentNode={state.currentNode}
+              selectedMethod={state.selectedMethod}
+              akgPath={state.akgPath}
+              confirmedVulns={state.confirmedVulns}
+              achievedOutcomes={state.achievedOutcomes}
+              viableMethods={state.viableMethods}
+              onLayoutReady={mock?.simulation ? layoutReady : undefined}
+            />
+          </>
+        }
+        panels={[
+          { label: "Coordinate", content: <CoordinatePanel state={state} /> },
+          { label: "Conversation", content: <ConversationPanel state={state} /> },
+          { label: "Outcomes", content: <OutcomePanel state={state} /> },
+        ]}
+      />
       {!mock && <details className="runtime-demonstration"><summary>Demonstration replay</summary><div className="page-actions"><Button onClick={runMockTest} aria-label="Run seeded AKG traversal test"><FlaskConical size={14} />Mock AKG test</Button><span className="helper-copy">Replay the local fixture to inspect graph behavior.</span></div></details>}
       <ActivityTimeline key={activeId ?? "waiting"} executionId={activeId ?? null} simulationEvents={mock ? state.events : undefined} />
       {!activeId && !mock && <div className="notice mt-5" role="status">Waiting for a live run. Open the results catalog to review saved executions, or ask the workspace owner to check the TESIS source configuration.</div>}

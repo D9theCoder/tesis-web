@@ -3,12 +3,12 @@ import { expect, test } from "@playwright/test";
 test("theme toggle cross-dissolves without shifting layout or animating every element", async ({ page }) => {
   await page.goto("/help");
   const toggle = page.locator(".topbar-actions button");
-  await expect(toggle).toHaveAccessibleName("Switch to dark theme");
+  await expect(toggle).toHaveAccessibleName("Theme: light. Switch to dark.");
   const before = (await toggle.boundingBox())!;
   const iconBefore = (await toggle.locator(".theme-toggle-icon").boundingBox())!;
 
   const observed = await page.evaluate(() => {
-    const button = document.querySelector<HTMLButtonElement>('button[aria-label="Switch to dark theme"]');
+    const button = document.querySelector<HTMLButtonElement>('button[aria-label="Theme: light. Switch to dark."]');
     if (!button) throw new Error("theme toggle unavailable");
     button.click();
     const animations = (element: Element | null) => (element?.getAnimations() ?? []).map(animation => {
@@ -72,8 +72,8 @@ test("theme toggle cross-dissolves without shifting layout or animating every el
     expect.objectContaining({ name: "transform", duration: 320 }),
   ]));
   // A performance guard: four dips, two fades for the canvas and header, and
-  // four glyph transitions — never one transition per element.
-  expect(observed.total).toBeLessThan(12);
+  // six glyph transitions (three icons × opacity/transform) — never one per element.
+  expect(observed.total).toBeLessThan(16);
 
   const dip = await page.evaluate(() => {
     const targets = [".app-main", ".topbar-context", ".topbar-actions"];
@@ -120,7 +120,7 @@ test("reduced motion switches theme without arming the cross-dissolve", async ({
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/help");
   const toggle = page.locator(".topbar-actions button");
-  await expect(toggle).toHaveAccessibleName("Switch to dark theme");
+  await expect(toggle).toHaveAccessibleName("Theme: light. Switch to dark.");
   await toggle.click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect(page.locator("html")).not.toHaveClass(/theme-fading/);

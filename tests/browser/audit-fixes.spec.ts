@@ -18,7 +18,7 @@ test.describe("technical audit regressions", () => {
       await expect(page.getByRole("table")).toBeVisible();
       const input = page.getByRole("searchbox");
       for (const theme of ["light", "dark"]) {
-        if (theme === "dark") await page.getByRole("button", { name: "Switch to dark theme" }).click();
+        if (theme === "dark") await page.getByRole("button", { name: "Theme: light. Switch to dark." }).click();
         await expect(page.locator("html")).not.toHaveClass(/theme-fading/);
         const contrast = await input.evaluate(el => {
           const luminance = (color: string) => color.match(/[\d.]+/g)!.slice(0, 3).map(Number)
@@ -29,7 +29,7 @@ test.describe("technical audit regressions", () => {
         });
         expect(contrast).toBeGreaterThanOrEqual(3);
       }
-      for (const control of [input, page.getByRole("button", { name: "Switch to light theme" }), page.getByRole("link", { name: "Open results", exact: true }).first()]) {
+      for (const control of [input, page.getByRole("button", { name: "Theme: dark. Switch to light." }), page.getByRole("link", { name: "Open results", exact: true }).first()]) {
         const bounds = (await control.boundingBox())!;
         expect(bounds.height).toBeGreaterThanOrEqual(44);
       }
@@ -68,7 +68,7 @@ test.describe("technical audit regressions", () => {
       await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
       expect(await page.locator("body").evaluate(el => getComputedStyle(el).backgroundColor)).toBe("rgb(15, 23, 37)");
     } finally { release(); }
-    await expect(page.getByRole("button", { name: "Switch to light theme" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Theme: dark. Switch to light." })).toBeVisible();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   });
 

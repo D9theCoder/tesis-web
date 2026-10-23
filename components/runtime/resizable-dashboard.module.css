@@ -1,0 +1,140 @@
+/*
+ * Resizable live-monitor workspace.
+ *
+ * These rules are deliberately scoped to the classes applied only in wide
+ * mode. The narrow layout keeps using the global `.runtime-dashboard` and
+ * `.runtime-sidebar` rules unchanged.
+ */
+
+.dashboard {
+  position: relative;
+  min-width: 0;
+}
+
+.sidebar {
+  min-width: 0;
+}
+
+/* In wide mode the JS grid rows replace the global 3fr/4fr/3fr tracks, and
+ * section max-heights must not cap those explicit rows. */
+.sidebar > .panel {
+  min-width: 0;
+  min-height: 0;
+  max-height: none;
+}
+
+.railHandle,
+.panelHandle,
+.heightHandle {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background-color 120ms ease;
+}
+
+.railHandle {
+  align-self: stretch;
+  width: 100%;
+  min-height: 48px;
+  cursor: col-resize;
+}
+
+.panelHandle {
+  height: 100%;
+  cursor: row-resize;
+}
+
+/* Owns the boundary between the workspace and the demonstration replay. */
+.heightHandle {
+  grid-column: 1 / -1;
+  height: 16px;
+  cursor: row-resize;
+}
+
+/* Extend the pointer target beyond the quiet 6px grip to roughly 44px. */
+.railHandle::before,
+.panelHandle::before,
+.heightHandle::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+}
+
+.railHandle::before {
+  inset: 0 -14px;
+}
+
+.panelHandle::before {
+  inset: -14px 0;
+}
+
+.heightHandle::before {
+  inset: -10px 0;
+}
+
+.railHandle:hover,
+.panelHandle:hover,
+.heightHandle:hover,
+.railHandle.handleActive,
+.panelHandle.handleActive,
+.heightHandle.handleActive {
+  background: var(--accent-soft);
+}
+
+.railHandle:focus-visible,
+.panelHandle:focus-visible,
+.heightHandle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.handleGrip {
+  position: relative;
+  z-index: 1;
+  display: block;
+  flex: none;
+  border-radius: 999px;
+  background: var(--border-strong);
+  pointer-events: none;
+  transition: background-color 120ms ease;
+}
+
+.railHandle .handleGrip {
+  width: 6px;
+  height: 44px;
+}
+
+.panelHandle .handleGrip,
+.heightHandle .handleGrip {
+  width: 44px;
+  height: 6px;
+}
+
+.railHandle:hover .handleGrip,
+.panelHandle:hover .handleGrip,
+.heightHandle:hover .handleGrip,
+.railHandle:focus-visible .handleGrip,
+.panelHandle:focus-visible .handleGrip,
+.heightHandle:focus-visible .handleGrip,
+.railHandle.handleActive .handleGrip,
+.panelHandle.handleActive .handleGrip,
+.heightHandle.handleActive .handleGrip {
+  background: var(--accent);
+}
+
+.resizing,
+.resizing * {
+  user-select: none;
+  -webkit-user-select: none;
+}

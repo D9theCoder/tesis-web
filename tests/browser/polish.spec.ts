@@ -36,14 +36,14 @@ test.describe("dashboard polish", () => {
       expect((await page.locator(".akg-canvas").boundingBox())!.height).toBeGreaterThanOrEqual(300);
       expect((await page.locator(".akg-canvas .react-flow").boundingBox())!.height).toBeGreaterThanOrEqual(300);
       if (width < 600) {
-        for (const name of ["Switch to dark theme", "Zoom in", "Zoom out"]) {
+        for (const name of ["Theme: light. Switch to dark.", "Zoom in", "Zoom out"]) {
           const bounds = (await page.getByRole("button", { name, exact: true }).boundingBox())!;
           expect(bounds.width).toBeGreaterThanOrEqual(44);
           expect(bounds.height).toBeGreaterThanOrEqual(44);
         }
       }
       await capture("monitor");
-      await page.getByRole("button", { name: "Switch to dark theme" }).click();
+      await page.getByRole("button", { name: "Theme: light. Switch to dark." }).click();
       await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
       await expect(page.locator("html")).not.toHaveClass(/theme-fading/);
       expect(await page.locator(".react-flow__attribution").evaluate(element => getComputedStyle(element).backgroundColor))
