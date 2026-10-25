@@ -7,8 +7,19 @@
 
 export const RAIL_DEFAULT_WIDTH = 330;
 export const RAIL_MIN_WIDTH = 280;
-export const RAIL_MAX_WIDTH = 520;
-export const RAIL_MAX_VIEWPORT_RATIO = 0.45;
+/** Widest the rail may grow; the graph keeps whatever is left. */
+export const RAIL_MAX_WIDTH = 720;
+export const RAIL_MAX_VIEWPORT_RATIO = 0.6;
+/** The graph stops the rail from growing past this width. */
+export const GRAPH_MIN_WIDTH = 400;
+/**
+ * Fixed space left of the graph: the 216px navigation sidebar, the 24px page
+ * gutters, the 16px splitter, and scrollbar slack on wide viewports.
+ */
+const WORKSPACE_CHROME_WIDTH = 300;
+
+/** Below this width the rail is not rendered at all: the layout stacks. */
+export const WIDE_LAYOUT_MIN_WIDTH = 1201;
 
 export const DASHBOARD_MIN_HEIGHT = 480;
 export const DASHBOARD_MAX_HEIGHT = 1400;
@@ -32,16 +43,26 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), upper);
 }
 
-/** The widest rail allowed for the current viewport (45vw, capped at 520px). */
+/**
+ * The widest rail allowed for the current viewport. On wide screens it may claim
+ * 60% of the viewport and up to 720px, but never so much that the graph drops
+ * below `GRAPH_MIN_WIDTH`; stacked layouts keep the plain proportional bound,
+ * because the rail is not rendered there.
+ */
 export function railMaxWidth(viewportWidth: number): number {
   if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) {
     return RAIL_MAX_WIDTH;
   }
   const ratioLimit = Math.floor(viewportWidth * RAIL_MAX_VIEWPORT_RATIO);
-  return Math.max(
-    RAIL_MIN_WIDTH,
-    Math.min(RAIL_MAX_WIDTH, ratioLimit),
-  );
+  const ceiling =
+    viewportWidth < WIDE_LAYOUT_MIN_WIDTH
+      ? Math.min(RAIL_MAX_WIDTH, ratioLimit)
+      : Math.min(
+          RAIL_MAX_WIDTH,
+          ratioLimit,
+          Math.floor(viewportWidth - WORKSPACE_CHROME_WIDTH - GRAPH_MIN_WIDTH),
+        );
+  return Math.max(RAIL_MIN_WIDTH, ceiling);
 }
 
 export function clampRailWidth(width: number, viewportWidth: number): number {

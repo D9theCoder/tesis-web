@@ -9,6 +9,7 @@ import {
   defaultPanelHeights,
   effectivePanelMin,
   fitPanelHeights,
+  GRAPH_MIN_WIDTH,
   keyboardStep,
   panelMaxHeight,
   panelTrackHeight,
@@ -104,12 +105,23 @@ describe("resizable layout helpers", () => {
     expect(clamp(15, 0, 10)).toBe(10);
     expect(clamp(Number.NaN, 2, 10)).toBe(2);
 
-    expect(railMaxWidth(1200)).toBe(520);
-    expect(railMaxWidth(800)).toBe(360);
+    // The rail can take most of the workspace, but never the graph's floor.
+    expect(railMaxWidth(1201)).toBe(501);
+    expect(railMaxWidth(1366)).toBe(666);
+    expect(railMaxWidth(1440)).toBe(720);
+    expect(railMaxWidth(2560)).toBe(720);
+    expect(railMaxWidth(800)).toBe(480);
     expect(railMaxWidth(300)).toBe(RAIL_MIN_WIDTH);
-    expect(clampRailWidth(900, 800)).toBe(360);
+    expect(clampRailWidth(900, 1201)).toBe(501);
     expect(clampRailWidth(100, 800)).toBe(RAIL_MIN_WIDTH);
     expect(clampRailWidth(400, 1920)).toBe(400);
+  });
+
+  it("stops the rail before the graph drops below its minimum width", () => {
+    for (const viewport of [1201, 1280, 1366, 1440, 1920, 2560]) {
+      const graphWidth = viewport - 280 - railMaxWidth(viewport);
+      expect(graphWidth).toBeGreaterThanOrEqual(GRAPH_MIN_WIDTH);
+    }
   });
 
   it("derives the 3/4/3 defaults and fits rows without overflow", () => {

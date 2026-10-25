@@ -283,11 +283,25 @@ The right sidebar divides its height between Coordinate (30%), Conversation
 show compact execution context before the graph and stack the supporting panels.
 Experiment activity provides the complete paged journal below the live workspace,
 with execution identity, timestamp and inspectable event data. It refreshes the
-latest journal page automatically and resets when the journal changes. Chat, Trace,
-and Trajectory are bounded 300-record previews; earlier events remain available in
-the timeline. Trajectory groups those events into turns, with each call's kind,
-arguments, and paired duration, and folds a timing overview across input, model,
-and tool activity behind a summary line.
+latest journal page automatically and resets when the journal changes. The
+Conversation panel is a single trajectory ledger over the same bounded 300-record
+window; earlier events remain available in the timeline. The ledger keeps the
+journal's own order and shows every record: turns carry a status, node states, and
+the AKG path, each call shows its kind, arguments, and paired duration, and
+expanding a call reveals a labelled record inspector (start time, total duration,
+TTFT, generation, throughput, and where the timing came from, then input, cached,
+output, reasoning, and total tokens; an unfilled row says `not recorded` and a
+phase the record kind cannot have says `n/a`), the request, reasoning, and
+response text, and the raw payload when the journal recorded them. A search field
+and a Conversation toggle narrow the ledger without hiding anything by default; the
+toggle keeps only System, User, and Model records for a quieter read. Each turn folds
+from its own header, and one control folds every turn. A folded timing overview draws
+every record as a block coloured by kind across input, model, and tool lanes, with
+turn separators, a turn strip, the observed start and end times, and a per-turn table
+of duration and token usage; a Duration control switches between measured durations
+and equal-width operations.
+What the artifacts do not yet provide, and the keys the ledger accepts, are
+documented in `TRAJECTORY-DATA-HANDOFF.md`.
 Matrix child selection resolves exact metadata independently of catalog pages,
 and exposes a return-to-parent action. Demonstration replay stays separate.
 

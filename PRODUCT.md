@@ -39,8 +39,10 @@ coverage, and scoring provenance.
 - TESIS experiments run separately in the authorized DVWA sandbox. Viewers
   observe them here and open completed evidence for analysis and review.
 - `/` provides runtime discovery, journal replay and polling, an interactive
-  AKG, and coordinate, conversation, and outcome panels. The conversation panel
-  switches between chat, trace, and a turn-based trajectory ledger.
+  AKG, and coordinate, conversation, and outcome panels. The conversation panel is
+  a turn-based trajectory ledger that inspects each call's request, reasoning,
+  response, tokens, timing, and graph path where the journal records them, with a
+  Conversation filter for a quieter system/user/model-only read.
 - `/results/[executionId]` provides completed-execution inspection, matrix
   coordinate selection, scoring, evidence details, and redacted exports.
 - The local mock flow replays `data/akg-simulation.yaml` in the browser to verify
