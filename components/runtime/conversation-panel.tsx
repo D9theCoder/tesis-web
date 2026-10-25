@@ -11,9 +11,19 @@ import {
 } from "lucide-react";
 import type { ConversationEntry, LiveRunState } from "@/lib/schemas";
 import { Badge, Button, ScrollArea } from "@/components/ui/primitives";
+import { TrajectoryView } from "@/components/runtime/trajectory-view";
 import { cn } from "@/lib/utils";
 import { coalesceConversation } from "@/lib/event-reducer";
+import { deriveTrajectory } from "@/lib/trajectory";
 import { fmtClock, fmtNumber, prettyJson } from "@/lib/formatters";
+
+type ConversationView = "chat" | "trace" | "trajectory";
+
+const VIEW_TABS: { id: ConversationView; label: string }[] = [
+  { id: "chat", label: "Chat" },
+  { id: "trace", label: "Trace" },
+  { id: "trajectory", label: "Trajectory" },
+];
 
 const ROLE_STYLE: Record<ConversationEntry["role"], { label: string; variant: "default" | "amber" | "cyan" | "lime" | "violet" }> = {
   system: { label: "System", variant: "violet" },
@@ -24,7 +34,7 @@ const ROLE_STYLE: Record<ConversationEntry["role"], { label: string; variant: "d
 };
 
 export function ConversationPanel({ state }: { state: LiveRunState }) {
-  const [traceMode, setTraceMode] = useState(false);
+  const [view, setView] = useState<ConversationView>("chat");
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
   const chatEntries = useMemo(
@@ -46,11 +56,18 @@ export function ConversationPanel({ state }: { state: LiveRunState }) {
     [state.events],
   );
 
-  const visibleEntries = traceMode
-    ? traceEntries
-    : chatEntries.filter(
-        (entry) => entry.role !== "trace" && entry.eventType !== "graph.state",
-      );
+  const trajectory = useMemo(() => deriveTrajectory(state.events), [state.events]);
+  const chatVisible = useMemo(
+    () => chatEntries.filter((entry) => entry.role !== "trace" && entry.eventType !== "graph.state"),
+    [chatEntries],
+  );
+  const visibleEntries = view === "trace" ? traceEntries : chatVisible;
+  const countLabel =
+    view === "chat"
+      ? `${chatEntries.length} entries`
+      : view === "trace"
+        ? `${state.events.length} events`
+        : `${trajectory.stats.cells} records`;
   const bufferUsed =
     state.metrics.generationBudget > 0
       ? state.metrics.generatedCandidates
@@ -66,29 +83,24 @@ export function ConversationPanel({ state }: { state: LiveRunState }) {
           <h2>Conversation</h2>
         </div>
         <div className="conversation-view-switch" role="group" aria-label="Conversation view">
-          <Button
-            type="button"
-            variant={traceMode ? "ghost" : "default"}
-            aria-pressed={!traceMode}
-            onClick={() => setTraceMode(false)}
-          >
-            Chat
-          </Button>
-          <Button
-            type="button"
-            variant={traceMode ? "default" : "ghost"}
-            aria-pressed={traceMode}
-            onClick={() => setTraceMode(true)}
-          >
-            Trace
-          </Button>
+          {VIEW_TABS.map((tab) => (
+            <Button
+              key={tab.id}
+              type="button"
+              variant={view === tab.id ? "default" : "ghost"}
+              aria-pressed={view === tab.id}
+              onClick={() => setView(tab.id)}
+            >
+              {tab.label}
+            </Button>
+          ))}
         </div>
       </header>
 
       <div className="conversation-activity-bar" aria-live="polite">
         <span className="conversation-entry-count">
           <Cpu aria-hidden="true" size={14} />
-          {traceMode ? `${state.events.length} events` : `${chatEntries.length} entries`}
+          {countLabel}
         </span>
         <span className="conversation-activity-separator" aria-hidden="true" />
         <span>{fmtNumber(state.metrics.tokenCount)} tokens</span>
@@ -98,29 +110,37 @@ export function ConversationPanel({ state }: { state: LiveRunState }) {
       </div>
 
       {state.events.length >= 300 && <p className="helper-copy p-3">Recent activity preview. Use Experiment activity below for the complete paged journal.</p>}
-      <ScrollArea className="runtime-panel-body conversation-scroll">
-        <div className="conversation-list">
-          {visibleEntries.length === 0 && (
-            <div className="empty-state conversation-empty-state" role="status">
-              <MessageSquare aria-hidden="true" size={18} />
-              <p>{traceMode ? "No runtime events recorded" : "No conversation entries recorded"}</p>
-              <span>
-                {traceMode
-                  ? "Runtime events will appear in this trace when available."
-                  : "Switch to Trace to inspect the run event journal."}
-              </span>
-            </div>
-          )}
-          {visibleEntries.slice(-300).map((entry) => (
-            <TraceItem
-              key={entry.id}
-              entry={entry}
-              open={!!open[entry.id]}
-              onToggle={() => toggle(entry.id)}
-            />
-          ))}
+      {view === "trajectory" ? (
+        <div className="runtime-panel-body conversation-scroll is-trajectory">
+          <TrajectoryView model={trajectory} />
         </div>
-      </ScrollArea>
+      ) : (
+        <ScrollArea className="runtime-panel-body conversation-scroll">
+          <div className="conversation-list">
+            {visibleEntries.length === 0 && (
+              <div className="empty-state conversation-empty-state" role="status">
+                <MessageSquare aria-hidden="true" size={18} />
+                <p>
+                  {view === "trace" ? "No runtime events recorded" : "No conversation entries recorded"}
+                </p>
+                <span>
+                  {view === "trace"
+                    ? "Runtime events will appear in this trace when available."
+                    : "Switch to Trace or Trajectory to inspect the run event journal."}
+                </span>
+              </div>
+            )}
+            {visibleEntries.slice(-300).map((entry) => (
+              <TraceItem
+                key={entry.id}
+                entry={entry}
+                open={!!open[entry.id]}
+                onToggle={() => toggle(entry.id)}
+              />
+            ))}
+          </div>
+        </ScrollArea>
+      )}
     </div>
   );
 }

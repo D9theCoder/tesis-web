@@ -413,6 +413,7 @@ Hacker mode tightens cards, panels, and controls to 2px and adds bracketed title
 - The graph uses neutral nodes and edges, blue for traversed paths, ochre for the current node, and green for achieved nodes. Selection receives a visible accent outline.
 - On phones, control groups retain accessible names while redundant visual labels recede; the normal graph canvas retains a 300px minimum height as the controls wrap. Expanded views use the available viewport.
 - The conversation stream separates role, event type, message, time, and optional structured details. Safety events use the warning color and retain explanatory text.
+- The conversation panel switches between Chat, Trace, and Trajectory. Trajectory groups journal events into turns headed by `Turn N`, scope, and duration, then lists each cell with its `#N` index, a kind chip (System, User, Context, Model, Tool, Safety), the event type, compact arguments, and the paired duration; in-flight calls read `running` and never invent a duration. A search field filters cells, one control expands or collapses every row, and the timing overview stays folded behind a summary line of turns, records, observed span, and failures so the ledger keeps the panel height. The panel body is the single scroll region in that view.
 - Execution status, security outcome, diagnostics, run counts, and budget each keep their own labels and reasons.
 
 ### Data Tables

@@ -283,8 +283,11 @@ The right sidebar divides its height between Coordinate (30%), Conversation
 show compact execution context before the graph and stack the supporting panels.
 Experiment activity provides the complete paged journal below the live workspace,
 with execution identity, timestamp and inspectable event data. It refreshes the
-latest journal page automatically and resets when the journal changes. Chat/Trace
-are bounded 300-record previews; earlier events remain available in the timeline.
+latest journal page automatically and resets when the journal changes. Chat, Trace,
+and Trajectory are bounded 300-record previews; earlier events remain available in
+the timeline. Trajectory groups those events into turns, with each call's kind,
+arguments, and paired duration, and folds a timing overview across input, model,
+and tool activity behind a summary line.
 Matrix child selection resolves exact metadata independently of catalog pages,
 and exposes a return-to-parent action. Demonstration replay stays separate.
 

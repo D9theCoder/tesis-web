@@ -1,7 +1,25 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 
 const captures = "test-results/acceptance";
+
+// The replay launcher lives inside a native <details> disclosure. A click that
+// lands before the first client render after hydration is undone when React
+// replaces the subtree, so reveal it until the disclosure stays open.
+async function revealReplayLauncher(page: Page) {
+  const demonstration = page.locator("details.runtime-demonstration");
+  if (!(await demonstration.count())) return;
+  const launcher = page.getByRole("button", {
+    name: "Run seeded AKG traversal test",
+  });
+  await expect(async () => {
+    const open = await demonstration.evaluate(
+      (element) => (element as HTMLDetailsElement).open,
+    );
+    if (!open) await demonstration.locator("summary").click();
+    await expect(launcher).toBeVisible({ timeout: 750 });
+  }).toPass({ timeout: 20000 });
+}
 
 test("long labels and unfamiliar nodes remain inspectable without changing topology", async ({ page, request }) => {
   const snapshot = await (await request.get("/api/akg")).json();
@@ -61,8 +79,7 @@ for (const [width, height] of [
       path: `${captures}/${width}-overview.png`,
       fullPage: true,
     });
-    const demonstration = page.getByText("Demonstration replay", { exact: true });
-    if (await demonstration.count()) await demonstration.click();
+    await revealReplayLauncher(page);
     await page.getByRole("button", { name: "Run seeded AKG traversal test" }).click();
     await expect(page.getByTestId("replay-count")).toHaveText(
       "0/18 events reduced",
@@ -199,7 +216,7 @@ test("viewport, resize, scrolling, edge inspection and reduced motion during rep
     route.fulfill({ json: { runs: [], active: [], tesisRoot: "fixture" } }),
   );
   await page.goto("/");
-  await page.getByText("Demonstration replay", { exact: true }).click();
+  await revealReplayLauncher(page);
   await page.getByRole("button", { name: "Run seeded AKG traversal test" }).click();
   const index = async () =>
     Number((await page.getByTestId("replay-count").innerText()).split("/")[0]);
@@ -284,4 +301,87 @@ test("viewport, resize, scrolling, edge inspection and reduced motion during rep
     .getByRole("region", { name: "Outcomes", exact: true })
     .scrollIntoViewIfNeeded();
   expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+});
+
+test("trajectory view projects the replay journal into turns", async ({ page }) => {
+  await mkdir(captures, { recursive: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.route("**/api/runtime/runs*", (route) =>
+    route.fulfill({ json: { runs: [], active: [], tesisRoot: "fixture" } }),
+  );
+  await page.goto("/");
+  await revealReplayLauncher(page);
+  await page.getByRole("button", { name: "Run seeded AKG traversal test" }).click();
+  await expect(page.getByText("AKG verified", { exact: true })).toBeVisible({ timeout: 15000 });
+
+  const panel = page.locator('.runtime-sidebar > section[aria-label="Conversation"]');
+  await panel.getByRole("button", { name: "Trajectory", exact: true }).click();
+  await expect(panel.getByRole("button", { name: "Trajectory", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+
+  const ledger = panel.locator(".trajectory-ledger");
+  await expect(ledger).toBeVisible();
+  await expect(ledger.getByRole("heading", { name: "Turn 1", exact: true })).toBeVisible();
+  expect(await ledger.locator(".trajectory-turn").count()).toBeGreaterThan(0);
+
+  // The panel body is the only scroll region; the ledger grows inside it.
+  const body = panel.locator(".conversation-scroll.is-trajectory");
+  expect(await body.evaluate((element) => getComputedStyle(element).overflowY)).toBe("auto");
+  expect(await ledger.evaluate((element) => getComputedStyle(element).overflowY)).toBe("visible");
+  expect(await body.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  await panel.screenshot({ path: `${captures}/trajectory-desktop.png` });
+
+  // The timing overview stays folded so the ledger keeps the small panel height.
+  const timing = panel.locator("details.trajectory-timing");
+  await expect(timing.locator("summary")).toContainText("records");
+  await expect(timing).toHaveJSProperty("open", false);
+  await expect(timing.locator(".trajectory-lane").first()).toBeHidden();
+  await timing.locator("summary").click();
+  await expect(timing).toHaveJSProperty("open", true);
+  await expect(timing.locator(".trajectory-lane")).toHaveCount(3);
+  await expect(timing.locator(".trajectory-lane").first()).toBeVisible();
+  await timing.screenshot({ path: `${captures}/trajectory-timing.png` });
+  await timing.locator("summary").click();
+  await expect(timing.locator(".trajectory-lane").first()).toBeHidden();
+
+  const firstTurn = ledger.locator(".trajectory-turn").first();
+  await firstTurn.scrollIntoViewIfNeeded();
+  await panel.screenshot({ path: `${captures}/trajectory-ledger.png` });
+  const cell = firstTurn.locator(".trajectory-cell-toggle").first();
+  await expect(cell).toHaveAttribute("aria-expanded", "false");
+  await cell.click();
+  await expect(cell).toHaveAttribute("aria-expanded", "true");
+  await expect(firstTurn.locator(".trajectory-cell-detail").first()).toBeVisible();
+
+  await panel.getByRole("button", { name: "Expand all", exact: true }).click();
+  await expect(
+    panel.getByRole("button", { name: "Collapse all", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  expect(
+    await ledger
+      .locator(".trajectory-cell-toggle")
+      .evaluateAll((elements) =>
+        elements.every((element) => element.getAttribute("aria-expanded") === "true"),
+      ),
+  ).toBe(true);
+
+  await panel.getByRole("searchbox", { name: "Filter trajectory records" }).fill("no-such-record");
+  await expect(panel.getByText("No records match “no-such-record”")).toBeVisible();
+  await panel.getByRole("searchbox", { name: "Filter trajectory records" }).fill("");
+  await expect(ledger).toBeVisible();
+
+  // The stacked mobile layout remounts the panels, which resets the tab but keeps the journal.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await panel.getByRole("button", { name: "Trajectory", exact: true }).click();
+  await expect(panel.getByRole("button", { name: "Trajectory", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(panel.locator(".trajectory-ledger")).toBeVisible();
+  await expect(panel.getByRole("heading", { name: "Turn 1", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await panel.locator(".conversation-view-switch").scrollIntoViewIfNeeded();
+  await panel.screenshot({ path: `${captures}/trajectory-mobile.png` });
 });
