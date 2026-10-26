@@ -37,6 +37,14 @@ const nextConfig = {
   // It never proxies to the DVWA target, so no remote image domains are
   // configured and the default CSP stays strict.
   poweredByHeader: false,
+  // These two documents render the masked profile, so they must not be stored
+  // by the browser or an intermediary the way a static page would be.
+  async headers() {
+    return ["/control", "/settings"].map((source) => ({
+      source,
+      headers: [{ key: "Cache-Control", value: "no-store" }],
+    }));
+  },
 };
 
 export default nextConfig;

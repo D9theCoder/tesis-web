@@ -102,6 +102,11 @@ settings carry over. `${VAR}` references are resolved from the checkout `.env`,
 so credentials that already work in the TUI keep working here without being
 copied.
 
+Both pages render the profile on the server, so the launch form and the runtime
+form are in the first paint rather than a placeholder that grows when the bridge
+answers. Reading the schema costs one interpreter start, so the result is reused
+until the profile, its `.env`, or the seed document changes.
+
 ### Control API
 
 Mutating routes require a loopback `Host` (or a host listed in

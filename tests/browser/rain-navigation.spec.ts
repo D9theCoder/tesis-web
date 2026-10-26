@@ -42,5 +42,9 @@ test("keeps the rain scene across navigation and viewport resizes", async ({ pag
   await page.setViewportSize({ width: 1100, height: 800 });
   await page.waitForTimeout(300);
   expect(await atlasCount()).toBe(initialCount);
-  await expect(page.locator(".hacker-rain")).toHaveJSProperty("width", 1100);
+  // The canvas is a fixed backdrop, so it spans the viewport content box: on a
+  // page long enough to scroll that is narrower than the window.
+  const viewportWidth = await page.evaluate(() => document.documentElement.clientWidth);
+  await expect(page.locator(".hacker-rain")).toHaveJSProperty("width", viewportWidth);
+  expect(viewportWidth).toBeLessThanOrEqual(1100);
 });

@@ -104,4 +104,28 @@ describe("ControlPage", () => {
     await screen.findByText("Python interpreter not found");
     expect(screen.getByRole("heading", { name: "Experiment control" })).toBeInTheDocument();
   });
+
+  it("renders the form from server-rendered schema without refetching it", () => {
+    render(<ControlPage initialSchema={schema} />);
+
+    expect(screen.getByRole("group", { name: "Experiment mode" })).toBeInTheDocument();
+    expect(fetchControlSchema).not.toHaveBeenCalled();
+  });
+
+  it("keeps the refresh button out of its busy label before the first job list arrives", async () => {
+    let settle: (value: { jobs: never[] }) => void = () => {};
+    vi.mocked(fetchControlSchema).mockResolvedValue(schema);
+    vi.mocked(fetchControlJobs).mockImplementation(
+      () => new Promise<{ jobs: never[] }>(resolve => { settle = resolve; }),
+    );
+
+    render(<ControlPage />);
+
+    expect(screen.getByRole("button", { name: /^Refresh$/ })).toHaveTextContent(/^Refresh$/);
+    expect(screen.getByRole("button", { name: /^Refresh$/ })).toBeDisabled();
+
+    await waitFor(() => expect(settle).toBeTypeOf("function"));
+    settle({ jobs: [] });
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Refresh$/ })).toBeEnabled());
+  });
 });

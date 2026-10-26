@@ -31,6 +31,9 @@ import styles from "./runtime-settings.module.css";
  *
  * Every write goes through the bridge, which validates with the TESIS loader
  * before the profile is replaced, so a bad edit is rejected rather than saved.
+ *
+ * `initialSchema` is rendered on the server, so the form is in the first paint
+ * instead of arriving after a bridge round trip on the client.
  */
 
 /** Stable loader identity for `useReadResource`. */
@@ -103,8 +106,8 @@ function isSafeProviderId(value: string): boolean {
   return /^[a-z][a-z0-9_-]{0,63}$/.test(value);
 }
 
-export function RuntimeSettings() {
-  const schemaResource = useReadResource("control-settings", loadSettingsSchema);
+export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSchema | null }) {
+  const schemaResource = useReadResource("control-settings", loadSettingsSchema, initialSchema ?? undefined);
   const schema: ControlSchema | null = schemaResource.data ?? null;
   const [tab, setTab] = useState("experiment");
   const [overrides, setOverrides] = useState<Record<string, unknown>>({});
@@ -428,9 +431,14 @@ export function RuntimeSettings() {
           </p>
         ) : (
           <p className={styles.hint} role="status">
-            Loading the settings profile…
+            Reading the settings profile…
           </p>
         )}
+        <div className={styles.rowActions}>
+          <Button type="button" variant="outline" onClick={schemaResource.refresh} disabled={schemaResource.busy}>
+            <RefreshCw size={15} aria-hidden /> Try again
+          </Button>
+        </div>
       </section>
     );
   }

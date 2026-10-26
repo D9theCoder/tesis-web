@@ -9,6 +9,7 @@ import { DoctorPanel } from "@/components/control/doctor-panel";
 import { LaunchWizard } from "@/components/control/launch-wizard";
 import { RunConsole } from "@/components/control/run-console";
 import { fetchControlJobs, fetchControlSchema } from "@/lib/api-client";
+import type { ControlSchema } from "@/lib/control-contract";
 import { jobModeLabel } from "@/lib/control-options";
 import { useReadResource } from "@/lib/use-read-resource";
 import styles from "./control.module.css";
@@ -17,6 +18,9 @@ import styles from "./control.module.css";
  * Runtime control surface: launch experiments, supervise runs, and run the
  * Doctor. Every write goes through the local control API, which is
  * loopback-gated by default.
+ *
+ * `initialSchema` is rendered on the server so the launch form is already in
+ * the first paint; the job list stays client-side because it is polled.
  */
 
 const ACTIVE_POLL_MS = 3000;
@@ -38,9 +42,9 @@ const TABS = [
   { value: "doctor", label: "Doctor" },
 ];
 
-export function ControlPage() {
+export function ControlPage({ initialSchema }: { initialSchema?: ControlSchema | null }) {
   const [tab, setTab] = useState("launch");
-  const schemaResource = useReadResource("control-schema", loadSchema);
+  const schemaResource = useReadResource("control-schema", loadSchema, initialSchema ?? undefined);
   const jobsResource = useReadResource("control-jobs", loadJobs);
   const refreshJobs = jobsResource.refresh;
   const refreshRef = useRef(refreshJobs);
@@ -51,6 +55,8 @@ export function ControlPage() {
 
   const schema = schemaResource.data ?? null;
   const jobs = jobsResource.data?.jobs ?? [];
+  /** A background refresh, as opposed to the first load this page paints without. */
+  const refreshingJobs = jobsResource.busy && jobsResource.data !== undefined;
   const controlEnabled = schema?.control?.enabled ?? true;
   const controlReason = schema?.control?.reason ?? null;
   const activeRun =
@@ -91,7 +97,7 @@ export function ControlPage() {
         </div>
         <div className="page-actions">
           <Button type="button" variant="ghost" onClick={jobsResource.refresh} disabled={jobsResource.busy}>
-            <RefreshCw size={15} aria-hidden /> {jobsResource.busy ? "Refreshing…" : "Refresh"}
+            <RefreshCw size={15} aria-hidden /> {refreshingJobs ? "Refreshing…" : "Refresh"}
           </Button>
           <Link className="ui-button ui-button-outline" href="/settings">
             <Settings2 size={15} aria-hidden /> Settings
@@ -145,8 +151,15 @@ export function ControlPage() {
               </header>
               <div className="ui-card-content">
                 <p className={styles.hint} role="status">
-                  {schemaResource.busy ? "Loading the settings profile…" : "The settings profile is unavailable."}
+                  {schemaResource.busy
+                    ? "Preparing the launch form…"
+                    : "The settings profile could not be read, so the launch form is unavailable."}
                 </p>
+                {schemaResource.busy ? null : (
+                  <Button type="button" variant="outline" onClick={schemaResource.refresh}>
+                    <RefreshCw size={15} aria-hidden /> Try again
+                  </Button>
+                )}
               </div>
             </section>
           )
