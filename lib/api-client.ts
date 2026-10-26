@@ -15,6 +15,8 @@ import {
   controlJobLogResponse,
   controlJobSchema,
   controlModelsResponse,
+  controlReasoningRequest,
+  controlReasoningResponse,
   controlSaveResponse,
   controlSchemaResponse,
   controlSyncResponse,
@@ -23,6 +25,7 @@ import {
   type ControlJob,
   type ControlSchema,
 } from "@/lib/control-contract";
+import type { z } from "zod";
 
 /** Browser-safe read-only client for the observer route handlers. */
 
@@ -191,6 +194,10 @@ export async function discoverProviderModels(body: {
   apiKey?: string;
 }) {
   return sendJson("/api/control/config/models", "POST", body, controlModelsResponse);
+}
+
+export async function configureReasoning(body: z.infer<typeof controlReasoningRequest>, signal?: AbortSignal) {
+  return sendJson("/api/control/config/reasoning", "POST", body, controlReasoningResponse, signal);
 }
 
 export async function fetchChatGPTAccount(action: "status" | "models", account = "default") {

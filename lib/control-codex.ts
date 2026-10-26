@@ -1,4 +1,4 @@
-import type { CodexModelProfile } from "@/lib/control-contract";
+import type { CodexModelProfile, DiscoveredModel } from "@/lib/control-contract";
 
 /**
  * ChatGPT (Codex) stores one model per `models.<profile>` entry, unlike an API
@@ -33,6 +33,14 @@ export function effectiveCodexProfiles(
   overrides: Record<string, unknown>,
 ): CodexModelProfile[] {
   const profiles = new Map(saved.map((profile) => [profile.profile, profile]));
+  const root = overrides.models;
+  if (root && typeof root === "object" && !Array.isArray(root)) {
+    for (const [name, value] of Object.entries(root)) {
+      if (value && typeof value === "object" && !Array.isArray(value) && value.provider === "openai_codex_auth") {
+        profiles.set(name, profileFromConfig(name, value));
+      }
+    }
+  }
   for (const [key, value] of Object.entries(overrides)) {
     if (!key.startsWith(PREFIX)) continue;
     const name = key.slice(PREFIX.length);
@@ -67,6 +75,7 @@ export function stageCodexModels(
   selectedModels: string[],
   reservedProfileIds: string[],
   account: string,
+  catalog: DiscoveredModel[] = [],
 ): CodexStageResult {
   const existing = effectiveCodexProfiles(saved, currentOverrides);
   const models = [...new Set(selectedModels.map((model) => model.trim()).filter(Boolean))];
@@ -124,6 +133,8 @@ export function stageCodexModels(
     };
     if (previous?.reasoningEffort != null) entry.reasoning_effort = previous.reasoningEffort;
     if (previous?.reasoningEfforts != null) entry.reasoning_efforts = previous.reasoningEfforts;
+    const advertised = catalog.find((item) => item.id === model)?.reasoning_efforts;
+    if (advertised !== undefined) entry.reasoning_efforts = advertised;
     overrides[`${PREFIX}${name}`] = entry;
     profiles.push({
       profile: name,
@@ -131,7 +142,7 @@ export function stageCodexModels(
       account,
       timeout: previous?.timeout ?? 60,
       reasoningEffort: previous?.reasoningEffort ?? null,
-      reasoningEfforts: previous?.reasoningEfforts ?? null,
+      reasoningEfforts: entry.reasoning_efforts ?? null,
     });
   }
 

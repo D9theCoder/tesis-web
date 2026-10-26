@@ -17,6 +17,7 @@ save      Restore masked secrets and atomically persist config (+ API keys).
 models    Fetch a provider model catalog from a configured API provider.
 auth      OpenAI/ChatGPT account status or model catalog.
 plan      Expand the resolved configuration into experiment coordinates.
+reasoning Describe model efforts, stage an effort, or explicitly probe support.
 
 The script never prints API keys, DVWA passwords, or backed tokens. Secrets
 arrive through the inherited environment or the profile ``.env`` file only.
@@ -342,6 +343,10 @@ def _provider_summaries(payload: dict[str, Any]) -> list[dict[str, Any]]:
             "baseUrl": _safe_url(entry.get("base_url") or ""),
             "fetchUrl": _safe_url(entry.get("fetch_url") or ""),
             "models": [str(model) for model in (entry.get("models") or [])],
+            "modelOptions": {model: {key: value for key, value in options.items()
+                if key in {"reasoning_effort", "reasoning_efforts"}}
+                for model, options in (entry.get("model_options") or {}).items()
+                if isinstance(options, dict)},
             "keyRef": key_ref if key_ref.startswith("${") else "",
             "hasKey": bool(key_ref),
         })
@@ -683,6 +688,138 @@ def command_auth(request: dict[str, Any]) -> dict[str, Any]:
         return {"ok": True, "available": False, "error": f"{type(exc).__name__}: ChatGPT account status unavailable."}
 
 
+def _reasoning_targets(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    from llm.provider import supports_reasoning_effort
+    from llm.reasoning import model_efforts
+    from tesis.config_loader import _configured_reasoning_effort
+    from tesis.provider_registry import expanded_model_sections, model_profile_labels
+
+    profiles = expanded_model_sections(payload)
+    labels = model_profile_labels(payload)
+    targets = {}
+    for name, profile in profiles.items():
+        profile = {**profile, "provider": profile.get("provider", name)}
+        targets[name] = {
+            "id": name, "label": labels[name], "model": profile.get("model_name", ""),
+            "effort": _configured_reasoning_effort(profile, f"models.{name}.reasoning_effort"),
+            "efforts": model_efforts(payload, profile.get("model_name", ""), profile),
+            "supported": supports_reasoning_effort(profile.get("provider", name)),
+            "profile": profile,
+        }
+    evaluator = payload.get("scoring_evaluator") or {}
+    selected = evaluator.get("model_profile") or evaluator.get("provider")
+    if selected not in profiles or (not evaluator.get("model_profile") and evaluator.get("model")):
+        matches = [name for name, profile in profiles.items()
+            if profile.get("provider", name) == evaluator.get("provider")
+            and profile.get("model_name") == evaluator.get("model")]
+        if len(matches) == 1:
+            selected = matches[0]
+    if selected in profiles:
+        profile = copy.deepcopy(profiles[selected])
+        profile.setdefault("provider", selected)
+        model = evaluator.get("model") or profile.get("model_name", "")
+        if model != profile.get("model_name"):
+            profile.pop("reasoning_efforts", None)
+        profile["model_name"] = model
+        # Mirror the TUI: the evaluator can override connection/profile settings.
+        for key in ("base_url", "api_key", "account", "use_responses_api"):
+            if evaluator.get(key) is not None:
+                profile[key] = evaluator[key]
+        targets["__evaluator__"] = {
+            "id": "__evaluator__", "label": f"AI scorer / {labels[selected]}", "model": model,
+            "effort": _configured_reasoning_effort(evaluator, "scoring_evaluator.reasoning_effort"),
+            "efforts": model_efforts(payload, model, profile),
+            "supported": supports_reasoning_effort(profile.get("provider", selected)),
+            "profile": profile,
+        }
+    return targets
+
+
+def command_reasoning(request: dict[str, Any]) -> dict[str, Any]:
+    """Keep catalog lookup, canonical storage, and probing in the TESIS runtime."""
+    from llm.reasoning import FALLBACK_EFFORTS, validate_reasoning_effort
+    from tesis.config_loader import parse_yaml_config
+    from tesis.provider_registry import model_profile_id, provider_key_variable
+
+    payload = parse_yaml_config(request.get("yaml") or "")
+    if not isinstance(payload, dict):
+        raise BridgeError("Configuration must be a YAML mapping.")
+    payload = _apply_overrides(payload, request.get("overrides"))
+    pending_keys = {}
+    for provider_id, key in (request.get("apiProviderKeys") or {}).items():
+        entry = (payload.get("api_providers") or {}).get(provider_id)
+        if isinstance(entry, dict):
+            variable = provider_key_variable(provider_id)
+            pending_keys[variable] = key
+            entry["api_key"] = "${" + variable + "}"
+    targets = _reasoning_targets(payload)
+    action = request.get("action", "describe")
+    if action == "describe":
+        return {"ok": True, "targets": [
+            {key: value for key, value in item.items() if key != "profile"}
+            for item in targets.values()
+        ], "fallbackEfforts": list(FALLBACK_EFFORTS)}
+    if action not in {"apply", "check"}:
+        raise BridgeError("Unknown reasoning action.")
+    selected = request.get("target")
+    if selected not in targets:
+        raise BridgeError("Choose a configured model or AI scorer first.")
+    target = targets[selected]
+    effort = validate_reasoning_effort(request.get("effort"))
+    if effort and not target["supported"]:
+        raise BridgeError("This adapter cannot send reasoning effort; use provider default.")
+    known = effort is None or (target["efforts"] is not None and effort in target["efforts"])
+    if not known and action != "check":
+        raise BridgeError("Use Check reasoning support before applying this effort.")
+    if action == "check":
+        if effort is None:
+            raise BridgeError("Choose an explicit effort to check.")
+        # Restore credentials only inside the process. Never include the profile
+        # or provider exceptions in the response.
+        _, preserved = _mask_yaml_secrets(_read_payload())
+        restored = _restore_yaml_secrets(copy.deepcopy(payload), preserved)
+        profile = _reasoning_targets(restored)[selected]["profile"]
+        try:
+            if profile.get("api_key"):
+                profile["api_key"] = resolved_provider_key(profile, _state_config_path(), pending_keys)
+            from tesis.tui_reasoning import probe_reasoning
+
+            probe_reasoning(profile, effort)
+        except Exception as exc:
+            status = getattr(exc, "status_code", None)
+            return {"ok": True, "accepted": False, "error":
+                f"Provider did not confirm this effort (HTTP {status})." if isinstance(status, int) else
+                "Could not confirm this effort. Check model, effort, credentials, and connection."}
+
+    # Return only a masked settings patch. Exact model IDs may contain dots or
+    # slashes, so model_options is patched as a mapping, never a dotted model ID.
+    if selected == "__evaluator__":
+        # Null removes this key, restoring the scorer's profile inheritance.
+        patch = {"scoring_evaluator.reasoning_effort": effort}
+    else:
+        patch = None
+        for provider_id, entry in (payload.get("api_providers") or {}).items():
+            for model in entry.get("models", []):
+                if model_profile_id(provider_id, model) == selected:
+                    options = copy.deepcopy(entry.get("model_options") or {})
+                    options.setdefault(model, {})["reasoning_effort"] = effort
+                    patch = {f"api_providers.{provider_id}.model_options": options}
+        if patch is None:
+            models = copy.deepcopy(payload.get("models") or {})
+            models[selected]["reasoning_effort"] = effort
+            patch = {"models": models}
+    # Mask again in case a caller supplied literal credentials in draft YAML.
+    masked_patch, remasked = _mask_yaml_secrets(patch)
+    # The masked draft already contains stable placeholder identities from the
+    # full saved document. Masking a smaller patch numbers them again, so put
+    # those original identities back before returning it.
+    masked_patch = _restore_yaml_secrets(masked_patch, {
+        placeholder: original for placeholder, original in remasked.items()
+        if original.startswith(_STALE_PLACEHOLDER)
+    })
+    return {"ok": True, "accepted": True, "overrides": masked_patch}
+
+
 def command_plan(request: dict[str, Any]) -> dict[str, Any]:
     payload = _apply_overrides(_read_payload(), request.get("overrides"))
     config_path = _state_config_path()
@@ -705,6 +842,7 @@ COMMANDS = {
     "write-tesis-config": command_write_tesis_config,
     "models": command_models,
     "auth": command_auth,
+    "reasoning": command_reasoning,
     "plan": command_plan,
 }
 

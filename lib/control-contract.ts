@@ -80,6 +80,7 @@ export const controlProviderSummarySchema = z
     baseUrl: z.string().default(""),
     fetchUrl: z.string().default(""),
     models: z.array(z.string()).default([]),
+    modelOptions: z.record(z.record(z.unknown())).optional(),
     keyRef: z.string().default(""),
     hasKey: z.boolean().default(false),
   })
@@ -266,6 +267,25 @@ export const controlModelsResponse = z
 
 export type DiscoveredModel = z.infer<typeof discoveredModelSchema>;
 
+export const reasoningTargetSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  model: z.string(),
+  effort: z.string().nullable(),
+  efforts: z.array(z.string()).nullable(),
+  supported: z.boolean(),
+});
+
+export type ReasoningTarget = z.infer<typeof reasoningTargetSchema>;
+
+export const controlReasoningResponse = z.object({
+  targets: z.array(reasoningTargetSchema).optional(),
+  fallbackEfforts: z.array(z.string()).optional(),
+  accepted: z.boolean().optional(),
+  error: z.string().optional(),
+  overrides: z.record(z.unknown()).optional(),
+});
+
 /** Doctor report emitted by `tesis doctor --json`. */
 export const doctorCheckSchema = z
   .object({
@@ -308,6 +328,15 @@ const secretMap = z.record(z.string().max(8192)).refine(
 
 /** Dotted configuration paths mapped to typed values (null removes a key). */
 const overrideMap = z.record(z.unknown());
+
+export const controlReasoningRequest = z.object({
+  action: z.enum(["describe", "apply", "check"]),
+  yaml: yamlDocument,
+  overrides: overrideMap.optional(),
+  apiProviderKeys: secretMap.optional(),
+  target: z.string().max(256).optional(),
+  effort: z.string().max(64).nullable().optional(),
+}).strict();
 
 export const controlValidateRequest = z.object({
   yaml: yamlDocument,

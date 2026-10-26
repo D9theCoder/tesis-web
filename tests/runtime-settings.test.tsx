@@ -14,6 +14,7 @@ vi.mock("@/lib/api-client", () => ({
   saveControlConfig: vi.fn(),
   syncControlToCheckout: vi.fn(),
   validateControlDraft: vi.fn(),
+  configureReasoning: vi.fn(),
 }));
 
 const {
@@ -22,6 +23,7 @@ const {
   startChatGPTAuth,
   fetchChatGPTAccount,
   saveControlConfig,
+  configureReasoning,
 } = await import("@/lib/api-client");
 
 const idleAuthFlow: ControlAuthFlow = {
@@ -110,6 +112,27 @@ beforeEach(() => {
 });
 
 describe("RuntimeSettings", () => {
+  it("saves a staged reasoning change alongside other unsaved experiment edits", async () => {
+    vi.mocked(configureReasoning).mockResolvedValueOnce({
+      targets: [{ id: "gpt", label: "GPT fixture", model: "gpt-fixture", effort: null, efforts: ["low", "high"], supported: true }],
+      fallbackEfforts: [],
+    }).mockResolvedValueOnce({
+      accepted: true, overrides: { models: { gpt: { provider: "openai_codex_auth", model_name: "gpt-fixture", reasoning_effort: "high" } } },
+    }).mockResolvedValue({ targets: [], fallbackEfforts: [] });
+    render(<RuntimeSettings initialSchema={schema} />);
+    fireEvent.change(screen.getByLabelText(/^Target URL/), { target: { value: "http://127.0.0.1/new-target" } });
+    fireEvent.click(screen.getByRole("tab", { name: "Reasoning" }));
+    fireEvent.change(await screen.findByLabelText("Reasoning effort"), { target: { value: "high" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply effort" }));
+    await screen.findByText("Reasoning effort staged. Save the profile to use it in new runs.");
+    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    await waitFor(() => expect(saveControlConfig).toHaveBeenCalledWith(expect.objectContaining({
+      overrides: expect.objectContaining({
+        target_url: "http://127.0.0.1/new-target",
+        models: { gpt: { provider: "openai_codex_auth", model_name: "gpt-fixture", reasoning_effort: "high" } },
+      }),
+    })));
+  });
   it("paints the saved profile on the first render when the server seeded it", async () => {
     render(<RuntimeSettings initialSchema={schema} />);
 

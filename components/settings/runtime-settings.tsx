@@ -7,6 +7,7 @@ import { Badge, Button, Dialog, Tabs } from "@/components/ui/primitives";
 import { CopyButton } from "@/components/ui/copy-button";
 import { FieldControl } from "@/components/control/field-control";
 import { YamlKeyValue } from "@/components/settings/yaml-key-value";
+import { ReasoningSettings } from "@/components/settings/reasoning-settings";
 import {
   cancelChatGPTAuth,
   discoverProviderModels,
@@ -63,6 +64,7 @@ type ProviderDraft = {
   baseUrl: string;
   fetchUrl: string;
   models: string[];
+  modelOptions: Record<string, Record<string, unknown>>;
   apiKey: string;
   isNew: boolean;
   baseUrlTouched: boolean;
@@ -74,6 +76,7 @@ type Status = { tone: "ok" | "error" | "info"; message: string } | null;
 const TABS = [
   { value: "experiment", label: "Experiment" },
   { value: "providers", label: "Model providers" },
+  { value: "reasoning", label: "Reasoning" },
   { value: "scorer", label: "AI scorer" },
   { value: "yaml", label: "Config keys" },
 ];
@@ -88,6 +91,7 @@ function emptyProviderDraft(): ProviderDraft {
     baseUrl: "",
     fetchUrl: "",
     models: [],
+    modelOptions: {},
     apiKey: "",
     isNew: true,
     baseUrlTouched: false,
@@ -103,6 +107,7 @@ function draftFromProvider(provider: ControlProviderSummary): ProviderDraft {
     baseUrl: provider.baseUrl,
     fetchUrl: provider.fetchUrl,
     models: [...provider.models],
+    modelOptions: provider.modelOptions ?? {},
     apiKey: "",
     isNew: false,
     baseUrlTouched: false,
@@ -353,6 +358,12 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
       display_name: draft.displayName.trim() || draft.id,
       protocol: draft.protocol,
       models: draft.models,
+      model_options: Object.fromEntries(draft.models.flatMap((model) => {
+        const options = { ...draft.modelOptions[model] };
+        const advertised = catalog.find((item) => item.id === model)?.reasoning_efforts;
+        if (advertised !== undefined) options.reasoning_efforts = advertised;
+        return Object.keys(options).length ? [[model, options]] : [];
+      })),
     };
     if (draft.isNew || draft.baseUrlTouched) entry.base_url = draft.baseUrl.trim();
     if (draft.isNew || draft.fetchUrlTouched) entry.fetch_url = draft.fetchUrl.trim();
@@ -419,6 +430,7 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
                 typeof model.slug === "string" ? model.slug : typeof model.id === "string" ? model.id : "";
               if (!id) return [];
               return [{
+                ...model,
                 id,
                 display_name: typeof model.display_name === "string" ? model.display_name : id,
               }];
@@ -547,6 +559,7 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
       models,
       schema?.modelProfiles.map((profile) => profile.id) ?? [],
       codexAccount,
+      codexModels,
     );
     setOverrides((previous) => ({ ...previous, ...staged.overrides }));
   };
@@ -1330,6 +1343,24 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
               </div>
             ) : null}
           </div>
+        ) : null}
+
+        {tab === "reasoning" ? (
+          <ReasoningSettings yaml={currentYaml} overrides={overrides} apiProviderKeys={providerKeys}
+            disabled={!controlEnabled || busy !== null}
+            onApply={(patch) => {
+              setOverrides((previous) => {
+                const next = { ...previous };
+                // The bridge's models mapping already includes all staged
+                // profile edits. Drop older child patches so they cannot
+                // overwrite a reasoning change when the profile is saved.
+                if ("models" in patch) {
+                  for (const key of Object.keys(next)) if (key.startsWith("models.")) delete next[key];
+                }
+                return { ...next, ...patch };
+              });
+              setStatus({ tone: "info", message: "Reasoning effort staged. Save the profile to use it in new runs." });
+            }} />
         ) : null}
 
         {tab === "scorer" ? (

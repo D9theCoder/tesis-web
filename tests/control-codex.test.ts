@@ -23,6 +23,12 @@ const SAVED: CodexModelProfile[] = [
 ];
 
 describe("effectiveCodexProfiles", () => {
+  it("reads a reasoning patch before the provider editor is reopened", () => {
+    const profiles = effectiveCodexProfiles(SAVED, {
+      models: { openai_codex_auth: { provider: "openai_codex_auth", model_name: "gpt-5-codex", reasoning_effort: "low" } },
+    });
+    expect(profiles[0].reasoningEffort).toBe("low");
+  });
   it("applies staged profile objects and removals", () => {
     const profiles = effectiveCodexProfiles(SAVED, {
       "models.openai_codex_auth_2": null,
@@ -48,6 +54,13 @@ describe("effectiveCodexProfiles", () => {
 });
 
 describe("stageCodexModels", () => {
+  it("retains effort metadata returned by account discovery", () => {
+    const result = stageCodexModels([], {}, ["gpt-fixture"], [], "default", [
+      { id: "gpt-fixture", reasoning_efforts: ["low", "high", "max"] },
+    ]);
+    expect(result.profiles[0].reasoningEfforts).toEqual(["low", "high", "max"]);
+    expect(result.overrides["models.openai_codex_auth"]).toMatchObject({ reasoning_efforts: ["low", "high", "max"] });
+  });
   it("creates one profile per selected model", () => {
     const result = stageCodexModels(SAVED, {}, ["gpt-5-codex", "gpt-5"], [], "default");
     expect(result.profiles.map((profile) => profile.profile)).toEqual([

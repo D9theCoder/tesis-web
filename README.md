@@ -85,6 +85,7 @@ button links to the detailed results page.
 
 `/settings` holds the server-backed configuration: **Experiment** defaults,
 **Model providers** (add/edit a provider, discover its catalog, stage API keys),
+**Reasoning** (per-model API and ChatGPT/Codex effort, plus an independent AI scorer override),
 **AI scorer** (human / AI / human+AI preset, rubric version, frozen evaluator
 model and limits) and **Config keys** (every key in the masked document, with
 read-only keys and typed value controls). ChatGPT (Codex) is a built-in provider
@@ -96,6 +97,20 @@ remote revocation. The footer offers **Validate**, **Discard changes**
 (a second click confirms a draft reset), **Save profile**, and the explicitly
 confirmed **Write to TESIS config.yaml**. The appearance options (theme, cheat
 code) remain below it.
+
+Reasoning uses the same `llm.reasoning` exact-model catalog and provider probe as
+the TESIS TUI. Advertised catalog choices take precedence over `reasoning_catalog`
+presets; unknown models expose fallback choices and a custom effort field. Values
+outside a model's catalog require **Check reasoning support** before **Apply effort**.
+The confirmation dialog describes the short provider request and potential credit
+or ChatGPT usage. Acceptance confirms the request setting, not internal reasoning.
+Catalog reads and applying known/default values do not call a provider. Apply stages
+the setting; **Save profile** persists it. API model settings use
+`api_providers.<id>.model_options[exactModelId].reasoning_effort`; legacy/Codex
+profiles use `models.<profile>.reasoning_effort`. The scorer override is
+`scoring_evaluator.reasoning_effort`; clearing it restores model-profile inheritance.
+Existing `llm_runtime.roles.*.reasoning_effort` overrides still take precedence for
+experiment roles and can be cleared in Config keys.
 
 Which file is authoritative:
 
@@ -126,6 +141,7 @@ browser requests:
 - `POST /api/control/config/save` — validate, then atomically replace the profile (and profile `.env`)
 - `POST /api/control/config/sync` — write the profile over `TESIS_ROOT/config.yaml`
 - `POST /api/control/config/models` — fetch a provider model catalog
+- `POST /api/control/config/reasoning` — describe model effort choices, stage a known/default effort, or explicitly check support; returns a draft patch without saving
 - `GET /api/control/auth?action=status|models|flow` — ChatGPT account state, model catalogue, or supervised account action
 - `POST /api/control/auth` — start a ChatGPT `login`/`logout` or `cancel` a waiting sign-in
 - `GET /api/control/runs` · `POST /api/control/runs` — list or start a run/matrix
@@ -472,6 +488,13 @@ npm run dev -- --webpack
 npx playwright install chromium
 npm run test:browser
 curl http://127.0.0.1:3000/api/mock/akg
+```
+
+Reasoning bridge regressions use the TESIS interpreter and mock the TUI provider
+probe, so they remain offline:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 "$TESIS_ROOT/.venv/bin/python" tests/test_bridge_reasoning.py
 ```
 
 Playwright checks 1440×900, 1920×1080, 1024×768 and 390×844, writing overview,
