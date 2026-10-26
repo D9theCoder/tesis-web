@@ -4,7 +4,7 @@ import type { RunEvent } from "@/lib/schemas";
 import { deriveTrajectory } from "@/lib/trajectory";
 import { initialState } from "@/lib/event-reducer";
 import { TrajectoryView } from "@/components/runtime/trajectory-view";
-import { ConversationPanel } from "@/components/runtime/conversation-panel";
+import { TrajectoryPanel } from "@/components/runtime/trajectory-panel";
 
 const EVENTS: RunEvent[] = [
   { event_type: "run.started", timestamp: 1000 },
@@ -232,12 +232,13 @@ describe("TrajectoryView", () => {
   });
 });
 
-describe("ConversationPanel", () => {
+describe("TrajectoryPanel", () => {
   const state = { ...initialState("exec-1"), events: EVENTS };
 
   it("renders the trajectory ledger as its only body", () => {
-    render(<ConversationPanel state={state} />);
+    render(<TrajectoryPanel state={state} />);
 
+    expect(screen.getByRole("heading", { name: "Trajectory" })).toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Conversation view" })).toBeNull();
     expect(screen.getAllByText("5 records").length).toBeGreaterThan(0);
     expect(screen.getByRole("group", { name: "Trajectory records" })).toBeInTheDocument();
@@ -267,7 +268,10 @@ const RICH_EVENTS: RunEvent[] = [
     node: "bf_dictionary",
     method: "bf_dictionary",
     data: {
-      reasoning_content: "Dictionary attempt is cheapest.",
+      reasoning_trace: "Dictionary attempt is cheapest.",
+      reasoning_trace_source: "additional_kwargs.reasoning_content",
+      reasoning_summary: null,
+      reasoning_summary_source: null,
       response_text: "Use the seeded credential pair.",
       usage: { prompt_tokens: 120, completion_tokens: 30 },
     },
@@ -291,7 +295,10 @@ function detailOf(button: HTMLElement): HTMLElement {
 }
 
 /** Read one facts list in the record inspector as label → value pairs. */
-function facts(detail: HTMLElement, label: "Record timing" | "Token usage"): Record<string, string> {
+function facts(
+  detail: HTMLElement,
+  label: "Record timing" | "Token usage" | "Reasoning evidence",
+): Record<string, string> {
   const list = within(detail).getByLabelText(label);
   const rows: Record<string, string> = {};
   for (const row of Array.from(list.querySelectorAll(".trajectory-fact"))) {
@@ -332,12 +339,78 @@ describe("TrajectoryView detail", () => {
     const detail = within(detailOf(button));
 
     expect(detail.getByText("Request")).toBeInTheDocument();
-    expect(detail.getByText("Thinking")).toBeInTheDocument();
+    expect(detail.getByText("Reasoning trace")).toBeInTheDocument();
+    expect(detail.queryByText("Reasoning summary")).toBeNull();
     expect(detail.getByText("Response")).toBeInTheDocument();
     expect(detail.getByText("Raw JSON")).toBeInTheDocument();
     expect(detail.getByText(/system: You are TESIS\./)).toBeInTheDocument();
     expect(detail.getByText("Dictionary attempt is cheapest.")).toBeInTheDocument();
     expect(detail.getByText("Use the seeded credential pair.")).toBeInTheDocument();
+  });
+
+  it("names the metadata field each reasoning text arrived in", () => {
+    render(<TrajectoryView model={RICH_MODEL} />);
+
+    const button = cellButton(/llm\.request/);
+    fireEvent.click(button);
+
+    expect(facts(detailOf(button), "Reasoning evidence")).toEqual({
+      Trace: "31 chars",
+      "Trace source": "additional_kwargs.reasoning_content",
+      Summary: "not recorded",
+      "Summary source": "not recorded",
+    });
+  });
+
+  it("renders a provider summary without inventing a trace", () => {
+    const summaryModel = deriveTrajectory([
+      {
+        event_type: "llm.response",
+        timestamp: 1,
+        data: {
+          reasoning_trace: null,
+          reasoning_trace_source: null,
+          reasoning_summary: "Compared two payloads.",
+          reasoning_summary_source: "additional_kwargs.reasoning",
+        },
+      },
+    ]);
+    render(<TrajectoryView model={summaryModel} />);
+
+    const button = cellButton(/llm\.response/);
+    fireEvent.click(button);
+    const detail = within(detailOf(button));
+
+    expect(detail.getByText("Reasoning summary")).toBeInTheDocument();
+    expect(detail.queryByText("Reasoning trace")).toBeNull();
+    expect(detail.getByText("Compared two payloads.")).toBeInTheDocument();
+    const evidence = facts(detailOf(button), "Reasoning evidence");
+    expect(evidence.Trace).toBe("not recorded");
+    expect(evidence["Summary source"]).toBe("additional_kwargs.reasoning");
+  });
+
+  it("states when reasoning text arrived without its source field", () => {
+    const legacy = deriveTrajectory([
+      {
+        event_type: "llm.response",
+        timestamp: 1,
+        data: { reasoning_content: "Legacy provider trace." },
+      },
+    ]);
+    render(<TrajectoryView model={legacy} />);
+
+    const button = cellButton(/llm\.response/);
+    fireEvent.click(button);
+    const evidence = facts(detailOf(button), "Reasoning evidence");
+
+    expect(evidence.Trace).toBe("22 chars");
+    expect(evidence["Trace source"]).toBe("not recorded");
+    const row = Array.from(
+      within(detailOf(button))
+        .getByLabelText("Reasoning evidence")
+        .querySelectorAll(".trajectory-fact"),
+    ).find((item) => item.querySelector("dt")?.textContent === "Trace source");
+    expect(row?.querySelector("dd")?.getAttribute("title")).toContain("without naming");
   });
 
   it("labels the call with its status, node, method, model, and outcome", () => {
@@ -420,6 +493,13 @@ describe("TrajectoryView detail", () => {
     expect(timing["Generation"]).toBe("n/a");
     expect(timing["Throughput"]).toBe("n/a");
     expect(timing["Started"]).not.toBe("not recorded");
+    // A tool call carries no provider reasoning, so every row reads n/a.
+    expect(facts(detailOf(button), "Reasoning evidence")).toEqual({
+      Trace: "n/a",
+      "Trace source": "n/a",
+      Summary: "n/a",
+      "Summary source": "n/a",
+    });
   });
 
   it("omits payload blocks the journal never recorded", () => {
@@ -430,7 +510,8 @@ describe("TrajectoryView detail", () => {
     const detail = within(detailOf(button));
 
     expect(detail.queryByText("Request")).toBeNull();
-    expect(detail.queryByText("Thinking")).toBeNull();
+    expect(detail.queryByText("Reasoning trace")).toBeNull();
+    expect(detail.queryByText("Reasoning summary")).toBeNull();
     expect(detail.queryByText("Response")).toBeNull();
     expect(detail.getByText("Raw JSON")).toBeInTheDocument();
   });

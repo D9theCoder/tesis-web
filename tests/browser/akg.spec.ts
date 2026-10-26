@@ -246,7 +246,7 @@ test("viewport, resize, scrolling, edge inspection and reduced motion during rep
   await expect(viewport).toHaveAttribute("style", transform!);
 
   // The ledger is the panel's only body, and each panel scrolls on its own.
-  for (const panel of ["Coordinate", "Conversation", "Outcomes"]) {
+  for (const panel of ["Coordinate", "Trajectory", "Outcomes"]) {
     const scroller = page
       .locator(
         `.runtime-sidebar > section[aria-label="${panel}"] .runtime-panel-body`,
@@ -303,7 +303,7 @@ test("viewport, resize, scrolling, edge inspection and reduced motion during rep
   expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
 });
 
-test("conversation ledger projects the replay journal into turns", async ({ page }) => {
+test("trajectory ledger projects the replay journal into turns", async ({ page }) => {
   await mkdir(captures, { recursive: true });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.route("**/api/runtime/runs*", (route) =>
@@ -314,7 +314,7 @@ test("conversation ledger projects the replay journal into turns", async ({ page
   await page.getByRole("button", { name: "Run seeded AKG traversal test" }).click();
   await expect(page.getByText("AKG verified", { exact: true })).toBeVisible({ timeout: 15000 });
 
-  const panel = page.locator('.runtime-sidebar > section[aria-label="Conversation"]');
+  const panel = page.locator('.runtime-sidebar > section[aria-label="Trajectory"]');
   expect(await panel.getByRole("group", { name: "Conversation view" }).count()).toBe(0);
 
   const ledger = panel.locator(".trajectory-ledger");
@@ -349,7 +349,7 @@ test("conversation ledger projects the replay journal into turns", async ({ page
   await expect(ledger.locator(".trajectory-cell")).toHaveCount(16);
 
   // The panel body is the only scroll region; the ledger grows inside it.
-  const body = panel.locator(".conversation-scroll.is-trajectory");
+  const body = panel.locator(".trajectory-scroll");
   expect(await body.evaluate((element) => getComputedStyle(element).overflowY)).toBe("auto");
   expect(await ledger.evaluate((element) => getComputedStyle(element).overflowY)).toBe("visible");
   expect(await body.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
@@ -423,12 +423,26 @@ test("conversation ledger projects the replay journal into turns", async ({ page
   const usageRows = modelDetail.locator('dl[aria-label="Token usage"] .trajectory-fact');
   await expect(usageRows).toHaveCount(5);
   await expect(usageRows.locator("dd").last()).toHaveText("18");
-  await expect(modelDetail.locator("summary", { hasText: "Thinking" })).toHaveCount(0);
+  // Reasoning stays two independent representations, each with its metadata field.
+  const evidenceRows = modelDetail.locator(
+    'dl[aria-label="Reasoning evidence"] .trajectory-fact',
+  );
+  await expect(evidenceRows).toHaveCount(4);
+  await expect(evidenceRows.locator("dd").nth(1)).toHaveText(
+    "additional_kwargs.reasoning_content",
+  );
+  await expect(evidenceRows.locator("dd").nth(2)).toHaveText("not recorded");
+  await expect(modelDetail.locator("summary", { hasText: "Reasoning summary" })).toHaveCount(0);
   const block = (label: string) =>
     modelDetail
       .locator("details.trajectory-block")
       .filter({ has: page.getByText(label, { exact: true }) });
 
+  const traceBlock = block("Reasoning trace");
+  await traceBlock.locator("summary").click();
+  await expect(traceBlock.locator("pre")).toHaveText(
+    "The confirmed credential pair is already seeded for this target.",
+  );
   const responseBlock = block("Response");
   await responseBlock.locator("summary").click();
   await expect(responseBlock.locator("pre")).toHaveText(

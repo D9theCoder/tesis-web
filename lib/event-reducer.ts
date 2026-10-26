@@ -19,8 +19,8 @@ import { asNum, asStr, extractText, normalizeRunStatus } from "@/lib/formatters"
  *    are never clobbered by a stale `graph.state` snapshot.
  *  - Counters are monotonic: we keep the largest observed value so a snapshot
  *    that forgets an earlier count cannot roll the dashboard backwards.
- *  - Token chunks share a coalesce key so the conversation panel can collapse
- *    a streamed response into a single entry without discarding the journal.
+ *  - Token chunks share a coalesce key so a streamed response can collapse into
+ *    a single conversation entry without discarding the journal.
  */
 
 const LLM_EVENT_TYPES = new Set([

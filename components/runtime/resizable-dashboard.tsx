@@ -68,7 +68,7 @@ const RAIL_HANDLE_ID = "runtime-rail-resizer";
 const HEIGHT_HANDLE_ID = "runtime-height-resizer";
 const PANEL_IDS = [
   "runtime-coordinate-panel",
-  "runtime-conversation-panel",
+  "runtime-trajectory-panel",
   "runtime-outcomes-panel",
 ] as const;
 

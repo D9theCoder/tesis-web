@@ -366,13 +366,13 @@ svg { flex-shrink: 0; }
 .coordinate-target-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .coordinate-target-value { overflow-wrap: anywhere; font: 12px/1.6 var(--font-mono); }
 .coordinate-empty-path, .outcome-empty-state { padding: 8px 0; text-align: left; font-size: 12px; }
-.conversation-activity-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 9px 16px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 11px; }
-.conversation-entry-count { display: flex; align-items: center; gap: 5px; }
-.conversation-activity-separator { height: 12px; width: 1px; background: var(--border); }
-.conversation-empty-state { padding: 18px 5px; }
-.conversation-empty-state svg { display: block; margin: 0 auto 10px; }
-.conversation-empty-state span { font-size: 12px; }
-.conversation-scroll.is-trajectory { overflow-y: auto; overscroll-behavior: contain; }
+.trajectory-activity-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 9px 16px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 11px; }
+.trajectory-entry-count { display: flex; align-items: center; gap: 5px; }
+.trajectory-activity-separator { height: 12px; width: 1px; background: var(--border); }
+.trajectory-empty-state { padding: 18px 5px; }
+.trajectory-empty-state svg { display: block; margin: 0 auto 10px; }
+.trajectory-empty-state span { font-size: 12px; }
+.trajectory-scroll { overflow-y: auto; overscroll-behavior: contain; }
 .trajectory { display: flex; flex-direction: column; gap: 10px; }
 .trajectory-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .trajectory-controls { display: flex; align-items: center; gap: 6px; margin-left: auto; }

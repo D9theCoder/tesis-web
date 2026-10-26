@@ -17,10 +17,11 @@ import { asNum, asStr, extractText, truncate } from "@/lib/formatters";
  *   by emission order when timestamps are missing
  *
  * Each cell also projects the payload facts a harness trajectory shows for a
- * call: the request text the model received, its reasoning/response text, the
- * tool name, the AKG path, token usage, first-token latency, and a derived
- * status. Every field is optional and stays `null` when the journal never
- * carried it, so the view states "not recorded" instead of guessing.
+ * call: the request text the model received, its reasoning trace and summary
+ * (with the metadata field each came from), its response text, the tool name,
+ * the AKG path, token usage, first-token latency, and a derived status. Every
+ * field is optional and stays `null` when the journal never carried it, so the
+ * view states "not recorded" instead of guessing.
  */
 
 export type TrajectoryKind = "system" | "user" | "context" | "model" | "tool" | "safety";
@@ -63,6 +64,24 @@ export interface TrajectoryTiming {
   tokensPerSecond: number | null;
 }
 
+/**
+ * Provider-returned reasoning, kept as two independent representations.
+ *
+ * TESIS retains a pure trace (`reasoning_trace`) and, when the provider exposes
+ * one instead, a summary of its reasoning (`reasoning_summary`, usually OpenAI
+ * Codex auth). Each text carries the metadata field it arrived in, and every
+ * value stays null when the provider returned nothing — the view never infers
+ * reasoning from an answer or a token count.
+ */
+export interface TrajectoryReasoning {
+  trace: string | null;
+  /** Metadata field the trace came from, e.g. `additional_kwargs.reasoning_content`. */
+  traceSource: string | null;
+  summary: string | null;
+  /** Metadata field the summary came from, e.g. `additional_kwargs.reasoning`. */
+  summarySource: string | null;
+}
+
 /** Status reached by one AKG node inside a turn. */
 export interface TrajectoryNodeState {
   node: string;
@@ -95,8 +114,8 @@ export interface TrajectoryCell {
   inputText: string | null;
   /** Full assistant or tool output text, when the journal carried it. */
   outputText: string | null;
-  /** Full reasoning/thinking text, when the provider or journal recorded it. */
-  thinkingText: string | null;
+  /** Provider reasoning trace and summary, with the field each came from. */
+  reasoning: TrajectoryReasoning;
   /** Model identifier reported for this call. */
   model: string | null;
   /** Tool name reported for this call, when it is not just the method. */
@@ -264,8 +283,14 @@ const OUTPUT_KEYS = [
   "completion",
   "text",
 ];
-/** Journal keys that carry provider reasoning; none are emitted today. */
-const THINKING_KEYS = [
+/**
+ * Journal keys that carry the provider's pure chain-of-thought text. The first
+ * is the TESIS evidence field; the rest are provider-native spellings kept for
+ * gateways that forward them directly.
+ */
+const REASONING_TRACE_KEYS = [
+  "reasoning_trace",
+  "reasoningTrace",
   "reasoning_content",
   "reasoningContent",
   "reasoning_text",
@@ -275,6 +300,10 @@ const THINKING_KEYS = [
   "analysis",
   "thought",
 ];
+/** Journal keys that name the metadata field each reasoning text arrived in. */
+const REASONING_TRACE_SOURCE_KEYS = ["reasoning_trace_source", "reasoningTraceSource"];
+const REASONING_SUMMARY_KEYS = ["reasoning_summary", "reasoningSummary"];
+const REASONING_SUMMARY_SOURCE_KEYS = ["reasoning_summary_source", "reasoningSummarySource"];
 const MODEL_KEYS = ["model", "model_name", "modelName", "model_id", "modelId"];
 const TOOL_KEYS = ["tool", "tool_name", "toolName"];
 const PATH_KEYS = ["akg_path", "akgPath"];
@@ -308,6 +337,60 @@ function textOf(data: Record<string, unknown>, keys: readonly string[]): string 
   return null;
 }
 
+/** Read the metadata field one reasoning text arrived in, when it was named. */
+function sourceOf(data: Record<string, unknown>, keys: readonly string[]): string | null {
+  for (const key of keys) {
+    const value = asStr(data, key)?.trim();
+    if (value) return value;
+  }
+  return null;
+}
+
+/**
+ * Payload keys that wrap the LLM performance record TESIS writes for a call.
+ * `orchestrator.llm.response` nests its record under `data.performance`; the
+ * reasoning evidence lives inside that record.
+ */
+const PERFORMANCE_KEYS = ["performance", "llm_performance"];
+
+/** One payload plus any performance record it wraps, outermost first. */
+function payloadsOf(data: Record<string, unknown>): Record<string, unknown>[] {
+  const payloads = [data];
+  for (const key of PERFORMANCE_KEYS) {
+    const nested = recordOf(data[key]);
+    if (nested) payloads.push(nested);
+  }
+  return payloads;
+}
+
+/**
+ * Read both reasoning representations from one payload and any performance
+ * record it wraps. A source only travels with text from the same container, so
+ * provenance is never attached to a text the journal reported elsewhere.
+ */
+function reasoningOf(data: Record<string, unknown>): TrajectoryReasoning {
+  let result: TrajectoryReasoning = EMPTY_REASONING;
+  for (const payload of payloadsOf(data)) {
+    const trace = textOf(payload, REASONING_TRACE_KEYS);
+    const summary = textOf(payload, REASONING_SUMMARY_KEYS);
+    if (result.trace == null && trace != null) {
+      result = {
+        ...result,
+        trace,
+        traceSource: sourceOf(payload, REASONING_TRACE_SOURCE_KEYS),
+      };
+    }
+    if (result.summary == null && summary != null) {
+      result = {
+        ...result,
+        summary,
+        summarySource: sourceOf(payload, REASONING_SUMMARY_SOURCE_KEYS),
+      };
+    }
+  }
+  return result;
+}
+
 function pathOf(data: Record<string, unknown>): string[] {
   for (const key of PATH_KEYS) {
     const value = data[key];
@@ -335,6 +418,13 @@ const EMPTY_USAGE: TrajectoryUsage = {
   reasoning: null,
   cached: null,
   total: null,
+};
+
+const EMPTY_REASONING: TrajectoryReasoning = {
+  trace: null,
+  traceSource: null,
+  summary: null,
+  summarySource: null,
 };
 
 /** Read token usage from either a nested `usage` block or flat journal fields. */
@@ -412,7 +502,7 @@ function finalizeCell(cell: TrajectoryCell): void {
   let usage: TrajectoryUsage = EMPTY_USAGE;
   let inputText: string | null = null;
   let outputText: string | null = null;
-  let thinkingText: string | null = null;
+  let reasoning: TrajectoryReasoning = EMPTY_REASONING;
   let streamed = "";
   let model: string | null = null;
   let toolName: string | null = null;
@@ -423,7 +513,15 @@ function finalizeCell(cell: TrajectoryCell): void {
     usage = mergeUsage(usage, usageOf(data));
     inputText = inputText ?? textOf(data, REQUEST_KEYS);
     outputText = textOf(data, OUTPUT_KEYS) ?? outputText;
-    thinkingText = textOf(data, THINKING_KEYS) ?? thinkingText;
+    // The latest record that carries each representation wins, and keeps the
+    // source field it arrived with instead of borrowing another record's.
+    const found = reasoningOf(data);
+    if (found.trace != null) {
+      reasoning = { ...reasoning, trace: found.trace, traceSource: found.traceSource };
+    }
+    if (found.summary != null) {
+      reasoning = { ...reasoning, summary: found.summary, summarySource: found.summarySource };
+    }
     model = model ?? textOf(data, MODEL_KEYS);
     toolName = toolName ?? textOf(data, TOOL_KEYS);
     const path = pathOf(data);
@@ -438,7 +536,7 @@ function finalizeCell(cell: TrajectoryCell): void {
   cell.tokens = cell.usage.total ?? cell.tokens;
   cell.inputText = inputText;
   cell.outputText = outputText ?? (streamed || null);
-  cell.thinkingText = thinkingText;
+  cell.reasoning = reasoning;
   cell.model = model;
   cell.toolName = toolName;
   cell.akgPath = akgPath;
@@ -569,7 +667,7 @@ function makeCell(event: RunEvent, record: TrajectoryRecord): TrajectoryCell {
     tokens: asNum(data, "total_tokens") ?? asNum(data, "tokens") ?? asNum(data, "completion_tokens"),
     inputText: null,
     outputText: null,
-    thinkingText: null,
+    reasoning: EMPTY_REASONING,
     model: null,
     toolName: null,
     akgPath: [],
@@ -951,7 +1049,10 @@ function cellMatches(cell: TrajectoryCell, needle: string): boolean {
     cell.akgPath.join(" "),
     cell.inputText ?? "",
     cell.outputText ?? "",
-    cell.thinkingText ?? "",
+    cell.reasoning.trace ?? "",
+    cell.reasoning.traceSource ?? "",
+    cell.reasoning.summary ?? "",
+    cell.reasoning.summarySource ?? "",
     cell.records.map((record) => record.eventType).join(" "),
     cell.records.map((record) => record.message ?? "").join(" "),
   ]

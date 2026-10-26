@@ -74,6 +74,11 @@ events:
     data:
       response_text: "Use the seeded credential pair and verify the login signal."
       total_tokens: 18
+      performance:
+        reasoning_trace: "The confirmed credential pair is already seeded for this target."
+        reasoning_trace_source: additional_kwargs.reasoning_content
+        reasoning_summary: null
+        reasoning_summary_source: null
 
   - event_type: probe.attempt
     node: bf_dictionary

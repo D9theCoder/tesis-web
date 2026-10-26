@@ -1,10 +1,11 @@
 # Trajectory view — artifact handoff
 
-The live monitor's **Trajectory** view (`components/runtime/trajectory-view.tsx` over
-`lib/trajectory.ts`) projects the redacted runtime journal into turns, calls, and a
-timing overview. It renders exactly what the journal carries and states when a fact
-was never recorded. This document records the field contract it already accepts and
-the gaps that only TESIS-side artifact changes can close.
+The live monitor's **Trajectory** panel (`components/runtime/trajectory-panel.tsx`,
+rendering `components/runtime/trajectory-view.tsx` over `lib/trajectory.ts`) projects
+the redacted runtime journal into turns, calls, and a timing overview. It renders
+exactly what the journal carries and states when a fact was never recorded. This
+document records the field contract it already accepts and the gaps that only
+TESIS-side artifact changes can close.
 
 Ordering is fixed and not configurable: the view walks `state.events` in emission
 order, never sorts by timestamp, and shows every record kind by default. Search and
@@ -21,7 +22,7 @@ the expand/collapse control change presentation only.
 | Node status | `event.node` per cell, last meaningful status wins per node | node chips on the turn |
 | AKG path | `data.akg_path` / `data.akgPath` on the latest record carrying one | breadcrumb on the turn and in the cell |
 | Request text | `data.prompts`, `prompt`, `system_prompt`, `systemPrompt`, `messages`, `request_text`, `input` | `Request` block |
-| Reasoning text | `data.reasoning_content`, `reasoningContent`, `reasoning_text`, `reasoning`, `thinking_text`, `thinking`, `analysis`, `thought` | `Thinking` block |
+| Reasoning text | `data.reasoning_trace` and `data.reasoning_summary` (nullable strings) with `data.reasoning_trace_source` / `data.reasoning_summary_source`, read from the event payload or the `data.performance` record an `orchestrator.llm.response` event wraps; provider-native aliases `reasoning_content`, `reasoning_text`, `reasoning`, `thinking_text`, `thinking`, `analysis`, `thought` still map to the trace | `Reasoning trace` and `Reasoning summary` blocks, plus a `Reasoning evidence` fact list |
 | Response text | `data.response_text`, `responseText`, `response`, `content`, `output_text`, `output`, `completion`, `text`; streamed `*.token` / `*.stream` chunks are concatenated | `Response` block |
 | Model, tool | `data.model`, `model_name`, `model_id`; `data.tool`, `tool_name` | meta line |
 | Usage | `data.usage.{input_tokens|prompt_tokens, output_tokens|completion_tokens, reasoning_tokens, cached_tokens, total_tokens}` or the same keys flat on `data`; `usage.completion_tokens_details.reasoning_tokens`, `usage.prompt_tokens_details.cached_tokens` | `Input` / `Cached` / `Output` / `Reasoning` / `Total tokens` rows, `in/out/think/cached` on the turn |
@@ -32,12 +33,14 @@ the expand/collapse control change presentation only.
 Timestamps are epoch seconds and are rendered through `fmtClock`; missing timestamps
 degrade the overview to emission order and are labelled as such.
 
-The cell inspector renders two labelled lists, `Record timing` and `Token usage`, with
-one row per fact. Three states are distinguished and never blurred: a filled value, `not
-recorded` when the journal was silent although the record kind could have carried the
-fact, and `n/a` when the phase cannot exist for that kind (a tool call has no first-token
-latency). The `Source` row names where the numbers came from — today always `journal
-event timestamps`, never provider-reported timing.
+The cell inspector renders three labelled lists, `Record timing`, `Token usage`, and
+`Reasoning evidence`, with one row per fact. Three states are distinguished and never
+blurred: a filled value, `not recorded` when the journal was silent although the record
+kind could have carried the fact, and `n/a` when the phase cannot exist for that kind
+(a tool call has no first-token latency). The `Source` row names where the numbers came
+from — today always `journal event timestamps`, never provider-reported timing. The
+reasoning rows keep the trace and the summary independent and name the metadata field
+each arrived in; `null` is rendered as `not recorded`, never as an inferred origin.
 
 ## 2. Gaps that need TESIS-side changes
 
@@ -45,17 +48,29 @@ Each gap lists what the UI shows today, what is missing from the artifacts, and 
 concrete change that would close it. The client already reads the keys in §1, so most
 fixes are emitter-only.
 
-### G1 — Provider reasoning is never recorded
+### G1 — Provider reasoning reaches the journal only through orchestrator telemetry
 
-- **Today:** no `Thinking` block ever appears for a real run; the block only renders when a journal carries a reasoning key.
-- **Missing:** TESIS does not emit reasoning/thinking text or reasoning-token counts.
-- **Change:** in the model client, add to the response event `data`:
-  `reasoning_content` (string, the model's reasoning text) and
-  `usage.completion_tokens_details.reasoning_tokens` (number).
-  If the provider streams reasoning, emit it as `llm.reasoning` / `llm.reasoning_token`
-  records; the view concatenates chunk records that sit inside a model cell.
-- **Consumption:** automatic — no client change needed once the keys are present.
-- **Verification:** `tests/trajectory.test.ts` ("projects request, response, reasoning …") asserts the projection; the browser test asserts that no `Thinking` block appears when the mock has none.
+- **Today:** TESIS `629fc89114523fd9f4bfe1948d7fa9c30f16a969` retains
+  `reasoning_trace`, `reasoning_trace_source`, `reasoning_summary`, and
+  `reasoning_summary_source` in the `llm_performance` record and physical attempt
+  records (`llm/reasoning_evidence.py`, `llm/runtime.py`). The orchestrator's
+  `orchestrator.llm.response` telemetry embeds that whole record under
+  `data.performance`, so its planning calls already expose the reasoning evidence to
+  this view. Other roles do not: `CoordinateCallContext.emit_activity` copies a fixed
+  field list, so their `llm.completed` / `llm.failed` data carries usage and
+  reasoning-token evidence but not the text or its source.
+- **Missing:** the four evidence fields on the non-orchestrator activity events
+  (payload generation, scoring, evaluator receipts).
+- **Change:** forward `reasoning_trace`, `reasoning_trace_source`, `reasoning_summary`,
+  and `reasoning_summary_source` from the completed or failed record into
+  `emit_activity` data, preserving `null` when the provider returned nothing. Keep each
+  text and its source in the same record so the client never pairs them across records.
+- **Consumption:** automatic — the client reads the flat keys and the nested
+  `data.performance` record, renders a `Reasoning trace` and a `Reasoning summary`
+  block, and names each source in the inspector.
+- **Verification:** `tests/trajectory.test.ts` ("keeps the trace and summary separate…",
+  "never attaches a source…"), `tests/trajectory-view.test.tsx` ("names the metadata
+  field…"), and the mock replay in `tests/browser/akg.spec.ts`.
 
 ### G2 — Prompts, system prompt, tool catalog, and request options
 
@@ -121,15 +136,16 @@ fixes are emitter-only.
 
 - Pairing identity: `data.call_id`, `data.callId`, or a top-level `call_id`. Without it, pairing falls back to namespace + kind + node + method, most recent open call first.
 - Status inputs: `data.ok` (boolean), `data.success` (boolean), `data.status` (string).
+- Reasoning evidence: `data.reasoning_trace` and `data.reasoning_summary` are nullable strings; `data.reasoning_trace_source` and `data.reasoning_summary_source` are nullable metadata field paths such as `additional_kwargs.reasoning_content`, `additional_kwargs.reasoning_details`, `additional_kwargs.reasoning`, `content`, or `output`. The keys are read from the event payload first and then from a nested `data.performance` record (`orchestrator.llm.response`); a payload's own text wins over the nested copy. `null` means the provider returned nothing (a summary, for example, is usually available only through OpenAI Codex auth). A source without its text is ignored, so provenance is never attached to a text another record carried. Provider-native aliases (`reasoning_content`, `reasoning_text`, `reasoning`, `thinking_text`, `thinking`, `analysis`, `thought`) still project into the trace with a `null` source.
 - Redaction: the API scrubs secret-looking strings and replaces secret-keyed values with `[REDACTED]` (`lib/server/fs-util.ts`). Prompt and reasoning text survive redaction; credentials inside them do not. Never rely on the view to hide secrets.
 - Determinism: identical event windows must produce identical models, so no `Date.now()`, no locale-dependent formatting, and no ordering by object iteration.
 
 ## 4. How to verify a change end to end
 
-1. Add the field to `data/akg-simulation.yaml` on an **existing** event first — the replay assertions count `18/18 events reduced`, so new events need those expectations updated in `tests/browser/akg.spec.ts`.
-2. `npx vitest run tests/trajectory.test.ts` — the projection tests cover request/response/reasoning, usage, TTFT, status, and search.
-3. `npx vitest run tests/trajectory-view.test.tsx` — the component tests cover the blocks, the turn meta, the timing table, and the record inspector's timing and usage rows.
-4. `PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 npx playwright test tests/browser/akg.spec.ts -g trajectory` — asserts the unfiltered 16-record ledger, chronology, turn status, node chips, AKG path, and the response/raw blocks against the mock replay.
+1. Add the field to `data/akg-simulation.yaml` on an **existing** event first — the replay assertions count `18/18 events reduced`, so new events need those expectations updated in `tests/browser/akg.spec.ts`. The fixture's `llm.response` already carries a trace with its source plus a `null` summary.
+2. `npx vitest run tests/trajectory.test.ts` — the projection tests cover request/response/reasoning (trace, summary, and sources), usage, TTFT, status, and search.
+3. `npx vitest run tests/trajectory-view.test.tsx` — the component tests cover the blocks, the turn meta, the timing table, and the record inspector's timing, usage, and reasoning rows.
+4. `PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 npx playwright test tests/browser/akg.spec.ts -g trajectory` — asserts the unfiltered 16-record ledger, chronology, turn status, node chips, AKG path, the reasoning trace and its source, and the response/raw blocks against the mock replay.
 5. Screenshots land in `test-results/acceptance/trajectory-*.png` for a visual check.
 
 ## 5. Constraints to preserve

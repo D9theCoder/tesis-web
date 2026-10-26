@@ -82,7 +82,7 @@ storage falls back to the session
 and then memory, and reduced-motion preferences swap instantly, keep a static rain
 pattern, and disable the boot, glitch, and scramble effects. Phone and
 coarse-pointer controls use 44px targets, including graph traversal and inventory
-actions. On wide screens the live monitor rail, its Coordinate, Conversation, and
+actions. On wide screens the live monitor rail, its Coordinate, Trajectory, and
 Outcomes panels, and the overall workspace height are resizable with pointer or
 keyboard separators, so the graph can grow past the default viewport-relative
 height; the stacked mobile layout is unchanged. The current-run live monitor remains the primary entry
@@ -278,20 +278,21 @@ unterminated records retain their byte cursor until the writer completes them.
 ## Graph dashboard
 
 Above 1200px, the AKG shares the workspace with a 330px supporting sidebar.
-The right sidebar divides its height between Coordinate (30%), Conversation
+The right sidebar divides its height between Coordinate (30%), Trajectory
 (40%), and Outcomes (30%); each panel scrolls independently. Smaller screens
 show compact execution context before the graph and stack the supporting panels.
 Experiment activity provides the complete paged journal below the live workspace,
 with execution identity, timestamp and inspectable event data. It refreshes the
 latest journal page automatically and resets when the journal changes. The
-Conversation panel is a single trajectory ledger over the same bounded 300-record
-window; earlier events remain available in the timeline. The ledger keeps the
-journal's own order and shows every record: turns carry a status, node states, and
-the AKG path, each call shows its kind, arguments, and paired duration, and
-expanding a call reveals a labelled record inspector (start time, total duration,
-TTFT, generation, throughput, and where the timing came from, then input, cached,
-output, reasoning, and total tokens; an unfilled row says `not recorded` and a
-phase the record kind cannot have says `n/a`), the request, reasoning, and
+Trajectory panel is a single ledger over the same bounded 300-record window;
+earlier events remain available in the timeline. The ledger keeps the journal's
+own order and shows every record: turns carry a status, node states, and the AKG
+path, each call shows its kind, arguments, and paired duration, and expanding a
+call reveals a labelled record inspector (start time, total duration, TTFT,
+generation, throughput, and where the timing came from; input, cached, output,
+reasoning tokens, and total tokens; then the reasoning trace and summary with the
+metadata field each arrived in; an unfilled row says `not recorded` and a phase
+the record kind cannot have says `n/a`), the request, reasoning trace or summary,
 response text, and the raw payload when the journal recorded them. A search field
 and a Conversation toggle narrow the ledger without hiding anything by default; the
 toggle keeps only System, User, and Model records for a quieter read. Each turn folds

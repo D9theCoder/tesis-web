@@ -97,6 +97,9 @@ const NOT_APPLICABLE = "n/a";
 const STREAM_GAP =
   "The journal carried no streamed chunk records, so this call has no first token to measure from.";
 
+const SOURCE_GAP =
+  "The journal carried this reasoning text without naming the metadata field it came from.";
+
 interface TrajectoryFact {
   label: string;
   value: string;
@@ -104,7 +107,7 @@ interface TrajectoryFact {
 }
 
 /**
- * Timing and token facts for one record.
+ * Timing, token, and reasoning facts for one record.
  *
  * This is the per-record inspector a harness trajectory shows: every
  * measurement gets its own labelled row, and a row the journal never filled
@@ -112,9 +115,13 @@ interface TrajectoryFact {
  * rows only apply to model calls, so other records read `n/a` rather than
  * "not recorded" — the difference between "the journal was silent" and "this
  * call has no such phase" matters when judging a run.
+ *
+ * Reasoning keeps its two representations apart: a provider trace and a
+ * provider summary each get a presence row and a row naming the metadata field
+ * they arrived in. Neither is inferred from the answer or the token counts.
  */
 function TrajectoryFacts({ cell }: { cell: TrajectoryCell }) {
-  const { timing, usage } = cell;
+  const { timing, usage, reasoning } = cell;
   const isModel = cell.kind === "model";
 
   const clock = (value: number | null) => (value == null ? NOT_RECORDED : fmtClock(value));
@@ -162,6 +169,36 @@ function TrajectoryFacts({ cell }: { cell: TrajectoryCell }) {
     { label: "Total tokens", value: count(usage.total) },
   ];
 
+  // A record that carries reasoning always reports it, even when its event type
+  // is not a plain model call; only an empty row falls back to `n/a`.
+  const traceSize = (text: string | null) =>
+    text != null
+      ? `${fmtNumber(text.length)} chars`
+      : isModel
+        ? NOT_RECORDED
+        : NOT_APPLICABLE;
+  const traceSource = (source: string | null, text: string | null) => {
+    if (text == null) return isModel ? NOT_RECORDED : NOT_APPLICABLE;
+    return source ?? NOT_RECORDED;
+  };
+  const sourceGap = (source: string | null, text: string | null) =>
+    text != null && source == null ? SOURCE_GAP : undefined;
+
+  const reasoningFacts: TrajectoryFact[] = [
+    { label: "Trace", value: traceSize(reasoning.trace) },
+    {
+      label: "Trace source",
+      value: traceSource(reasoning.traceSource, reasoning.trace),
+      title: sourceGap(reasoning.traceSource, reasoning.trace),
+    },
+    { label: "Summary", value: traceSize(reasoning.summary) },
+    {
+      label: "Summary source",
+      value: traceSource(reasoning.summarySource, reasoning.summary),
+      title: sourceGap(reasoning.summarySource, reasoning.summary),
+    },
+  ];
+
   return (
     <div className="trajectory-facts">
       <dl className="trajectory-fact-list" aria-label="Record timing">
@@ -177,6 +214,14 @@ function TrajectoryFacts({ cell }: { cell: TrajectoryCell }) {
           <div className="trajectory-fact" key={fact.label}>
             <dt>{fact.label}</dt>
             <dd>{fact.value}</dd>
+          </div>
+        ))}
+      </dl>
+      <dl className="trajectory-fact-list" aria-label="Reasoning evidence">
+        {reasoningFacts.map((fact) => (
+          <div className="trajectory-fact" key={fact.label}>
+            <dt>{fact.label}</dt>
+            <dd title={fact.title}>{fact.value}</dd>
           </div>
         ))}
       </dl>
@@ -309,19 +354,19 @@ export function TrajectoryView({ model }: { model: TrajectoryModel }) {
       <TrajectoryTiming model={model} overview={overview} shown={visible.length} />
 
       {model.turns.length === 0 ? (
-        <div className="empty-state conversation-empty-state" role="status">
+        <div className="empty-state trajectory-empty-state" role="status">
           <Route aria-hidden="true" size={18} />
           <p>No trajectory records yet</p>
           <span>Turn structure appears here as the run journal grows.</span>
         </div>
       ) : turns.length === 0 && conversationOnly ? (
-        <div className="empty-state conversation-empty-state" role="status">
+        <div className="empty-state trajectory-empty-state" role="status">
           <MessageSquare aria-hidden="true" size={18} />
           <p>No conversation records</p>
           <span>Tool, graph, and safety records are hidden by the conversation filter.</span>
         </div>
       ) : turns.length === 0 ? (
-        <div className="empty-state conversation-empty-state" role="status">
+        <div className="empty-state trajectory-empty-state" role="status">
           <Search aria-hidden="true" size={18} />
           <p>No records match “{query}”</p>
           <span>Clear the filter to see all {model.stats.cells} records.</span>
@@ -641,8 +686,11 @@ function TrajectoryCellRow({
             </p>
           )}
           {cell.inputText && <DetailBlock label="Request" text={cell.inputText} />}
-          {cell.thinkingText && (
-            <DetailBlock label="Thinking" text={cell.thinkingText} tone="thinking" />
+          {cell.reasoning.trace && (
+            <DetailBlock label="Reasoning trace" text={cell.reasoning.trace} tone="thinking" />
+          )}
+          {cell.reasoning.summary && (
+            <DetailBlock label="Reasoning summary" text={cell.reasoning.summary} tone="thinking" />
           )}
           {cell.outputText && <DetailBlock label="Response" text={cell.outputText} />}
           <ol className="trajectory-record-list">

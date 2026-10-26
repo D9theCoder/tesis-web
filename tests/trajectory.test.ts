@@ -309,13 +309,130 @@ describe("payload projection", () => {
     const [cell] = model.turns[0].cells;
     expect(cell.inputText).toContain("system: You are TESIS.");
     expect(cell.inputText).toContain("user: Pick the next AKG method.");
-    expect(cell.thinkingText).toBe("Dictionary attempt is cheapest.");
+    expect(cell.reasoning.trace).toBe("Dictionary attempt is cheapest.");
+    // A provider-native key without TESIS source metadata stays unprovenanced.
+    expect(cell.reasoning.traceSource).toBeNull();
     expect(cell.outputText).toBe("Use the seeded credential pair.");
     expect(cell.model).toBe("deepseek-chat");
     expect(cell.akgPath).toEqual(["unauthenticated", "brute_force", "bf_dictionary"]);
     expect(cell.usage).toEqual({ input: 120, output: 30, reasoning: 64, cached: null, total: 150 });
     expect(model.turns[0].akgPath).toEqual(["unauthenticated", "brute_force", "bf_dictionary"]);
     expect(model.turns[0].usage).toMatchObject({ input: 120, output: 30, total: 150 });
+  });
+
+  it("keeps the trace and summary separate with the source field each arrived in", () => {
+    const model = deriveTrajectory([
+      event("llm.response", {
+        timestamp: 1,
+        data: {
+          reasoning_trace: "Check the seeded pair first.",
+          reasoning_trace_source: "additional_kwargs.reasoning_content",
+          reasoning_summary: "Compared two payloads.",
+          reasoning_summary_source: "additional_kwargs.reasoning",
+        },
+      }),
+    ]);
+
+    const [cell] = model.turns[0].cells;
+    expect(cell.reasoning).toEqual({
+      trace: "Check the seeded pair first.",
+      traceSource: "additional_kwargs.reasoning_content",
+      summary: "Compared two payloads.",
+      summarySource: "additional_kwargs.reasoning",
+    });
+  });
+
+  it("reads reasoning from the performance record an orchestrator event wraps", () => {
+    const model = deriveTrajectory([
+      event("orchestrator.llm.response", {
+        timestamp: 1,
+        node: "orchestrator",
+        data: {
+          response_text: '{"next_agent":"sqli_union"}',
+          parse_status: "ok",
+          performance: {
+            model: "deepseek-v4.1-flash",
+            reasoning_trace: "Union is viable after the login bypass.",
+            reasoning_trace_source: "additional_kwargs.reasoning_content",
+            reasoning_summary: null,
+            reasoning_summary_source: null,
+          },
+        },
+      }),
+    ]);
+
+    const [cell] = model.turns[0].cells;
+    expect(cell.kind).toBe("model");
+    expect(cell.reasoning.trace).toBe("Union is viable after the login bypass.");
+    expect(cell.reasoning.traceSource).toBe("additional_kwargs.reasoning_content");
+    expect(cell.reasoning.summary).toBeNull();
+    expect(cell.reasoning.summarySource).toBeNull();
+  });
+
+  it("prefers a payload's own reasoning over the performance record it wraps", () => {
+    const model = deriveTrajectory([
+      event("llm.completed", {
+        timestamp: 1,
+        data: {
+          reasoning_trace: "Top-level trace.",
+          reasoning_trace_source: "content",
+          performance: {
+            reasoning_trace: "Nested trace.",
+            reasoning_trace_source: "additional_kwargs.reasoning_content",
+            reasoning_summary: "Nested summary.",
+            reasoning_summary_source: "additional_kwargs.reasoning",
+          },
+        },
+      }),
+    ]);
+
+    const [cell] = model.turns[0].cells;
+    expect(cell.reasoning.trace).toBe("Top-level trace.");
+    expect(cell.reasoning.traceSource).toBe("content");
+    // Each representation resolves independently, so the nested summary still shows.
+    expect(cell.reasoning.summary).toBe("Nested summary.");
+    expect(cell.reasoning.summarySource).toBe("additional_kwargs.reasoning");
+  });
+
+  it("never attaches a source to reasoning the journal did not carry", () => {
+    const model = deriveTrajectory([
+      event("llm.response", {
+        timestamp: 1,
+        data: {
+          reasoning_trace: null,
+          reasoning_trace_source: "additional_kwargs.reasoning_content",
+          reasoning_summary: null,
+          reasoning_summary_source: null,
+        },
+      }),
+    ]);
+
+    const [cell] = model.turns[0].cells;
+    expect(cell.reasoning).toEqual({
+      trace: null,
+      traceSource: null,
+      summary: null,
+      summarySource: null,
+    });
+  });
+
+  it("keeps each representation's own source when records are paired", () => {
+    const model = deriveTrajectory([
+      event("llm.request", { timestamp: 1 }),
+      event("llm.response", {
+        timestamp: 2,
+        data: {
+          reasoning_trace: "Streamed trace.",
+          reasoning_trace_source: "additional_kwargs.reasoning_details",
+          reasoning_summary: "Provider summary.",
+          reasoning_summary_source: "content",
+        },
+      }),
+    ]);
+
+    const [cell] = model.turns[0].cells;
+    expect(cell.reasoning.traceSource).toBe("additional_kwargs.reasoning_details");
+    expect(cell.reasoning.summarySource).toBe("content");
   });
 
   it("derives first-token latency and throughput from streamed chunks", () => {
@@ -344,7 +461,12 @@ describe("payload projection", () => {
     const [cell] = model.turns[0].cells;
     expect(cell.inputText).toBeNull();
     expect(cell.outputText).toBeNull();
-    expect(cell.thinkingText).toBeNull();
+    expect(cell.reasoning).toEqual({
+      trace: null,
+      traceSource: null,
+      summary: null,
+      summarySource: null,
+    });
     expect(cell.model).toBeNull();
     expect(cell.akgPath).toEqual([]);
     expect(cell.usage.total).toBeNull();
@@ -419,5 +541,24 @@ describe("payload projection", () => {
     expect(hits).toHaveLength(1);
     expect(hits[0].cells).toHaveLength(1);
     expect(filterTrajectoryTurns(model.turns, "credential-pair")).toEqual([]);
+  });
+
+  it("searches reasoning text and the source field it arrived in", () => {
+    const model = deriveTrajectory([
+      event("llm.response", {
+        timestamp: 1,
+        data: {
+          reasoning_trace: "Dictionary attempt is cheapest.",
+          reasoning_trace_source: "additional_kwargs.reasoning_content",
+          reasoning_summary: "Compared two payloads.",
+          reasoning_summary_source: "additional_kwargs.reasoning",
+        },
+      }),
+    ]);
+
+    expect(filterTrajectoryTurns(model.turns, "cheapest")).toHaveLength(1);
+    expect(filterTrajectoryTurns(model.turns, "compared two")).toHaveLength(1);
+    expect(filterTrajectoryTurns(model.turns, "additional_kwargs.reasoning")).toHaveLength(1);
+    expect(filterTrajectoryTurns(model.turns, "no-such-reasoning")).toEqual([]);
   });
 });

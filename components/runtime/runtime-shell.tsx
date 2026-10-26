@@ -18,7 +18,7 @@ import {
   fetchRuns,
 } from "@/lib/api-client";
 import { CoordinatePanel } from "@/components/runtime/coordinate-panel";
-import { ConversationPanel } from "@/components/runtime/conversation-panel";
+import { TrajectoryPanel } from "@/components/runtime/trajectory-panel";
 import { OutcomePanel } from "@/components/runtime/outcome-panel";
 import { ResizableRuntimeDashboard } from "@/components/runtime/resizable-dashboard";
 import { fmtDuration, normalizeRunStatus } from "@/lib/formatters";
@@ -450,7 +450,7 @@ export function RuntimeShell() {
         }
         panels={[
           { label: "Coordinate", content: <CoordinatePanel state={state} /> },
-          { label: "Conversation", content: <ConversationPanel state={state} /> },
+          { label: "Trajectory", content: <TrajectoryPanel state={state} /> },
           { label: "Outcomes", content: <OutcomePanel state={state} /> },
         ]}
       />

@@ -76,7 +76,7 @@ function renderDashboard() {
       graph={<div data-testid="graph" />}
       panels={[
         { label: "Coordinate", content: <div data-testid="coordinate" /> },
-        { label: "Conversation", content: <div data-testid="conversation" /> },
+        { label: "Trajectory", content: <div data-testid="trajectory" /> },
         { label: "Outcomes", content: <div data-testid="outcomes" /> },
       ]}
     />,
@@ -283,7 +283,7 @@ describe("ResizableRuntimeDashboard", () => {
     expect(coordinate).toHaveAttribute("aria-orientation", "horizontal");
     expect(coordinate).toHaveAttribute(
       "aria-controls",
-      "runtime-coordinate-panel runtime-conversation-panel",
+      "runtime-coordinate-panel runtime-trajectory-panel",
     );
     expect(coordinate).toHaveAttribute("aria-valuemin", "120");
     expect(coordinate).toHaveAttribute(
@@ -292,7 +292,7 @@ describe("ResizableRuntimeDashboard", () => {
     );
 
     expect(
-      separator("Resize runtime conversation panel"),
+      separator("Resize runtime trajectory panel"),
     ).toBeInTheDocument();
 
     expect(screen.getByTestId("coordinate").closest("section")).toHaveAttribute(
@@ -312,7 +312,7 @@ describe("ResizableRuntimeDashboard", () => {
     expect(screen.queryAllByRole("separator")).toHaveLength(0);
     expect(screen.getByTestId("graph")).toBeInTheDocument();
     expect(screen.getByTestId("coordinate")).toBeInTheDocument();
-    expect(screen.getByTestId("conversation")).toBeInTheDocument();
+    expect(screen.getByTestId("trajectory")).toBeInTheDocument();
     expect(screen.getByTestId("outcomes")).toBeInTheDocument();
 
     const dashboard = document.querySelector(".runtime-dashboard");
