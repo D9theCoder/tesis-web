@@ -50,6 +50,48 @@ describe("FieldControl", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Unknown security level");
   });
 
+  it("announces the hint as a description instead of part of the name", () => {
+    render(
+      <FieldControl
+        field={field({
+          path: "target_url",
+          label: "Target URL",
+          category: "target",
+          kind: "url",
+          valueType: "str",
+          choices: [],
+          multiple: false,
+          description: "Authorized DVWA base URL.",
+          forms: ["single", "matrix"],
+        })}
+        value="http://127.0.0.1/dvwa"
+        onChange={vi.fn()}
+      />,
+    );
+
+    const input = screen.getByRole("textbox", { name: "Target URL" });
+    expect(input).toHaveAccessibleDescription("Authorized DVWA base URL.");
+  });
+
+  it("states a boolean's value instead of a fixed word", () => {
+    const boolField = field({
+      path: "diagnose",
+      label: "Diagnostics",
+      category: "run",
+      kind: "boolean",
+      valueType: "bool",
+      choices: [],
+      multiple: false,
+      forms: ["single", "matrix"],
+    });
+    const { rerender } = render(<FieldControl field={boolField} value onChange={vi.fn()} />);
+    expect(screen.getByText("On")).toBeInTheDocument();
+
+    rerender(<FieldControl field={boolField} value={false} onChange={vi.fn()} />);
+    expect(screen.getByText("Off")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Diagnostics" })).not.toBeChecked();
+  });
+
   it("adds and removes a choice from a multi-select axis", () => {
     const onChange = vi.fn();
     render(<FieldControl field={field({})} value={[]} onChange={onChange} />);

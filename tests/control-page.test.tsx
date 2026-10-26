@@ -112,6 +112,38 @@ describe("ControlPage", () => {
     expect(fetchControlSchema).not.toHaveBeenCalled();
   });
 
+  it("keeps the launch draft when the reader checks another tab", async () => {
+    vi.mocked(fetchControlSchema).mockResolvedValue(schema);
+    render(<ControlPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /^Next$/ }));
+    await screen.findByRole("group", { name: "Coordinates step" });
+
+    fireEvent.click(screen.getByRole("tab", { name: /Runs/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /Launch/ }));
+
+    // The wizard is still mounted, so the step it had reached survives.
+    expect(screen.getByRole("group", { name: "Coordinates step" })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Scope step" })).not.toBeInTheDocument();
+  });
+
+  it("waits for the job list instead of painting an empty one", async () => {
+    vi.mocked(fetchControlSchema).mockResolvedValue(schema);
+    let settle: (value: { jobs: never[] }) => void = () => {};
+    vi.mocked(fetchControlJobs).mockImplementation(
+      () => new Promise<{ jobs: never[] }>(resolve => { settle = resolve; }),
+    );
+
+    render(<ControlPage />);
+    fireEvent.click(screen.getByRole("tab", { name: /Runs/ }));
+
+    expect(await screen.findByText("Loading runs…")).toBeInTheDocument();
+    settle({ jobs: [] });
+
+    expect(await screen.findByText("No run in this session yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Start a run/ })).toBeInTheDocument();
+  });
+
   it("keeps the refresh button out of its busy label before the first job list arrives", async () => {
     let settle: (value: { jobs: never[] }) => void = () => {};
     vi.mocked(fetchControlSchema).mockResolvedValue(schema);

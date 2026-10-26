@@ -318,6 +318,28 @@ describe("LaunchWizard", () => {
     );
   });
 
+  it("turns a loader error into the field's label and the step that owns it", async () => {
+    vi.mocked(validateControlDraft).mockResolvedValue({
+      valid: false,
+      error: "level: must be one of low, medium, high",
+      fieldErrors: { "__override__ level": "level: level: must be one of low, medium, high" },
+      resolved: null,
+      coordinates: [],
+      totalCoordinates: 0,
+    });
+
+    render(<LaunchWizard schema={schema} onStarted={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Review/ }));
+
+    const jump = await screen.findByRole("button", { name: /Fix in Coordinates/ });
+    const item = jump.closest("li");
+    expect(item).toHaveTextContent("Level: must be one of low, medium, high");
+    expect(screen.queryByText(/__override__/)).not.toBeInTheDocument();
+
+    fireEvent.click(jump);
+    expect(screen.getByRole("group", { name: "Coordinates step" })).toBeInTheDocument();
+  });
+
   it("shows matrix axes on the coordinates step and requires every axis", async () => {
     render(<LaunchWizard schema={schema} onStarted={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /^Matrix$/ }));

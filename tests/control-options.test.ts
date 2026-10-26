@@ -53,8 +53,13 @@ describe("matrix coordinate expansion", () => {
     ).toBe(false);
   });
 
-  it("renders a compact axis summary using 1 for empty axes", () => {
-    expect(matrixAxisSummary({ providers: ["a", "b"], repeats: 3 })).toBe("2 × 1 × 1 × 1 × 3");
+  it("renders a compact axis summary that names every axis and counts empty ones as 1", () => {
+    expect(matrixAxisSummary({ providers: ["a", "b"], repeats: 3 })).toBe(
+      "2 providers × 1 level × 1 surface × 1 payload mode × 3 repeats",
+    );
+    expect(matrixAxisSummary({ repeats: 1 })).toBe(
+      "1 provider × 1 level × 1 surface × 1 payload mode × 1 repeat",
+    );
   });
 });
 
