@@ -53,13 +53,6 @@ export function SettingsPanel() {
 
   return (
     <article className={`settings-page ${styles.settingsPage}`}>
-      <header className="page-header">
-        <div>
-          <h1 className="page-title">Settings</h1>
-          <p className="page-description">Choose how the observer looks.</p>
-        </div>
-      </header>
-
       <section className="settings-section" aria-labelledby="settings-appearance">
         <h2 className="settings-section-heading" id="settings-appearance">
           Appearance

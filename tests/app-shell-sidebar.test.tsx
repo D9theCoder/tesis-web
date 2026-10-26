@@ -102,6 +102,7 @@ describe("collapsible desktop sidebar", () => {
     const collapsedNav = screen.getByRole("navigation", { name: "Main navigation" });
     const collapsedLinks = within(collapsedNav).getAllByRole("link");
     expect(collapsedLinks.map(link => link.textContent)).toEqual([
+      "Control",
       "Live monitor",
       "Overview",
       "Results",
@@ -115,6 +116,7 @@ describe("collapsible desktop sidebar", () => {
     expect(within(drawerNav).getByRole("link", { name: "Live monitor" })).toHaveTextContent("Live monitor");
     expect(within(drawerNav).getByRole("link", { name: "Settings" })).toHaveTextContent("Settings");
     expect(within(drawerNav).getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
+    expect(within(drawerNav).getByRole("link", { name: "Control" })).toHaveAttribute("href", "/control");
     expect(within(drawerNav).getByRole("link", { name: "Settings" })).not.toHaveAttribute("title");
   });
 

@@ -15,10 +15,10 @@ evidence.
 
 ## Product Purpose
 
-TESIS Web Observer makes TESIS experiment progress and completed results
-inspectable through a read-only browser interface. It supports understanding
-agent activity, following Attack Knowledge Graph (AKG) traversal, reviewing
-results and scoring, and comparing matrix coordinates for thesis analysis.
+TESIS Web Console makes TESIS experiments both runnable and inspectable from
+the browser. Operators configure a matrix, launch and cancel runs, run the
+Doctor, then follow agent activity, Attack Knowledge Graph (AKG) traversal,
+scoring, and matrix coordinates for thesis analysis.
 
 Live monitoring and completed-results review have equal priority. Successful
 use means viewers can understand what happened, inspect the evidence behind a
@@ -51,8 +51,12 @@ coverage, and scoring provenance.
 
 ## Capabilities and Constraints
 
-- Preserve the observer-only boundary. Real-run endpoints never launch, cancel,
-  or modify experiments and never write into `TESIS_ROOT`.
+- Keep control writes explicit and local. Launch, cancel, Doctor, and
+  configuration saves are loopback-gated (or host-allowlisted), reviewed in the
+  UI before they run, and never trust request data as a path or argv value.
+- Never write into `TESIS_ROOT` from the web process. Experiments started from
+  the console write artifacts through the TESIS runtime; only the explicit,
+  backed-up `config.yaml` sync touches the checkout.
 - Mock replay remains separate from live TESIS, DVWA, and model-provider
   execution.
 - Filesystem access belongs on the server. User-derived paths must pass the
@@ -93,7 +97,7 @@ and status panels; completed-results review remains equally accessible.
 ## Evidence on Hand
 
 - `README.md` documents the workflows, routes, artifact contracts, configuration,
-  and observer-only boundary.
+  and the control-plane safety boundary.
 - `AGENTS.md` records architecture, accessibility, and contribution constraints.
 - `lib/schemas.ts` defines the shared data contracts; `lib/server/` contains
   filesystem discovery, validation, source resolution, and redaction.

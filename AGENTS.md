@@ -12,7 +12,13 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## Purpose and boundaries
 
-TESIS Web is a read-only Next.js observer for TESIS runs. It discovers local run descriptors, tails redacted runtime journals, displays the Attack Knowledge Graph (AKG), and renders completed artifacts. Real-run endpoints must never launch, cancel, or modify TESIS experiments or write into `TESIS_ROOT`.
+TESIS Web is a Next.js console for TESIS runs with two clearly separated halves.
+
+**Observation (read-only).** It discovers local run descriptors, tails redacted runtime journals, displays the Attack Knowledge Graph (AKG), and renders completed artifacts. Observer routes must never modify TESIS artifacts.
+
+**Runtime control (explicit, local).** It edits a web-owned settings profile, validates it with the real TESIS loader, and starts/cancels experiments by spawning the checkout's own interpreter (`python -m tesis run --headless …`). That process — not the Next.js server — writes artifacts under `TESIS_ROOT/results`. Every control write is gated: loopback `Host` (or `TESIS_CONTROL_ALLOWED_HOSTS`), same-origin `Origin`, and `TESIS_CONTROL_DISABLED=1` as a kill switch. Never add a control route that skips `assertControlAllowed`.
+
+**Never do from the web process:** write into `TESIS_ROOT` except the explicit, backed-up `config.yaml` sync; hand-edit artifacts; import TESIS Python; return provider keys, `dvwa_password`, or the resolved `scoring_evaluator`; pass request values into argv, env vars, or filesystem paths.
 
 The mock AKG flow is local test data: it reads `data/akg-simulation.yaml`, replays events in the browser reducer, and verifies the resulting client state. Keep this separate from live TESIS and provider execution.
 
@@ -26,18 +32,23 @@ The mock AKG flow is local test data: it reads `data/akg-simulation.yaml`, repla
 | `app/api/mock/akg/` | Serves the checked-in mock replay fixture and assertions. It must not contact TESIS, DVWA, or model providers. |
 | `app/api/runtime/` | Discovers runs, resolves one execution, and tails cursor-based runtime events. |
 | `app/api/results/` | Loads aggregate results and individual matrix-coordinate artifacts. |
+| `app/api/control/` | Runtime control plane: schema, config validate/save/sync, provider discovery, run start/list/detail/cancel, job log, Doctor. Mutations call `assertControlAllowed` and reply through `controlResponse`. |
 | `app/results/[executionId]/` | Dynamic results explorer page for a completed execution. |
 | `components/` | React UI outside the routing tree. Keep data access and domain transformations in `lib/`. |
 | `components/runtime/` | Live/mock dashboard orchestration, AKG visualization, and runtime side panels. |
 | `components/results/` | Coordinate navigation, scoring, evidence, and artifact detail views. |
+| `components/control/` | Launch wizard, run console, Doctor panel, and the spec-driven field control shared with Settings. |
+| `components/settings/` | Server-backed runtime settings (providers, AI scorer, experiment defaults, YAML) and the appearance panel. |
 | `components/ui/` | Small reusable visual primitives shared by feature components. |
 | `data/` | Versioned local fixtures. Currently contains the YAML mock AKG session. |
 | `lib/` | Shared schemas, API client, reducers, result normalization, AKG data/layout/verification, formatting, and utilities. Prefer pure functions here. |
 | `lib/server/` | Server-only filesystem discovery and path resolution under `TESIS_ROOT`. Never import these modules into Client Components. |
+| `lib/server/control/` | Control plane internals: bridge subprocess, profile store, job supervisor, env layering, access guard, JSON envelope. |
+| `scripts/tesis_bridge.py` | Python bridge executed by the TESIS interpreter. Owns field specs, coercion, validation, atomic saving, model discovery, and plan projection. Change TESIS semantics here, never by re-implementing them in TypeScript. |
 | `tests/` | Vitest unit and React component tests. Test files mirror the relevant `lib/` or component behavior. |
 | `tests/browser/` | Playwright acceptance tests for replay, graph interaction, responsiveness, and reduced motion. |
 | `types/` | Project-wide ambient TypeScript declarations for packages without suitable types. |
-| `scripts/` | Reserved for repeatable repository automation; keep one-off shell commands out of application code. |
+| `scripts/` | Repeatable repository automation. `tesis_bridge.py` is the only production script; keep one-off shell commands out of application code. |
 | `.agents/`, `.codex/` | Local agent-tooling directories. Application code must not depend on their contents. |
 
 Generated directories such as `.next/`, `node_modules/`, `test-results/`, and `playwright-report/` are build or test output. Do not edit or commit them.
@@ -64,6 +75,11 @@ npm run dev
 Environment variables:
 
 - `TESIS_ROOT`: local TESIS repository containing runtime and result artifacts.
+- `TESIS_WEB_STATE_DIR`: web-owned profile, profile `.env`, and job records (default `.tesis-web/`).
+- `TESIS_PYTHON`: interpreter that can import TESIS (default `$TESIS_ROOT/.venv/bin/python`).
+- `TESIS_CONTROL_ALLOWED_HOSTS`: extra hostnames allowed to call mutating control routes.
+- `TESIS_CONTROL_DISABLED`: `1` disables the control plane and leaves the observer read-only.
+- `TESIS_CONTROL_ALLOW_CONCURRENT_RUNS`: `1` allows overlapping experiments (default refuses).
 - `NEXT_PUBLIC_TESIS_POLL_MS`: browser polling interval.
 - `PORT`: local server port.
 - `NEXT_ALLOWED_DEV_ORIGINS`: additional development hosts, useful for WSL access.
@@ -93,7 +109,9 @@ Add or update focused tests when changing reducers, schemas, normalization, path
 
 ## Change discipline
 
-- Preserve the observer-only boundary and backward compatibility with existing TESIS artifacts.
+- Preserve the observation boundary and backward compatibility with existing TESIS artifacts. Control writes must stay explicit, audited by the UI, and loopback-gated.
+- Keep configuration semantics in `scripts/tesis_bridge.py`; the TypeScript side renders what the bridge reports.
+- Never return unmasked credentials: the bridge masks literal secrets as placeholders and scrubs resolved config; do not run a blanket `redact()` over a YAML document (it rewrites `${VAR}` references and corrupts the round trip).
 - Keep changes focused; do not reformat unrelated files or overwrite existing worktree changes.
 - Update `README.md`, `.env.example`, and tests when behavior, routes, configuration, or commands change.
 - Do not commit or push unless the user explicitly asks.

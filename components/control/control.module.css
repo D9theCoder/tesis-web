@@ -1,0 +1,299 @@
+.page {
+  max-width: 960px;
+  min-width: 0;
+}
+
+.tabs {
+  margin: 18px 0 16px;
+}
+
+.panel {
+  min-width: 0;
+}
+
+.wizard,
+.console {
+  min-width: 0;
+}
+
+.cardHint {
+  margin-top: 4px;
+  max-width: 78ch;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+
+/* Step navigation reads as the same underline tabs used for page views. The row
+   wraps rather than scrolls so the 2px focus ring is never clipped. */
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin: 0 0 16px -15px;
+  padding: 0;
+  list-style: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.stepButton {
+  padding: 11px 15px;
+  min-height: 42px;
+  margin-bottom: -1px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.stepButton:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.stepButton:disabled {
+  opacity: 0.5;
+}
+
+.stepActive {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.stepBody {
+  min-height: 220px;
+}
+
+/* Programmatic focus target after a step change: no ring for pointer use, the
+   shared ring when the change came from the keyboard. */
+.stepBody:focus {
+  outline: none;
+}
+
+.stepBody:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.coordinatePane {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.divider {
+  height: 1px;
+  background: var(--border);
+}
+
+.matrixAxes {
+  display: grid;
+  gap: 10px;
+}
+
+.groupHeading {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.warning {
+  color: var(--warning);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.fullWidth {
+  grid-column: 1 / -1;
+}
+
+.review {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.reviewHeading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.reviewGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px;
+  margin: 0;
+}
+
+.reviewGrid > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.reviewGrid dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.reviewGrid dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.fieldErrorList,
+.warningList {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.fieldErrorList {
+  color: var(--danger);
+}
+
+.warningList {
+  color: var(--warning);
+}
+
+.fieldErrorList code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.wizardFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.statusRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-top: 10px;
+}
+
+.footerButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.pathValue {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.resultCell {
+  max-width: 320px;
+  color: var(--secondary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.rowButton {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.jobDetail {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.detailActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.detailGrid {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.detailGrid > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.detailGrid dt {
+  color: var(--muted);
+  min-width: 92px;
+}
+
+.detailGrid dd {
+  margin: 0;
+  min-width: 0;
+  flex: 1;
+}
+
+.logHeading {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+@media (max-width: 640px) {
+  .reviewGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .steps {
+    margin-left: -15px;
+  }
+
+  .stepButton {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 600px), (any-pointer: coarse) {
+  .stepButton {
+    min-height: 44px;
+  }
+}

@@ -12,9 +12,9 @@ const geist = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "TESIS Observer",
+  title: "TESIS Console",
   description:
-    "Read-only web observer and artifact explorer for the TESIS autonomous penetration-testing framework (DVWA sandbox).",
+    "Runtime control plane and evidence console for the TESIS autonomous penetration-testing framework (DVWA sandbox).",
 };
 
 export default function RootLayout({

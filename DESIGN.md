@@ -1,6 +1,6 @@
 ---
-name: TESIS Web Observer
-description: A read-only research observer for live TESIS runs and their evidence.
+name: TESIS Web Console
+description: A runtime control plane and evidence console for live TESIS experiments.
 colors:
   canvas: "var(--canvas)"
   surface: "var(--surface)"
@@ -220,7 +220,7 @@ The palette pairs cool neutrals with one blue interaction color and restrained s
 
 ## Hacker Mode (third variant)
 
-**Intent:** the movie version of a research terminal. Near-black phosphor green, full monospace, CRT glow, scanlines, and rain behind the workspace. It is an opt-in skin over the same observer, not a separate product: every page, data contract, status label, and read-only boundary remains the same.
+**Intent:** the movie version of a research terminal. Near-black phosphor green, full monospace, CRT glow, scanlines, and rain behind the workspace. It is an opt-in skin over the same observer, not a separate product: every page, data contract, status label, and control boundary remains the same.
 
 ### Palette and tokens
 
@@ -397,10 +397,24 @@ Hacker mode tightens cards, panels, and controls to 2px and adds bracketed title
 - **Mobile:** Navigation opens in a left-side drawer; the top bar retains the menu control and page context. The drawer always shows full labels.
 
 ### Settings
-- `/settings` is an Operate surface: one appearance section with a native three-way radio group for Light, Dark, and Hacker, plus a Cheat code section. The group's accessible name includes the current mode, selection is announced and focus stays on the chosen radio, and the layout does not change on selection.
+- `/settings` is an Operate surface with two halves. **Runtime configuration** owns the experiment: an Experiment tab of loader-backed fields (target, run limits, reporting, logging, guardrails, LLM runtime), a Model providers tab of provider records plus the add/edit form beside them, an AI scorer tab (human / AI / human+AI preset, rubric version, frozen evaluator limits), and an Advanced YAML tab. The card footer carries the actions in one row, left to right by blast radius: Discard changes (with its second-click confirm), Validate, then the outline "Write to TESIS config.yaml", then the primary Save profile. Discarding never touches the saved profile; validation and saving both run through the TESIS loader before anything is replaced.
+- **Appearance** stays below it: one section with a native three-way radio group for Light, Dark, and Hacker, plus a Cheat code section. The group's accessible name includes the current mode, selection is announced and focus stays on the chosen radio, and the layout does not change on selection.
 - Light and dark render the cheat-code switch as a plain borderless row with a simple pill; hacker keeps the boxed chip card over its terminal chrome. State is conveyed by `aria-checked` (and the pill/chip visually), focus stays on the control.
 - Hacker is selected only in Appearance or through the cheat code; the header light/dark quick switch steps aside while hacker is active. The page uses the same card, heading, and focus system in every theme.
+- Each configured provider is a record, not a paragraph: the display name carries the exceptions only (`no key`, `staged`, `removal staged`), one meta line holds the protocol and model count, and a labelled fact spine lists Base URL, Catalog, Models, and Key. Model ids are discrete mono chips, never a comma-joined line. The facts pair into two columns when the row is wide enough, except the models row, which keeps the full width so an id never splits inside a half cell; the editor narrows the row, so the facts return to one column there. `Edit provider` and `Remove` hold the right edge of the row at the height of its name, so nothing floats in the middle of the record.
+- ChatGPT sign-in is its own block under a divider: a plain-language title with `openai_codex_auth` demoted to a mono reference beside it, its two terminal-backed actions on the heading row, and the `python -m tesis auth login` command as a code strip sized to its content.
+- The Advanced YAML tab paints the document with token colour (comments, keys, strings, numbers/literals, `${VAR}` references, secret placeholders) behind a transparent textarea, so selection, undo, and the caret stay native.
+- Small mutually exclusive choices (experiment mode, payload review preset) use one bordered segmented track that sizes to its content; it never stretches across the card.
 - The appearance section keeps only the theme decision. Rain and the session cinematics live in the hacker status bar; motion behavior follows the OS setting; storage behavior stays in the implementation, not in explanatory copy.
+
+### Runtime control
+- `/control` is an Operate surface in one card at a time: Launch, Runs, and Doctor are page tabs, and the Launch card repeats the same underline treatment for its four steps so the two levels read as one system. The step row wraps onto a second line instead of scrolling, because a horizontal scroller clips the 2px focus ring; steps keep 44px targets on small screens and coarse pointers.
+- The experiment mode stays in the card header as a segmented track, because switching between a single run and a matrix applies to every step; a segmented track in a card header is a control, not a nested card. Changing the step moves focus to the new step body, so pressing Enter on Next never drops focus to the page body.
+- Review is read-only: it resolves the request with the TESIS loader, lists field errors as `path` plus message, and keeps Start disabled until the resolution passes. Start is the card's only primary button and names the save when the draft is dirty ("Save and start").
+- Runs lists the supervised jobs and details the selected one. Cancel run is an outline button because the first request is cooperative; Force kill is a ghost that opens a confirm dialog whose destructive button is the only red control in the flow. A selected run shows its status, pid, execution, artifact directory, command, and the tailed runtime log in one focusable scroll region.
+- Doctor runs offline checks by default; live checks authenticate to the target and spend provider credits, so their dialog spells that out and confirms with the dialog's primary action.
+- Empty states stay inside the card they belong to and name the next step. A card that is still loading shows its own header plus one status line, in the same shape as the loaded card, so the page never reflows into a different shell.
+- A modal's confirm is its primary action, not a status hue; red is reserved for the destructive confirm of an action that cannot be undone. Cancel holds initial focus so Escape and Enter on the dialog never destroy work.
 
 ### Hacker Chrome
 - The fixed status bar, scanline/vignette overlays, and rain canvas are inert outside hacker. The bar groups `[ OK ]` observer status, the `[ RAIN ]` three-way control, the `[ SPLASH ]` and `[ POWER-DOWN ]` on/off switches, and a UTC clock; at 375px it keeps the rain and cinematic controls and the clock and drops nonessential status copy.

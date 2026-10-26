@@ -26,6 +26,14 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# web control-plane state (profile, profile .env, job records)
+/.tesis-web/
+/.tesis-web-test/
+/.test-tmp/
+
+# the bridge runs under the TESIS interpreter
+__pycache__/
+
 # browser acceptance output
 /test-results/
 /playwright-report/

@@ -132,6 +132,7 @@ export function Tabs({
   className,
   idPrefix,
   panelId,
+  label = "View",
 }: {
   tabs: Array<{ value: string; label: string; badge?: number }>;
   value: string;
@@ -139,6 +140,7 @@ export function Tabs({
   className?: string;
   idPrefix?: string;
   panelId?: string;
+  label?: string;
 }) {
   return (
     <div
@@ -147,7 +149,7 @@ export function Tabs({
         className,
       )}
       role="tablist"
-      aria-label="View"
+      aria-label={label}
     >
       {tabs.map((tab, index) => (
         <button
@@ -181,6 +183,83 @@ export function Tabs({
           )}
         </button>
       ))}
+    </div>
+  );
+}
+
+/* Centered confirmation dialog */
+
+export function Dialog({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: React.ReactNode;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+}) {
+  const dialog = React.useRef<HTMLDivElement>(null);
+  const titleId = React.useId();
+  const bodyId = React.useId();
+  React.useEffect(() => {
+    if (!open) return;
+    const origin = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    // A confirmation starts on its least destructive control.
+    const initial =
+      dialog.current?.querySelector<HTMLElement>("[data-dialog-initial-focus]") ??
+      dialog.current?.querySelector<HTMLElement>("button");
+    initial?.focus();
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      origin?.focus();
+    };
+  }, [open]);
+  if (!open) return null;
+  return (
+    <div
+      ref={dialog}
+      className="ui-dialog-layer"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={bodyId}
+      onKeyDown={event => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+        } else if (event.key === "Tab") {
+          const controls = event.currentTarget.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          );
+          const first = controls[0], last = controls[controls.length - 1];
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+          }
+        }
+      }}
+    >
+      <div className="ui-dialog-backdrop" onClick={onClose} />
+      <div className="ui-dialog">
+        <div className="ui-dialog-header">
+          <div id={titleId} className="ui-dialog-title">{title}</div>
+          <button type="button" onClick={onClose} className="ui-button ui-button-ghost ui-button-icon" aria-label="Close">
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
+        <div className="ui-dialog-body" id={bodyId}>{children}</div>
+        {footer ? <div className="ui-dialog-footer">{footer}</div> : null}
+      </div>
     </div>
   );
 }

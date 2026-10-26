@@ -2,7 +2,7 @@
   "name": "tesis-web",
   "version": "0.1.0",
   "private": true,
-  "description": "Read-only web observer and artifact explorer for the TESIS penetration-testing framework.",
+  "description": "Runtime control plane and evidence console for the TESIS penetration-testing framework.",
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0",
     "build": "next build --webpack",

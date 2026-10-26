@@ -1,0 +1,523 @@
+.panel {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.header .hint {
+  max-width: 78ch;
+}
+
+.headerBadges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.hint code,
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.tabs {
+  margin-top: 4px;
+}
+
+
+.sectionHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.providerPane {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+  gap: 20px;
+  align-items: start;
+}
+
+.providerPaneSolo {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.providerList,
+.providerEditor {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* The editor is the second column of the same panel, not a card in a card. */
+.providerEditor {
+  padding-left: 20px;
+  border-left: 1px solid var(--border);
+}
+
+/* One provider reads as a record: identity and facts on the left, the actions
+   that touch it on the right, so no line floats in the middle of the row. */
+.providerRows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.providerRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px 24px;
+  align-items: start;
+  padding: 14px 0;
+}
+
+.providerRow:first-child {
+  padding-top: 6px;
+}
+
+.providerRow + .providerRow {
+  border-top: 1px solid var(--border);
+}
+
+.providerIdentity {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.providerHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.providerName {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.providerMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.providerMeta code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--secondary);
+}
+
+.providerFacts {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  min-width: 0;
+}
+
+.providerFacts > div {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.providerFacts dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.providerFacts dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--secondary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.providerFacts code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.providerModels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.providerModels code {
+  display: inline-block;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface-subtle);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.emptyValue {
+  color: var(--muted);
+}
+
+.providerAside {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.authBlock {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.authTitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.authKey {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.commandBlock {
+  display: block;
+  justify-self: start;
+  max-width: 100%;
+  padding: 8px 12px;
+  border-radius: 5px;
+  background: var(--surface-subtle);
+  color: var(--secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.modelPicker {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.inlineAdd {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.inlineAdd .form-control {
+  flex: 1;
+}
+
+.selectedModels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 24px;
+}
+
+.modelChip {
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.modelChip:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.codexStatus {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.codexStatus > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.codexStatus dt {
+  min-width: 120px;
+  color: var(--muted);
+}
+
+.codexStatus dd {
+  margin: 0;
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.codexModels {
+  display: grid;
+  gap: 4px;
+  max-height: 220px;
+  overflow: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.codexModels li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.scorerPane {
+  display: grid;
+  gap: 12px;
+}
+
+.groupHeading {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.yamlPane {
+  display: grid;
+  gap: 12px;
+}
+
+/* YAML editor: the textarea drives the box; the painted layer is pinned to it
+   and follows its scroll. Without the absolute layer the pre's full text height
+   would stretch the editor to the whole document. */
+.yamlEditor {
+  position: relative;
+  width: 100%;
+  border: 1px solid var(--control-border);
+  border-radius: 5px;
+  background: var(--surface);
+}
+
+.yamlHighlight,
+.yamlInput {
+  margin: 0;
+  padding: 12px 14px;
+  border: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre;
+  tab-size: 2;
+}
+
+.yamlHighlight {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  pointer-events: none;
+  color: var(--text);
+  scrollbar-width: none;
+  border-radius: 5px;
+}
+
+.yamlHighlight::-webkit-scrollbar {
+  display: none;
+}
+
+.yamlInput {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 420px;
+  max-height: 70vh;
+  resize: vertical;
+  overflow: auto;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--text);
+  overscroll-behavior: contain;
+  border-radius: 5px;
+}
+
+.yamlInput::selection {
+  background: rgb(var(--accent-rgb) / .22);
+}
+
+.yamlEditor:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.yamlInput:focus-visible {
+  outline: none;
+}
+
+/* Syntax colour stays inside the neutral ink ramp; only environment
+   references take the interaction colour, and no status hue is reused. */
+.yamlKey { color: var(--text); font-weight: 600; }
+.yamlComment { color: var(--muted); }
+.yamlString { color: var(--secondary); }
+.yamlNumber { color: var(--text); }
+.yamlLiteral { color: var(--text); font-weight: 500; }
+.yamlEnv { color: var(--accent); }
+.yamlSecret { color: var(--secondary); font-weight: 600; }
+.yamlPunctuation { color: var(--muted); }
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.profilePaths {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  min-width: 0;
+}
+
+.profilePaths > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.profilePaths dt {
+  color: var(--muted);
+}
+
+.profilePaths dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.profilePaths code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 900px) {
+  /* Wide rows pair the facts instead of leaving a hole before the actions. */
+  .providerFacts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 32px;
+  }
+
+  /* Model ids keep their own line instead of splitting inside a half cell. */
+  .factWide {
+    grid-column: 1 / -1;
+  }
+
+  /* The editor narrows the row, so the facts go back to one column there. */
+  .providerPaneSplit .providerFacts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .providerRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .providerAside {
+    justify-content: flex-start;
+  }
+
+  .providerFacts > div {
+    grid-template-columns: 60px minmax(0, 1fr);
+    gap: 10px;
+  }
+}
+
+@media (max-width: 600px) {
+  .footer {
+    align-items: stretch;
+  }
+
+  /* The two consequential actions take the full width; the draft actions keep
+     their natural size on one row above them. */
+  .footerWide {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 1040px) {
+  .providerPane {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .providerEditor {
+    padding-left: 0;
+    padding-top: 16px;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}
+
+@media (any-pointer: coarse) {
+  .modelChip {
+    min-height: 44px;
+  }
+}

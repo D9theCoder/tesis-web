@@ -1,14 +1,25 @@
-# TESIS Web Observer
+# TESIS Web Console
 
-A read-only web observer and artifact explorer for the
+A web control plane and observer for the
 [TESIS](https://github.com/example/tesis) autonomous penetration-testing
-framework (authorized DVWA sandbox only). It discovers active experiments,
-tails the redacted runtime journal, and opens a detailed results explorer
-after completion.
+framework (authorized DVWA sandbox only). It configures the experiment matrix,
+starts and cancels runs through the same headless entry point as the TUI, then
+tracks them live and opens a detailed results explorer after completion.
 
-**This application is observer-only for real TESIS runs.** It never launches,
-cancels, or mutates experiments, and it never writes to the Python repository.
-The dashboard's `Mock AKG test` control only replays the checked-in
+**Runtime controls are local by default.** Launch, cancel, Doctor, and
+configuration writes are accepted only from loopback hosts unless
+`TESIS_CONTROL_ALLOWED_HOSTS` names others, so binding the dev server to
+`0.0.0.0` for WSL access does not expose an experiment trigger to the network.
+Reads stay available to every client, as before.
+
+**Configuration is web-owned.** Settings are saved to a profile under
+`TESIS_WEB_STATE_DIR` (default `.tesis-web/`) and passed to the runtime with
+`--config`. The Python checkout's `config.yaml` is only rewritten by the
+explicit **Write to TESIS config.yaml** action, which keeps a timestamped
+backup first. Provider API keys entered in the web go to the profile `.env`,
+never to YAML and never back to the browser.
+
+The dashboard's `Mock AKG test` control still only replays the checked-in
 `data/akg-simulation.yaml` fixture through the browser reducer; it does not
 contact DVWA or a model provider.
 
@@ -16,6 +27,9 @@ contact DVWA or a model provider.
 
 - Node.js 22 (tested with Node 22.23.2)
 - npm
+- A TESIS checkout with its virtualenv (`TESIS_ROOT/.venv/bin/python`). The web
+  never imports TESIS; it drives the checkout through a small bridge script and
+  subprocesses, so this interpreter must exist for settings and runs to work.
 
 ## Setup
 
@@ -41,12 +55,75 @@ npm run dev      # http://127.0.0.1:3000 (also reachable via the current WSL IP)
 npm run build && npm run start
 ```
 
-The live dashboard begins in a waiting state. When you start an experiment
-with `python -m tesis run --config config.yaml` (or the headless CLI), it
-auto-adopts the newest active descriptor, replays the journal from cursor zero,
-then polls for new events. If no run is active when the page opens, it replays
-the newest journaled or artifact-backed run so completed experiments remain
-visible. On completion a button links to the detailed results page.
+The live dashboard begins in a waiting state. When an experiment starts — from
+`Control`, the TUI, or the headless CLI — it auto-adopts the newest active
+descriptor, replays the journal from cursor zero, then polls for new events. If
+no run is active when the page opens, it replays the newest journaled or
+artifact-backed run so completed experiments remain visible. On completion a
+button links to the detailed results page.
+
+## Runtime control
+
+`/control` is the runtime control surface. It has three tabs:
+
+- **Launch** — a `Scope → Coordinates → Runtime → Review` wizard matching the
+  TUI launcher. *Single run* edits one coordinate; *Matrix* adds the
+  `providers × levels × surfaces × payload_modes × repeats` axes with a live
+  coordinate count. Review resolves the request through the real TESIS loader
+  and is the only step with **Start**, which saves the reviewed document to the
+  web profile and launches `python -m tesis run --headless --mode … --json`.
+- **Runs** — supervised jobs with status, elapsed time, log tail, artifact and
+  execution identity, **Cancel run** (graceful `SIGINT`, which the runtime turns
+  into a cancelled artifact and terminal descriptor) and an explicit
+  **Force kill** escalation. One run at a time is enforced; set
+  `TESIS_CONTROL_ALLOW_CONCURRENT_RUNS=1` to override.
+- **Doctor** — offline checks, plus a two-step confirmed live check that
+  contacts DVWA and the model providers.
+
+`/settings` holds the server-backed configuration: **Experiment** defaults,
+**Model providers** (add/edit a provider, discover its catalog, stage API keys),
+**AI scorer** (human / AI / human+AI preset, rubric version, frozen evaluator
+model and limits) and **Advanced YAML** (the masked document with token colour,
+validated before save). The footer offers **Validate**, **Discard changes**
+(a second click confirms a draft reset), **Save profile**, and the explicitly
+confirmed **Write to TESIS config.yaml**. The appearance options (theme, cheat
+code) remain below it.
+
+Which file is authoritative:
+
+| Document | Written by | Read by |
+| --- | --- | --- |
+| `TESIS_WEB_STATE_DIR/config.yaml` | Settings, and the reviewed Start request | Every run and Doctor job started from the web |
+| `TESIS_WEB_STATE_DIR/.env` | Settings, for provider keys entered in the web | The runtime subprocess, which loads `.env` next to `--config` |
+| `TESIS_ROOT/config.yaml` | Only **Write to TESIS config.yaml** (backup kept) | The TUI and headless CLI |
+
+The profile is seeded from `TESIS_ROOT/config.yaml` on first use so existing
+settings carry over. `${VAR}` references are resolved from the checkout `.env`,
+so credentials that already work in the TUI keep working here without being
+copied.
+
+### Control API
+
+Mutating routes require a loopback `Host` (or a host listed in
+`TESIS_CONTROL_ALLOWED_HOSTS`) and are additionally rejected for cross-origin
+browser requests:
+
+- `GET /api/control/schema` — field specs, choices, masked profile, provider and scorer projections, active job
+- `POST /api/control/config/validate` — apply typed overrides and resolve with the TESIS loader
+- `POST /api/control/config/save` — validate, then atomically replace the profile (and profile `.env`)
+- `POST /api/control/config/sync` — write the profile over `TESIS_ROOT/config.yaml`
+- `POST /api/control/config/models` — fetch a provider model catalog
+- `GET /api/control/auth?action=status|models` — ChatGPT account state
+- `GET /api/control/runs` · `POST /api/control/runs` — list or start a run/matrix
+- `GET|DELETE /api/control/runs/[jobId]` — job detail, or request cancellation (`?force=1` to escalate)
+- `GET /api/control/runs/[jobId]/log?offset=N` — incremental progress log
+- `POST /api/control/doctor` — start an offline or live Doctor job
+
+External cancellation is a signal, not a file protocol: the first `DELETE`
+sends `SIGINT` to the process group, matching the TUI's cooperative
+cancellation token. The runtime then writes a `cancelled` descriptor and an
+aggregate artifact. A forced `SIGKILL` cannot do that, so the run stays
+`active` until the monitor marks it stale.
 
 ## Routes
 
@@ -143,7 +220,7 @@ while their inode, size, modification and change timestamps remain unchanged. A
 two-second catalog snapshot is served while a fresh scan runs behind it; an
 explicit refresh waits for that scan instead of returning the snapshot.
 
-Read-only API (served by the local Next.js process, contained under configured
+Observer API (served by the local Next.js process, contained under configured
 source/review roots and response-redacted):
 
 - `GET /api/runtime/runs?cursor=0&limit=100` — merged execution catalog; limit 1–200, `nextCursor` and `total`
@@ -258,11 +335,25 @@ unterminated records retain their byte cursor until the writer completes them.
 - Source and review roots are configured on the server. Canonical real paths reject traversal and escaped symlinks; root configuration is never accepted from a request.
 - Responses pass through a secret-key redaction allowlist and mask known
   credential values; no API keys, cookies, passwords, or session tokens are
-  returned or rendered.
-- The dev server binds to `0.0.0.0` for WSL/Windows host access. There are no
-  endpoints that launch, cancel, or control real experiments, and no arbitrary
-  filesystem/proc reads. The mock route reads only the checked-in fixture under
-  this web project.
+  returned or rendered. The settings document is masked at the source (literal
+  secrets become restorable placeholders, environment references stay visible)
+  and the resolved configuration is scrubbed of credential-shaped keys before it
+  leaves the bridge.
+- The dev server binds to `0.0.0.0` for WSL/Windows host access. Every mutating
+  control route rejects a non-loopback `Host` and a cross-origin `Origin` unless
+  the host is listed in `TESIS_CONTROL_ALLOWED_HOSTS`; `TESIS_CONTROL_DISABLED=1`
+  turns the control plane off entirely. Reads remain open, so a dashboard on
+  another machine keeps working.
+- Starting a run is the only consequential action, and it is always explicit:
+  the wizard's Review step is the sole place with Start, and it shows the
+  resolved target, coordinates and profile path first.
+- The web writes only its own state directory. Artifacts are written by the
+  TESIS runtime process under `TESIS_ROOT/results`, exactly as the TUI does; the
+  web never edits them. The checkout `config.yaml` changes only through the
+  explicit sync action, which keeps a backup.
+- The bridge script runs with the checkout as its working directory and never
+  receives request bodies as paths, argv, or environment variables. Model IDs,
+  axes and targets are validated by the TESIS loader before use.
 
 ## Scripts
 
