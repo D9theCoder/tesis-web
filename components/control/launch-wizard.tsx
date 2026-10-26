@@ -59,6 +59,26 @@ const MATRIX_ONLY_PATHS = new Set([
 type Mode = "single" | "matrix";
 type Overrides = Record<string, unknown>;
 
+/** Which step owns a field path, so a review error can send the reader there. */
+const STEP_OF_PATH = new Map<string, number>();
+for (const path of SCOPE_PATHS) STEP_OF_PATH.set(path, 0);
+for (const path of [...SINGLE_PATHS, ...MATRIX_PATHS]) STEP_OF_PATH.set(path, 1);
+for (const path of [...RUNTIME_PATHS, ...EXTRA_FIELDS.map((field) => field.path)]) STEP_OF_PATH.set(path, 2);
+
+/**
+ * The loader names the field inside its own message and routes overrides under
+ * a separate `__override__` namespace. Strip both so the review list can show
+ * the field's label once and its message once.
+ */
+function normalizeFieldError(path: string, message: string): { path: string; message: string } {
+  const key = path.replace(/^__override__\s+/, "");
+  let text = message.trim();
+  for (let pass = 0; pass < 4 && text.startsWith(`${key}:`); pass += 1) {
+    text = text.slice(key.length + 1).trim();
+  }
+  return { path: key, message: text };
+}
+
 /** "A", "A and B", "A, B and C" — the axis list reads as prose, not a dump. */
 function listAxisNames(names: string[]): string {
   if (names.length <= 1) return names[0] ?? "every axis";
@@ -205,11 +225,16 @@ export const LaunchWizard = memo(function LaunchWizard({ schema, disabled, onSta
 
   const canAdvance = step !== 1 || mode === "single" || axesComplete;
   const visibleFieldErrors = Object.entries(validation?.fieldErrors ?? {})
-    .filter(([path]) => mode === "matrix" || !MATRIX_ONLY_PATHS.has(path))
-    .map(([path, message]) => ({
-      path,
-      message: message.startsWith(`${path}:`) ? message.slice(path.length + 1).trim() : message,
-    }));
+    .map(([path, message]) => normalizeFieldError(path, message))
+    .filter((entry) => mode === "matrix" || !MATRIX_ONLY_PATHS.has(entry.path))
+    // The loader can report the same constraint under two keys; one row each.
+    .filter(
+      (entry, index, list) =>
+        list.findIndex((other) => other.path === entry.path && other.message === entry.message) === index,
+    );
+  const advancedErrorCount = visibleFieldErrors.filter((entry) =>
+    EXTRA_FIELDS.some((field) => field.path === entry.path),
+  ).length;
   const providersMissing = (fieldByPath.get("providers")?.choices.length ?? 1) === 0;
   const dirty = Object.keys(overrides).length > 0;
   const startDisabled =
@@ -249,6 +274,9 @@ export const LaunchWizard = memo(function LaunchWizard({ schema, disabled, onSta
                 onClick={() => setStep(index)}
                 disabled={starting || (index > 1 && mode === "matrix" && !axesComplete && index > step)}
               >
+                <span className={styles.stepNumber} aria-hidden="true">
+                  {index + 1}
+                </span>
                 {label}
               </button>
             </li>
@@ -294,54 +322,102 @@ export const LaunchWizard = memo(function LaunchWizard({ schema, disabled, onSta
                       first.
                     </p>
                   ) : null}
-                  <p
-                    className={axesComplete ? styles.hint : styles.warning}
+                  <div
+                    className={
+                      axesComplete
+                        ? styles.coordinateSummary
+                        : `${styles.coordinateSummary} ${styles.coordinateSummaryPending}`
+                    }
                     role="status"
                     aria-label="Matrix coordinate preview"
                   >
-                    {axesComplete
-                      ? `${matrixAxisSummary(matrixAxes)} → ${coordinateCount} coordinate${coordinateCount === 1 ? "" : "s"}`
-                      : `Choose at least one value for ${listAxisNames(missingAxes)} to build the matrix.`}
-                  </p>
+                    {axesComplete ? (
+                      <>
+                        <strong>
+                          {coordinateCount} coordinate{coordinateCount === 1 ? "" : "s"}
+                        </strong>
+                        <span className={styles.coordinateSummaryAxes}>{matrixAxisSummary(matrixAxes)}</span>
+                      </>
+                    ) : (
+                      <span>Choose at least one value for {listAxisNames(missingAxes)} to build the matrix.</span>
+                    )}
+                  </div>
                 </>
               ) : null}
             </div>
           ) : null}
 
           {step === 2 ? (
-            <div className="control-form-grid">
-              {RUNTIME_PATHS.map(renderField)}
-              {EXTRA_FIELDS.map((field) => (
-                <FieldControl
-                  key={field.path}
-                  field={field}
-                  value={valueFor(field.path)}
-                  disabled={disabled || starting}
-                  onChange={(value) => setValue(field.path, value)}
-                />
-              ))}
+            <div className={styles.runtimeGroups}>
+              <fieldset className={styles.fieldGroup}>
+                <legend className={styles.groupLegend}>Run limits</legend>
+                <div className={styles.groupFields}>
+                  {["candidate_budget", "iterations"].map(renderField)}
+                </div>
+              </fieldset>
+
+              <fieldset className={styles.fieldGroup}>
+                <legend className={styles.groupLegend}>Coverage and stopping</legend>
+                <div className={styles.groupFields}>
+                  {["stop_policy", "coverage_target", "report_format"].map(renderField)}
+                </div>
+              </fieldset>
+
+              <fieldset className={styles.fieldGroup}>
+                <legend className={styles.groupLegend}>Logging and output</legend>
+                <div className={styles.groupFields}>
+                  {["output_dir", "log_verbosity", "enriched_reporting", "diagnose"].map(renderField)}
+                </div>
+              </fieldset>
+
+              <details className={styles.advanced}>
+                <summary className={styles.advancedSummary}>
+                  Guardrails and LLM runtime
+                  {advancedErrorCount > 0 ? (
+                    <span className={styles.advancedNote}>
+                      {advancedErrorCount} need{advancedErrorCount === 1 ? "s" : ""} attention
+                    </span>
+                  ) : null}
+                </summary>
+                <div className={`${styles.advancedBody} ${styles.groupFields}`}>
+                  {EXTRA_FIELDS.map((field) => (
+                    <FieldControl
+                      key={field.path}
+                      field={field}
+                      value={valueFor(field.path)}
+                      error={validation?.fieldErrors?.[field.path]}
+                      disabled={disabled || starting}
+                      onChange={(value) => setValue(field.path, value)}
+                    />
+                  ))}
+                </div>
+              </details>
             </div>
           ) : null}
 
           {step === 3 ? (
-            <div className={styles.review}>
+            <div className={styles.review} aria-busy={validating || undefined}>
               <h3 className={styles.reviewHeading}>
                 <ShieldCheck size={16} aria-hidden /> Resolved request
               </h3>
-                {validating ? <p className={styles.hint}>Resolving with the TESIS loader…</p> : null}
+                {validating ? (
+                  <p className={styles.hint} role="status">
+                    Resolving with the TESIS loader…
+                  </p>
+                ) : null}
                 {validateError ? (
                   <p className="notice notice-error" role="alert">
                     {validateError}
                   </p>
                 ) : null}
-                {validation && !validation.valid ? (
+                {validation && !validation.valid && visibleFieldErrors.length === 0 ? (
                   <div className="notice notice-error" role="alert">
                     <strong>Configuration needs attention.</strong>
                     <p>{validation.error ?? "The runtime rejected this configuration."}</p>
                   </div>
                 ) : null}
                 {validation?.valid ? (
-                  <dl className={styles.reviewGrid}>
+                  <dl className={styles.reviewGrid} aria-label="Resolved request">
                     <div>
                       <dt>Mode</dt>
                       <dd>{mode === "matrix" ? "Matrix" : "Single run"}</dd>
@@ -395,13 +471,28 @@ export const LaunchWizard = memo(function LaunchWizard({ schema, disabled, onSta
                   </dl>
                 ) : null}
                 {visibleFieldErrors.length > 0 ? (
-                  <ul className={styles.fieldErrorList}>
-                    {visibleFieldErrors.map(({ path, message }) => (
-                      <li key={path}>
-                        <code>{path}</code> {message}
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="notice notice-error" role="alert">
+                    <strong>Configuration needs attention.</strong>
+                    <ul className={styles.fieldErrorList}>
+                      {visibleFieldErrors.map(({ path, message }) => {
+                        const target = STEP_OF_PATH.get(path);
+                        return (
+                          <li key={`${path}:${message}`}>
+                            <strong>{fieldByPath.get(path)?.label ?? path}</strong>: {message}
+                            {target !== undefined && target !== step ? (
+                              <button
+                                type="button"
+                                className={styles.errorJump}
+                                onClick={() => setStep(target)}
+                              >
+                                Fix in {STEPS[target]}
+                              </button>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
                 ) : null}
                 {schema.warnings.length > 0 ? (
                   <ul className={styles.warningList}>

@@ -7,6 +7,10 @@ import type { ControlField } from "@/lib/control-contract";
  *
  * The bridge decides the kind, choices, and limits; this component only maps
  * them onto native inputs so keyboard access and validation stay browser-native.
+ *
+ * The hint and the error sit outside the `<label>` and are wired through
+ * `aria-describedby`: a hint inside the label becomes part of the accessible
+ * name, which turns "Target URL" into "Target URL Authorized DVWA base URL."
  */
 
 type Props = {
@@ -35,7 +39,10 @@ export function FieldControl({ field, value, error: rawError, disabled, secretHi
   const error = rawError?.startsWith(`${field.path}:`)
     ? rawError.slice(field.path.length + 1).trim()
     : rawError;
-  const describedBy = error ? `${field.path.replace(/\./g, "-")}-error` : undefined;
+  const inputId = field.path.replace(/\./g, "-");
+  const hintId = `${inputId}-hint`;
+  const errorId = `${inputId}-error`;
+  const describedBy = [field.description ? hintId : null, error ? errorId : null].filter(Boolean).join(" ") || undefined;
   const label = optionLabels?.[field.path] ?? field.label;
 
   if (field.multiple) {
@@ -46,7 +53,7 @@ export function FieldControl({ field, value, error: rawError, disabled, secretHi
         <legend className="control-field-label">{label}</legend>
         <div className="control-checkbox-grid" role="group" aria-label={label}>
           {choices.map((choice) => {
-            const id = `${field.path.replace(/\./g, "-")}-${choice}`;
+            const id = `${inputId}-${choice}`;
             const checked = selected.includes(choice);
             return (
               <label key={choice} className="control-checkbox" htmlFor={id}>
@@ -67,9 +74,13 @@ export function FieldControl({ field, value, error: rawError, disabled, secretHi
           })}
           {field.choices.length === 0 ? <p className="control-field-hint">No choices are configured yet.</p> : null}
         </div>
-        {field.description ? <p className="control-field-hint">{field.description}</p> : null}
+        {field.description ? (
+          <p className="control-field-hint" id={hintId}>
+            {field.description}
+          </p>
+        ) : null}
         {error ? (
-          <p className="control-field-error" id={describedBy} role="alert">
+          <p className="control-field-error" id={errorId} role="alert">
             {error}
           </p>
         ) : null}
@@ -78,29 +89,34 @@ export function FieldControl({ field, value, error: rawError, disabled, secretHi
   }
 
   if (field.kind === "boolean" || field.valueType === "bool") {
-    const inputId = field.path.replace(/\./g, "-");
     const labelId = `${inputId}-label`;
+    const checked = Boolean(value);
     return (
       <div className="control-field">
         <span className="control-field-label" id={labelId}>
           {label}
         </span>
-        <label className="control-checkbox">
+        <label className="control-checkbox" htmlFor={inputId}>
           <input
             id={inputId}
             type="checkbox"
-            checked={Boolean(value)}
+            checked={checked}
             disabled={disabled}
             aria-labelledby={labelId}
-            aria-invalid={error ? true : undefined}
             aria-describedby={describedBy}
+            aria-invalid={error ? true : undefined}
             onChange={(event) => onChange(event.target.checked)}
           />
-          <span>Enabled</span>
+          {/* A fixed word next to a checkbox says nothing about its state. */}
+          <span>{checked ? "On" : "Off"}</span>
         </label>
-        {field.description ? <p className="control-field-hint">{field.description}</p> : null}
+        {field.description ? (
+          <p className="control-field-hint" id={hintId}>
+            {field.description}
+          </p>
+        ) : null}
         {error ? (
-          <p className="control-field-error" id={describedBy} role="alert">
+          <p className="control-field-error" id={errorId} role="alert">
             {error}
           </p>
         ) : null}
@@ -110,10 +126,12 @@ export function FieldControl({ field, value, error: rawError, disabled, secretHi
 
   if (field.choices.length > 0) {
     return (
-      <label className="control-field" htmlFor={field.path.replace(/\./g, "-")}>
-        <span className="control-field-label">{label}</span>
+      <div className="control-field">
+        <label className="control-field-label" htmlFor={inputId}>
+          {label}
+        </label>
         <select
-          id={field.path.replace(/\./g, "-")}
+          id={inputId}
           className="form-control"
           value={asText(value)}
           disabled={disabled}
@@ -128,23 +146,29 @@ export function FieldControl({ field, value, error: rawError, disabled, secretHi
             </option>
           ))}
         </select>
-        {field.description ? <span className="control-field-hint">{field.description}</span> : null}
+        {field.description ? (
+          <span className="control-field-hint" id={hintId}>
+            {field.description}
+          </span>
+        ) : null}
         {error ? (
-          <span className="control-field-error" id={describedBy} role="alert">
+          <span className="control-field-error" id={errorId} role="alert">
             {error}
           </span>
         ) : null}
-      </label>
+      </div>
     );
   }
 
   const numeric = field.kind === "integer" || field.kind === "decimal" || field.valueType === "int" || field.valueType === "float";
   const isSecret = field.secret || field.kind === "secret";
   return (
-    <label className="control-field" htmlFor={field.path.replace(/\./g, "-")}>
-      <span className="control-field-label">{label}</span>
+    <div className="control-field">
+      <label className="control-field-label" htmlFor={inputId}>
+        {label}
+      </label>
       <input
-        id={field.path.replace(/\./g, "-")}
+        id={inputId}
         className="form-control"
         type={isSecret ? "password" : numeric ? "number" : field.kind === "url" ? "url" : "text"}
         inputMode={numeric ? "decimal" : undefined}
@@ -171,12 +195,16 @@ export function FieldControl({ field, value, error: rawError, disabled, secretHi
           onChange(raw);
         }}
       />
-      {field.description ? <span className="control-field-hint">{field.description}</span> : null}
+      {field.description ? (
+        <span className="control-field-hint" id={hintId}>
+          {field.description}
+        </span>
+      ) : null}
       {error ? (
-        <span className="control-field-error" id={describedBy} role="alert">
+        <span className="control-field-error" id={errorId} role="alert">
           {error}
         </span>
       ) : null}
-    </label>
+    </div>
   );
 }

@@ -134,15 +134,27 @@ export function matrixAxesMissing(axes: MatrixAxes): string[] {
   return MATRIX_AXIS_NAMES.filter(([key]) => sizeOf(axes[key]) === 0).map(([, name]) => name);
 }
 
-/** Short "2 × 3 × 3 × 2 × 1" rendering of the populated axes. */
+const AXIS_UNITS: Array<[keyof MatrixAxes, string, string]> = [
+  ["providers", "provider", "providers"],
+  ["levels", "level", "levels"],
+  ["surfaces", "surface", "surfaces"],
+  ["payloadModes", "payload mode", "payload modes"],
+];
+
+/**
+ * "2 providers × 3 levels × 3 surfaces × 2 payload modes × 1 repeat".
+ *
+ * The axes are named because the count alone leaves the reader guessing which
+ * number belongs to which axis; empty axes count as one, matching the runtime's
+ * expansion.
+ */
 export function matrixAxisSummary(axes: MatrixAxes): string {
-  const parts = [
-    sizeOf(axes.providers) || 1,
-    sizeOf(axes.levels) || 1,
-    sizeOf(axes.surfaces) || 1,
-    sizeOf(axes.payloadModes) || 1,
-    Math.max(Number(axes.repeats) || 1, 1),
-  ];
+  const parts = AXIS_UNITS.map(([key, singular, plural]) => {
+    const count = Math.max(sizeOf(axes[key]), 1);
+    return `${count} ${count === 1 ? singular : plural}`;
+  });
+  const repeats = Math.max(Number(axes.repeats) || 1, 1);
+  parts.push(`${repeats} ${repeats === 1 ? "repeat" : "repeats"}`);
   return parts.join(" × ");
 }
 

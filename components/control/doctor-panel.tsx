@@ -113,8 +113,7 @@ export function DoctorPanel({ jobs, disabled, onRefresh }: DoctorPanelProps) {
                 <>
                   <Badge variant={report.status === "passed" ? "lime" : "red"}>{report.status}</Badge>
                   <span className={styles.hint}>
-                    {report.summary.passed} passed · {report.summary.failed} failed · {report.summary.skipped} not
-                    checked
+                    {report.summary.passed} passed · {report.summary.failed} failed · {report.summary.skipped} skipped
                   </span>
                 </>
               ) : (
