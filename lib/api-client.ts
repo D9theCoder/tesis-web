@@ -9,6 +9,7 @@ import { runListResponseSchema, runSummarySchema, eventCursorResponseSchema } fr
 import { normalizeResult } from "@/lib/result-normalizer";
 import { experimentListSchema, experimentOverviewSchema } from "@/lib/experiment-contract";
 import {
+  controlAuthFlowResponse,
   controlAuthResponse,
   controlJobListResponse,
   controlJobLogResponse,
@@ -18,6 +19,7 @@ import {
   controlSchemaResponse,
   controlSyncResponse,
   controlValidationResponse,
+  type ControlAuthFlow,
   type ControlJob,
   type ControlSchema,
 } from "@/lib/control-contract";
@@ -195,6 +197,28 @@ export async function fetchChatGPTAccount(action: "status" | "models", account =
   return controlAuthResponse.parse(
     await getJson(`/api/control/auth?action=${encodeURIComponent(action)}&account=${encodeURIComponent(account)}`),
   );
+}
+
+/** Current or last supervised ChatGPT account action, without spawning Python. */
+export async function fetchChatGPTAuthFlow(signal?: AbortSignal): Promise<ControlAuthFlow> {
+  return controlAuthFlowResponse.parse(
+    await getJson("/api/control/auth?action=flow", signal),
+  ).flow;
+}
+
+export async function startChatGPTAuth(
+  action: "login" | "logout",
+  account = "default",
+): Promise<ControlAuthFlow> {
+  return (
+    await sendJson("/api/control/auth", "POST", { action, account }, controlAuthFlowResponse)
+  ).flow;
+}
+
+export async function cancelChatGPTAuth(account = "default"): Promise<ControlAuthFlow> {
+  return (
+    await sendJson("/api/control/auth", "POST", { action: "cancel", account }, controlAuthFlowResponse)
+  ).flow;
 }
 
 export async function fetchControlJobs(limit = 25, signal?: AbortSignal) {

@@ -86,8 +86,13 @@ button links to the detailed results page.
 `/settings` holds the server-backed configuration: **Experiment** defaults,
 **Model providers** (add/edit a provider, discover its catalog, stage API keys),
 **AI scorer** (human / AI / human+AI preset, rubric version, frozen evaluator
-model and limits) and **Advanced YAML** (the masked document with token colour,
-validated before save). The footer offers **Validate**, **Discard changes**
+model and limits) and **Config keys** (every key in the masked document, with
+read-only keys and typed value controls). ChatGPT (Codex) is a built-in provider
+record in the same list as API-key providers: its editor owns signing in or out,
+checking account status, fetching the account catalog, and staging one or more models.
+The TESIS runtime owns the browser loopback and PKCE exchange; the page polls the
+supervised action, shows the one-time URL, and reports whether sign-out confirmed
+remote revocation. The footer offers **Validate**, **Discard changes**
 (a second click confirms a draft reset), **Save profile**, and the explicitly
 confirmed **Write to TESIS config.yaml**. The appearance options (theme, cheat
 code) remain below it.
@@ -121,7 +126,8 @@ browser requests:
 - `POST /api/control/config/save` — validate, then atomically replace the profile (and profile `.env`)
 - `POST /api/control/config/sync` — write the profile over `TESIS_ROOT/config.yaml`
 - `POST /api/control/config/models` — fetch a provider model catalog
-- `GET /api/control/auth?action=status|models` — ChatGPT account state
+- `GET /api/control/auth?action=status|models|flow` — ChatGPT account state, model catalogue, or supervised account action
+- `POST /api/control/auth` — start a ChatGPT `login`/`logout` or `cancel` a waiting sign-in
 - `GET /api/control/runs` · `POST /api/control/runs` — list or start a run/matrix
 - `GET|DELETE /api/control/runs/[jobId]` — job detail, or request cancellation (`?force=1` to escalate)
 - `GET /api/control/runs/[jobId]/log?offset=N` — incremental progress log

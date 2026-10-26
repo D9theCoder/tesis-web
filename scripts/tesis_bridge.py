@@ -348,6 +348,49 @@ def _provider_summaries(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return summaries
 
 
+def _codex_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    """Safe view of the built-in ChatGPT (Codex) provider profiles."""
+
+    models = payload.get("models") or {}
+    profiles: list[dict[str, Any]] = []
+    if isinstance(models, dict):
+        for name, entry in models.items():
+            if not isinstance(entry, dict) or entry.get("provider", name) != "openai_codex_auth":
+                continue
+            extra = entry.get("extra") if isinstance(entry.get("extra"), dict) else {}
+            account = entry.get("account") or extra.get("account") or "default"
+            profiles.append({
+                "profile": str(name),
+                "model": str(entry.get("model_name") or ""),
+                "account": str(account),
+                "timeout": entry.get("timeout", 60),
+                "reasoningEffort": entry.get("reasoning_effort"),
+                "reasoningEfforts": entry.get("reasoning_efforts"),
+            })
+    if not profiles:
+        return {
+            "id": "openai_codex_auth",
+            "displayName": "ChatGPT (Codex)",
+            "configured": False,
+            "model": "",
+            "account": "default",
+            "models": [],
+            "protocol": "openai_codex_auth",
+            "baseUrl": "https://api.openai.com/v1",
+        }
+    first = profiles[0]
+    return {
+        "id": "openai_codex_auth",
+        "displayName": "ChatGPT (Codex)",
+        "configured": True,
+        "model": first["model"],
+        "account": first["account"],
+        "models": profiles,
+        "protocol": "openai_codex_auth",
+        "baseUrl": "https://api.openai.com/v1",
+    }
+
+
 def _scoring_summary(payload: dict[str, Any]) -> dict[str, Any]:
     evaluator = payload.get("scoring_evaluator") or {}
     if not isinstance(evaluator, dict):
@@ -459,6 +502,7 @@ def command_schema(request: dict[str, Any]) -> dict[str, Any]:
         "fieldErrors": _field_errors(payload),
         "warnings": warnings,
         "providers": _provider_summaries(payload),
+        "codex": _codex_summary(payload),
         "scoring": _scoring_summary(payload),
         "llmRuntime": _llm_runtime_summary(payload),
         "guardrails": _guardrail_summary(payload),

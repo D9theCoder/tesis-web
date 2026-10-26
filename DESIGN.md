@@ -105,14 +105,14 @@ components:
     typography: "{typography.control}"
     rounded: "{rounded.control}"
     padding: "7px 12px"
-    height: "34px"
+    height: "36px"
   button-primary:
     backgroundColor: "{colors.accent}"
     textColor: "{colors.surface}"
     typography: "{typography.control}"
     rounded: "{rounded.control}"
     padding: "7px 12px"
-    height: "34px"
+    height: "36px"
   button-primary-hover:
     backgroundColor: "color-mix(in srgb, var(--accent), black 12%)"
   button-ghost:
@@ -121,7 +121,7 @@ components:
     typography: "{typography.control}"
     rounded: "{rounded.control}"
     padding: "7px 12px"
-    height: "34px"
+    height: "36px"
   button-icon:
     rounded: "{rounded.control}"
     padding: "6px"
@@ -373,7 +373,7 @@ Hacker mode tightens cards, panels, and controls to 2px and adds bracketed title
 - **Primary:** Accent blue surface with a contrasting surface-colored label; hover deepens the accent.
 - **Ghost:** Transparent at rest with secondary text; hover uses the surface-hover color.
 - **Focus / Disabled:** Focus uses a 2px accent outline with a 3px offset. Disabled controls use reduced opacity and a not-allowed cursor. Buttons have no transition outside the theme switch.
-- **Sizing:** 34px minimum height for fine-pointer desktop use and 44px for small screens or coarse pointers.
+- **Sizing:** 36px minimum height for fine-pointer desktop use and 44px for small screens or coarse pointers.
 - **Icon controls:** Use square 34px controls for fine-pointer desktop use and 44px touch targets for small screens or coarse pointers. Preserve an accessible action name.
 
 ### Chips
@@ -397,13 +397,17 @@ Hacker mode tightens cards, panels, and controls to 2px and adds bracketed title
 - **Mobile:** Navigation opens in a left-side drawer; the top bar retains the menu control and page context. The drawer always shows full labels.
 
 ### Settings
-- `/settings` is an Operate surface with two halves. **Runtime configuration** owns the experiment: an Experiment tab of loader-backed fields (target, run limits, reporting, logging, guardrails, LLM runtime), a Model providers tab of provider records plus the add/edit form beside them, an AI scorer tab (human / AI / human+AI preset, rubric version, frozen evaluator limits), and an Advanced YAML tab. The card footer carries the actions in one row, left to right by blast radius: Discard changes (with its second-click confirm), Validate, then the outline "Write to TESIS config.yaml", then the primary Save profile. Discarding never touches the saved profile; validation and saving both run through the TESIS loader before anything is replaced.
+- `/settings` is an Operate surface with two halves. **Runtime configuration** owns the experiment: an Experiment tab of loader-backed fields (target, run limits, reporting, logging, guardrails, LLM runtime), a Model providers tab of provider records plus the add/edit form beside them, an AI scorer tab (human / AI / human+AI preset, rubric version, frozen evaluator limits), and a Config keys tab. The card footer carries the actions in one row, left to right by blast radius: Discard changes (with its second-click confirm), Validate, then the outline "Write to TESIS config.yaml", then the primary Save profile. Discarding never touches the saved profile; validation and saving both run through the TESIS loader before anything is replaced.
 - **Appearance** stays below it: one section with a native three-way radio group for Light, Dark, and Hacker, plus a Cheat code section. The group's accessible name includes the current mode, selection is announced and focus stays on the chosen radio, and the layout does not change on selection.
 - Light and dark render the cheat-code switch as a plain borderless row with a simple pill; hacker keeps the boxed chip card over its terminal chrome. State is conveyed by `aria-checked` (and the pill/chip visually), focus stays on the control.
 - Hacker is selected only in Appearance or through the cheat code; the header light/dark quick switch steps aside while hacker is active. The page uses the same card, heading, and focus system in every theme.
 - Each configured provider is a record, not a paragraph: the display name carries the exceptions only (`no key`, `staged`, `removal staged`), one meta line holds the protocol and model count, and a labelled fact spine lists Base URL, Catalog, Models, and Key. Model ids are discrete mono chips, never a comma-joined line. The facts pair into two columns when the row is wide enough, except the models row, which keeps the full width so an id never splits inside a half cell; the editor narrows the row, so the facts return to one column there. `Edit provider` and `Remove` hold the right edge of the row at the height of its name, so nothing floats in the middle of the record.
-- ChatGPT sign-in is its own block under a divider: a plain-language title with `openai_codex_auth` demoted to a mono reference beside it, its two terminal-backed actions on the heading row, and the `python -m tesis auth login` command as a code strip sized to its content.
-- The Advanced YAML tab paints the document with token colour (comments, keys, strings, numbers/literals, `${VAR}` references, secret placeholders) behind a transparent textarea, so selection, undo, and the caret stay native.
+- ChatGPT (Codex) is a built-in record in the same provider list as API-key providers, not a separate block. It carries a `built-in` badge, the `no model` exception, Base URL, account state, and its selected model chips; `Edit provider` opens the same second-column editor and `Remove all models` clears every saved Codex profile. Its editor keeps the provider facts read-only, then puts the account action (`Sign in` or `Sign out`), `Check status`, the one-time loopback link with Copy and Cancel, a multi-select catalog (`Fetch catalog`, filter, checkboxes, exact ID), and `Apply provider` in the same rhythm as the API provider editor. Each checked model becomes its own `models.<profile>` entry (`openai_codex_auth`, then `_2`, `_3`, …), preserving an existing profile name and its reasoning settings when that model stays selected. The page polls the supervised runtime action rather than owning any OAuth state.
+- Below 1040px the provider editor stacks under the list; opening one scrolls it into view and moves focus to its heading so the action has a visible result.
+- The Config keys tab is a Vercel-style key/value editor over the masked YAML document, not a raw-text surface: every mapping and sequence flattens to read-only dotted paths, while scalar leaves edit in place through typed controls (text, number, boolean, null). Top-level mappings and sequences collapse; search filters keys and values and forces matching groups open; empty mappings and sequences stay visible as such; secret placeholders are locked. Edits are written back to the YAML AST so comments and formatting survive, and the footer's Validate/Save still run the TESIS loader. Model ids and other list items are edited individually, never as comma-joined strings.
+
+**The Read-Only Keys Rule.** In Config keys, keys and collection structure are read-only; only scalar values change, and stored secret placeholders never become editable inputs.
+
 - Small mutually exclusive choices (experiment mode, payload review preset) use one bordered segmented track that sizes to its content; it never stretches across the card.
 - The appearance section keeps only the theme decision. Rain and the session cinematics live in the hacker status bar; motion behavior follows the OS setting; storage behavior stays in the implementation, not in explanatory copy.
 
@@ -467,6 +471,7 @@ Hacker mode tightens cards, panels, and controls to 2px and adds bracketed title
 - Do keep the 2px focus outline with a 3px offset, and give small-screen controls at least 44px height.
 - Do label execution status and security outcome separately, keeping reasons, diagnostics, and unavailable states close to the relevant result.
 - Do keep the selected execution, coordinate, score origin, and evidence visibly connected.
+- Do keep configuration keys and collection structure read-only in Config keys; edit scalar values only, and leave stored-secret placeholders locked.
 - Do select hacker on Settings; the header quick switch covers light/dark and steps aside in hacker.
 - Do keep hacker glow on headings and decoration only, with body text on near-solid surfaces.
 
@@ -475,6 +480,7 @@ Hacker mode tightens cards, panels, and controls to 2px and adds bracketed title
 - Don't add shadows to cards or panels; use the existing border and surface treatment.
 - Don't use color as the only carrier of a status; keep its text label visible.
 - Don't collapse provisional runtime scoring and independent Human or AI review into one unlabeled value.
+- Don't present a masked secret placeholder as an editable value or write a literal credential into the configuration document.
 - Don't carry hacker rain, scanlines, glow, or uppercase labels into light or dark.
 - Don't uppercase body copy, long headings, or control labels in hacker mode.
 - Don't fire more than one full-screen flash in a cinematic run, and never spread them faster than three per second (WCAG 2.3.1).

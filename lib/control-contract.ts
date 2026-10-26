@@ -87,6 +87,35 @@ export const controlProviderSummarySchema = z
 
 export type ControlProviderSummary = z.infer<typeof controlProviderSummarySchema>;
 
+export const codexModelProfileSchema = z
+  .object({
+    profile: z.string(),
+    model: z.string().default(""),
+    account: z.string().default("default"),
+    timeout: z.union([z.number(), z.string()]).default(60),
+    reasoningEffort: z.string().nullish(),
+    reasoningEfforts: z.unknown().nullish(),
+  })
+  .passthrough();
+
+export type CodexModelProfile = z.infer<typeof codexModelProfileSchema>;
+
+/** Built-in ChatGPT (Codex) model profile; credentials stay in SIWC storage. */
+export const codexProviderSummarySchema = z
+  .object({
+    id: z.string().default("openai_codex_auth"),
+    displayName: z.string().default("ChatGPT (Codex)"),
+    configured: z.boolean().default(false),
+    model: z.string().default(""),
+    account: z.string().default("default"),
+    models: z.array(codexModelProfileSchema).default([]),
+    protocol: z.string().default("openai_codex_auth"),
+    baseUrl: z.string().default("https://api.openai.com/v1"),
+  })
+  .passthrough();
+
+export type CodexProviderSummary = z.infer<typeof codexProviderSummarySchema>;
+
 export const controlScoringSummarySchema = z
   .object({
     mode: z.string().default("human"),
@@ -147,6 +176,7 @@ export const controlSchemaResponse = z
     fieldErrors: z.record(z.string()).default({}),
     warnings: z.array(z.string()).default([]),
     providers: z.array(controlProviderSummarySchema).default([]),
+    codex: codexProviderSummarySchema.nullish(),
     scoring: controlScoringSummarySchema.nullish(),
     llmRuntime: controlRuntimeSummarySchema.nullish(),
     guardrails: controlGuardrailSummarySchema.nullish(),
@@ -312,6 +342,72 @@ export const controlModelsRequest = z.object({
 });
 
 export const controlAuthQuery = z.object({
-  action: z.enum(["status", "models"]).default("status"),
+  action: z.enum(["status", "models", "flow"]).default("status"),
   account: z.string().max(64).default("default"),
+});
+
+/** One account's non-secret SIWC status, from the bridge or a completed flow. */
+export const chatGPTAccountSchema = z
+  .object({
+    signed_in: z.boolean().optional(),
+    plan_usage: z.boolean().optional(),
+    email: z.string().nullish(),
+    expires_at: z.number().nullish(),
+    client_id: z.string().nullish(),
+  })
+  .passthrough();
+
+export type ChatGPTAccount = z.infer<typeof chatGPTAccountSchema>;
+
+/**
+ * The bridge returns statuses keyed by account; a completed flow returns the
+ * selected account's record directly. Normalize both to one account record.
+ */
+export function selectChatGPTAccount(
+  status: Record<string, unknown> | null | undefined,
+): ChatGPTAccount | null {
+  if (!status) return null;
+  for (const candidate of [status, status.default, ...Object.values(status)]) {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) continue;
+    const parsed = chatGPTAccountSchema.safeParse(candidate);
+    if (parsed.success && typeof parsed.data.signed_in === "boolean") return parsed.data;
+  }
+  return null;
+}
+
+/**
+ * One supervised ChatGPT account action, mirroring `tesis auth login|logout
+ * --json-events`. The runtime owns credentials; this snapshot only carries the
+ * one-time authorization URL and the non-secret status projection.
+ */
+export const controlAuthFlowSchema = z
+  .object({
+    state: z.enum(["idle", "running", "succeeded", "failed", "cancelled"]),
+    action: z.enum(["login", "logout"]).nullish(),
+    account: z.string().default("default"),
+    authorizeUrl: z.string().nullish(),
+    message: z.string().nullish(),
+    startedAt: z.string().nullish(),
+    endedAt: z.string().nullish(),
+    pid: z.number().int().nullish(),
+    remoteRevoked: z.boolean().nullish(),
+    status: z.record(z.unknown()).nullish(),
+  })
+  .passthrough();
+
+export type ControlAuthFlow = z.infer<typeof controlAuthFlowSchema>;
+
+export const controlAuthFlowResponse = z
+  .object({ flow: controlAuthFlowSchema })
+  .passthrough();
+
+export const controlAuthActionRequest = z.object({
+  action: z.enum(["login", "logout", "cancel"]),
+  account: z
+    .string()
+    .trim()
+    .min(1, "An account label is required.")
+    .max(64)
+    .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/, "Account labels use letters, digits, dots, underscores, and dashes.")
+    .default("default"),
 });

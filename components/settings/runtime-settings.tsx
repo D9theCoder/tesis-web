@@ -1,25 +1,33 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import { CloudDownload, Plus, RefreshCw, Save, ShieldCheck, Trash2, Upload } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CloudDownload, LogIn, LogOut, Plus, RefreshCw, Save, ShieldCheck, Trash2, Upload, X } from "lucide-react";
 
 import { Badge, Button, Dialog, Tabs } from "@/components/ui/primitives";
+import { CopyButton } from "@/components/ui/copy-button";
 import { FieldControl } from "@/components/control/field-control";
-import { YamlEditor } from "@/components/settings/yaml-editor";
+import { YamlKeyValue } from "@/components/settings/yaml-key-value";
 import {
+  cancelChatGPTAuth,
   discoverProviderModels,
   fetchChatGPTAccount,
+  fetchChatGPTAuthFlow,
   fetchControlSchema,
   saveControlConfig,
+  startChatGPTAuth,
   syncControlToCheckout,
   validateControlDraft,
 } from "@/lib/api-client";
 import type {
+  ChatGPTAccount,
+  ControlAuthFlow,
   ControlProviderSummary,
   ControlSchema,
   ControlValidation,
   DiscoveredModel,
 } from "@/lib/control-contract";
+import { selectChatGPTAccount } from "@/lib/control-contract";
+import { effectiveCodexProfiles, stageCodexModels } from "@/lib/control-codex";
 import { EXTRA_FIELDS, extraFieldBaseline } from "@/lib/control-fields";
 import { PROTOCOL_LABELS, SCORING_MODE_LABELS, controlOptionLabels } from "@/lib/control-options";
 import { useReadResource } from "@/lib/use-read-resource";
@@ -67,7 +75,7 @@ const TABS = [
   { value: "experiment", label: "Experiment" },
   { value: "providers", label: "Model providers" },
   { value: "scorer", label: "AI scorer" },
-  { value: "yaml", label: "Advanced YAML" },
+  { value: "yaml", label: "Config keys" },
 ];
 
 const EXPERIMENT_CATEGORIES = new Set(["target", "run", "reporting", "logging"]);
@@ -125,12 +133,28 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [modelFilter, setModelFilter] = useState("");
   const [manualModel, setManualModel] = useState("");
-  const [modelsOverrides, setModelsOverrides] = useState<Record<string, unknown>>({});
 
-  const [codexStatus, setCodexStatus] = useState<Record<string, unknown> | null>(null);
-  const [codexModels, setCodexModels] = useState<Record<string, unknown>[]>([]);
+  const [codexStatus, setCodexStatus] = useState<ChatGPTAccount | null>(null);
+  const [codexModels, setCodexModels] = useState<DiscoveredModel[]>([]);
   const [codexBusy, setCodexBusy] = useState(false);
   const [codexError, setCodexError] = useState<string | null>(null);
+  const [codexOpen, setCodexOpen] = useState(false);
+  const [codexSelected, setCodexSelected] = useState<string[]>([]);
+  const [authFlow, setAuthFlow] = useState<ControlAuthFlow | null>(null);
+  const [authAction, setAuthAction] = useState<"login" | "logout" | "cancel" | null>(null);
+  const [statusKnown, setStatusKnown] = useState(false);
+  const [statusError, setStatusError] = useState(false);
+  const authRequest = useRef(0);
+  const statusRequest = useRef(0);
+  const providerEditorRef = useRef<HTMLDivElement | null>(null);
+  const authRunning = authFlow?.state === "running";
+  const signedIn = codexStatus?.signed_in === true;
+  const codexAccount = schema?.codex?.account ?? "default";
+  const editorIdentity = codexOpen ? "codex" : draft ? "provider" : "";
+  const codexProfiles = useMemo(
+    () => effectiveCodexProfiles(schema?.codex?.models ?? [], overrides),
+    [schema, overrides],
+  );
 
   const baseline = useMemo(() => {
     const values: Record<string, unknown> = {};
@@ -141,8 +165,8 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
         extraFieldBaseline({ guardrails: schema.guardrails, llmRuntime: schema.llmRuntime }),
       );
     }
-    return { ...values, ...modelsOverrides };
-  }, [schema, modelsOverrides]);
+    return values;
+  }, [schema]);
 
   const valueFor = useCallback(
     (path: string) => (path in overrides ? overrides[path] : baseline[path]),
@@ -182,7 +206,6 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
     setOverrides({});
     setProviderKeys({});
     setYamlText(null);
-    setModelsOverrides({});
     setDraft(null);
     setValidation(null);
     setSyncOpen(false);
@@ -270,6 +293,7 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
   // -- provider editor ------------------------------------------------------
 
   const openNewProvider = () => {
+    setCodexOpen(false);
     setDraft(emptyProviderDraft());
     setCatalog([]);
     setCatalogError(null);
@@ -278,6 +302,7 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
   };
 
   const openProvider = (provider: ControlProviderSummary) => {
+    setCodexOpen(false);
     setDraft(draftFromProvider(provider));
     setCatalog([]);
     setCatalogError(null);
@@ -373,41 +398,220 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
   const filteredCatalog = catalog.filter((model) =>
     modelFilter ? `${model.id} ${model.display_name ?? ""}`.toLowerCase().includes(modelFilter.toLowerCase()) : true,
   );
+  const filteredCodexCatalog = codexModels.filter((model) =>
+    modelFilter ? `${model.id} ${model.display_name ?? ""}`.toLowerCase().includes(modelFilter.toLowerCase()) : true,
+  );
 
   const checkCodex = async (action: "status" | "models") => {
+    const request = action === "status" ? ++statusRequest.current : null;
     setCodexBusy(true);
     setCodexError(null);
     try {
-      const result = await fetchChatGPTAccount(action);
+      const result = await fetchChatGPTAccount(action, codexAccount);
       if (action === "models") {
-        setCodexModels(result.models ?? []);
-      } else {
-        setCodexStatus(result.status ?? result);
+        if (result.error) {
+          setCodexModels([]);
+          setCodexError(result.error);
+        } else {
+          setCodexModels(
+            (result.models ?? []).flatMap((model) => {
+              const id =
+                typeof model.slug === "string" ? model.slug : typeof model.id === "string" ? model.id : "";
+              if (!id) return [];
+              return [{
+                id,
+                display_name: typeof model.display_name === "string" ? model.display_name : id,
+              }];
+            }),
+          );
+        }
+      } else if (request === statusRequest.current) {
+        const account = selectChatGPTAccount(result.status ?? result);
+        setCodexStatus(account);
+        setStatusKnown(true);
+        setStatusError(!account && Boolean(result.error));
       }
       if (result.error) setCodexError(result.error);
     } catch (error) {
+      if (action === "status" && request === statusRequest.current) {
+        setStatusKnown(true);
+        setStatusError(true);
+      }
       setCodexError(error instanceof Error ? error.message : "ChatGPT account lookup failed.");
     } finally {
       setCodexBusy(false);
     }
   };
 
-  const applyCodexModel = (modelId: string) => {
-    setModelsOverrides((previous) => ({
-      ...previous,
-      "models.openai_codex_auth": modelId,
-    }));
-    setOverrides((previous) => ({
-      ...previous,
-      "models.openai_codex_auth": {
-        provider: "openai_codex_auth",
-        model_name: modelId,
-        timeout: 60,
-        extra: { account: "default" },
-      },
-    }));
-    setStatus({ tone: "info", message: `Staged models.openai_codex_auth → ${modelId}. Save to persist.` });
+  useEffect(() => {
+    const request = ++statusRequest.current;
+    fetchChatGPTAccount("status", codexAccount)
+      .then((result) => {
+        if (request !== statusRequest.current) return;
+        const account = selectChatGPTAccount(result.status ?? result);
+        setCodexStatus(account);
+        setStatusKnown(true);
+        setStatusError(!account && Boolean(result.error));
+        if (result.error) setCodexError(result.error);
+      })
+      .catch((error: unknown) => {
+        if (request !== statusRequest.current) return;
+        setStatusKnown(true);
+        setStatusError(true);
+        setCodexError(error instanceof Error ? error.message : "ChatGPT account state unavailable.");
+      });
+    return () => {
+      statusRequest.current += 1;
+    };
+  }, [codexAccount]);
+
+  const applyAuthFlow = useCallback((flow: ControlAuthFlow, fromSnapshot = false) => {
+    setAuthFlow(flow);
+    if (fromSnapshot) return;
+    if (flow.status) {
+      statusRequest.current += 1;
+      setCodexStatus(selectChatGPTAccount(flow.status));
+      setStatusKnown(true);
+      setStatusError(false);
+    }
+    if (flow.state === "succeeded") {
+      setCodexModels([]);
+      if (flow.action === "logout") {
+        statusRequest.current += 1;
+        setCodexStatus(null);
+        setStatusKnown(true);
+        setStatusError(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const request = ++authRequest.current;
+    const controller = new AbortController();
+    fetchChatGPTAuthFlow(controller.signal)
+      .then((flow) => {
+        if (request === authRequest.current) applyAuthFlow(flow, true);
+      })
+      .catch((error: unknown) => {
+        if (request !== authRequest.current) return;
+        setCodexError(error instanceof Error ? error.message : "ChatGPT account state unavailable.");
+      });
+    return () => {
+      authRequest.current += 1;
+      controller.abort();
+    };
+  }, [applyAuthFlow]);
+
+  useEffect(() => {
+    if (!authRunning) return;
+    const controller = new AbortController();
+    const timer = setInterval(() => {
+      const request = ++authRequest.current;
+      fetchChatGPTAuthFlow(controller.signal)
+        .then((flow) => {
+          if (request === authRequest.current) applyAuthFlow(flow);
+        })
+        .catch((error: unknown) => {
+          if (request !== authRequest.current) return;
+          setCodexError(error instanceof Error ? error.message : "ChatGPT account state unavailable.");
+        });
+    }, 1500);
+    return () => {
+      authRequest.current += 1;
+      clearInterval(timer);
+      controller.abort();
+    };
+  }, [authRunning, applyAuthFlow]);
+
+  const runAuthAction = async (action: "login" | "logout" | "cancel") => {
+    authRequest.current += 1;
+    setAuthAction(action);
+    setCodexError(null);
+    try {
+      const flow =
+        action === "cancel"
+          ? await cancelChatGPTAuth(codexAccount)
+          : await startChatGPTAuth(action, codexAccount);
+      applyAuthFlow(flow);
+    } catch (error) {
+      setCodexError(error instanceof Error ? error.message : "ChatGPT account action failed.");
+    } finally {
+      setAuthAction(null);
+    }
   };
+
+  const stageCodexSelection = (models: string[]) => {
+    const staged = stageCodexModels(
+      codex?.models ?? [],
+      overrides,
+      models,
+      schema?.modelProfiles.map((profile) => profile.id) ?? [],
+      codexAccount,
+    );
+    setOverrides((previous) => ({ ...previous, ...staged.overrides }));
+  };
+
+  const openCodexProvider = () => {
+    setDraft(null);
+    setCodexOpen(true);
+    setCodexSelected([...new Set(codexProfiles.map((profile) => profile.model).filter(Boolean))]);
+    setCodexModels([]);
+    setCodexError(null);
+    setManualModel("");
+    setModelFilter("");
+  };
+
+  const toggleCodexModel = (modelId: string) => {
+    setCodexSelected((previous) =>
+      previous.includes(modelId) ? previous.filter((model) => model !== modelId) : [...previous, modelId],
+    );
+  };
+
+  const applyManualCodexModel = () => {
+    const id = manualModel.trim();
+    if (!id || /\s/.test(id)) {
+      setCodexError("Model IDs cannot be empty or contain spaces.");
+      return;
+    }
+    setCodexSelected((previous) => (previous.includes(id) ? previous : [...previous, id]));
+    setManualModel("");
+    setCodexError(null);
+  };
+
+  const applyCodexProvider = () => {
+    const models = [...new Set(codexSelected.map((model) => model.trim()).filter(Boolean))];
+    if (models.length === 0) {
+      setCodexError("Select at least one model.");
+      return;
+    }
+    stageCodexSelection(models);
+    setStatus({
+      tone: "info",
+      message: `ChatGPT (Codex) staged: ${models.join(", ")}. Save the profile to persist the selection.`,
+    });
+    setCodexOpen(false);
+  };
+
+  const removeCodexProvider = () => {
+    stageCodexSelection([]);
+    setStatus({
+      tone: "info",
+      message: "All ChatGPT (Codex) model profiles staged for removal. Save the profile to apply it.",
+    });
+    setCodexOpen(false);
+  };
+
+  useEffect(() => {
+    if (!editorIdentity) return;
+    // Below 1040px the editor stacks under the list; bring it into view and
+    // move focus to its heading so the action has a visible result.
+    if (typeof window.matchMedia !== "function") return;
+    if (!window.matchMedia("(max-width: 1040px)").matches) return;
+    const heading = providerEditorRef.current?.querySelector<HTMLHeadingElement>("h3");
+    if (!heading) return;
+    heading.scrollIntoView({ block: "start", inline: "nearest" });
+    heading.focus({ preventScroll: true });
+  }, [editorIdentity]);
 
   // -- view -----------------------------------------------------------------
 
@@ -420,6 +624,33 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
   const evaluatorTokens = Number(evaluatorOverride.max_tokens ?? scoring?.evaluator?.maxTokens ?? 1024);
   const evaluatorTimeout = Number(evaluatorOverride.timeout ?? scoring?.evaluator?.timeout ?? 60);
   const evaluatorMissing = scoringMode !== "human" && !evaluatorProvider;
+
+  const codex = schema?.codex;
+  const codexDisplayName = codex?.displayName || "ChatGPT (Codex)";
+  const codexBaseUrl = codex?.baseUrl || "https://api.openai.com/v1";
+  const codexStaged = Object.keys(overrides).some((key) => key.startsWith("models."));
+  const codexRemovalStaged = codexStaged && codexProfiles.length === 0;
+  const codexModelStaged = codexStaged && !codexRemovalStaged;
+  const codexConfiguredModels = codexProfiles.filter((profile) => profile.model);
+  const codexConfigured = Boolean(codex?.configured || codexConfiguredModels.length > 0);
+  const codexAccountState = authRunning
+    ? authFlow?.action === "login"
+      ? "waiting for browser"
+      : "signing out"
+    : statusKnown
+      ? statusError
+        ? "status unavailable"
+        : signedIn
+          ? "signed in"
+          : "signed out"
+      : "checking account";
+  const showAuthFlowMessage =
+    Boolean(authFlow?.message) &&
+    (!statusKnown ||
+      statusError ||
+      authFlow?.state !== "succeeded" ||
+      (authFlow?.action === "login" && signedIn) ||
+      (authFlow?.action === "logout" && !signedIn));
 
   if (!schema) {
     return (
@@ -522,22 +753,86 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
         ) : null}
 
         {tab === "providers" ? (
-          <div className={`${styles.providerPane} ${draft ? styles.providerPaneSplit : styles.providerPaneSolo}`}>
+          <div className={`${styles.providerPane} ${draft || codexOpen ? styles.providerPaneSplit : styles.providerPaneSolo}`}>
             <div className={styles.providerList}>
               <div className={styles.sectionHeader}>
-                <h3 className="control-section-title">API providers</h3>
+                <h3 className="control-section-title">Providers</h3>
                 <Button type="button" variant="outline" onClick={openNewProvider} disabled={!controlEnabled}>
                   <Plus size={15} aria-hidden /> Add provider
                 </Button>
               </div>
-              {schema.providers.length === 0 ? (
-                <p className={styles.hint}>
-                  No API provider is configured yet. Add one to build the model profiles that runs and the AI scorer
-                  select from.
-                </p>
-              ) : (
-                <ul className={styles.providerRows}>
-                  {schema.providers.map((provider) => {
+              <ul className={styles.providerRows}>
+                <li className={styles.providerRow}>
+                  <div className={styles.providerIdentity}>
+                    <div className={styles.providerHead}>
+                      <h4 className={styles.providerName}>{codexDisplayName}</h4>
+                      <Badge variant="outline">built-in</Badge>
+                      {codexConfiguredModels.length > 0 ? null : <Badge variant="amber">no model</Badge>}
+                      {codexModelStaged ? <Badge variant="outline">staged</Badge> : null}
+                      {codexRemovalStaged ? <Badge variant="amber">removal staged</Badge> : null}
+                    </div>
+                    <p className={styles.providerMeta}>
+                      <code>openai_codex_auth</code>
+                      <span aria-hidden="true">·</span>
+                      <span>ChatGPT sign-in</span>
+                      <span aria-hidden="true">·</span>
+                      <span>
+                        {codexConfiguredModels.length} model{codexConfiguredModels.length === 1 ? "" : "s"}
+                      </span>
+                    </p>
+                    <dl className={styles.providerFacts}>
+                      <div>
+                        <dt>Base URL</dt>
+                        <dd>
+                          <code>{codexBaseUrl}</code>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Account</dt>
+                        <dd>
+                          <code>{codexAccount}</code> · {codexAccountState}
+                        </dd>
+                      </div>
+                      <div className={styles.factWide}>
+                        <dt>Models</dt>
+                        <dd>
+                          {codexConfiguredModels.length > 0 ? (
+                            <ul className={styles.providerModels}>
+                              {codexConfiguredModels.map((profile) => (
+                                <li key={profile.profile}>
+                                  <code>{profile.model}</code>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <span className={styles.emptyValue}>none selected</span>
+                          )}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                  <div className={styles.providerAside}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={openCodexProvider}
+                      disabled={!controlEnabled || codexRemovalStaged}
+                    >
+                      Edit provider
+                    </Button>
+                    {codexConfigured ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={removeCodexProvider}
+                        disabled={!controlEnabled || codexRemovalStaged}
+                      >
+                        <Trash2 size={14} aria-hidden /> Remove all models
+                      </Button>
+                    ) : null}
+                  </div>
+                </li>
+                {schema.providers.map((provider) => {
                     const stagedRemoval = overrides[`api_providers.${provider.id}`] === null;
                     const staged = `${provider.id}` in overrides || provider.id in providerKeys;
                     const title = provider.displayName || provider.id;
@@ -633,69 +928,244 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
                       </li>
                     );
                   })}
-                </ul>
-              )}
-
-              <div className={styles.authBlock}>
-                <div className={styles.sectionHeader}>
-                  <div className={styles.authTitle}>
-                    <h3 className="control-section-title">ChatGPT sign-in</h3>
-                    <code className={styles.authKey}>openai_codex_auth</code>
-                  </div>
-                  <div className={styles.rowActions}>
-                    <Button type="button" variant="ghost" onClick={() => void checkCodex("status")} disabled={codexBusy}>
-                      <RefreshCw size={14} aria-hidden /> Account status
-                    </Button>
-                    <Button type="button" variant="ghost" onClick={() => void checkCodex("models")} disabled={codexBusy}>
-                      <CloudDownload size={14} aria-hidden /> Fetch models
-                    </Button>
-                  </div>
-                </div>
+              </ul>
+              {schema.providers.length === 0 ? (
                 <p className={styles.hint}>
-                  Signing in needs a browser loopback, so it stays in the terminal. Model selection works here once
-                  the account is signed in.
+                  No API-key provider is configured yet. Add one to build the model profiles that runs and the AI scorer
+                  select from.
                 </p>
-                <code className={styles.commandBlock}>python -m tesis auth login --account default</code>
-              </div>
-              {codexError ? (
-                <p className="notice notice-error" role="alert">
-                  {codexError}
-                </p>
-              ) : null}
-              {codexStatus ? (
-                <dl className={styles.codexStatus}>
-                  {Object.entries(codexStatus)
-                    .filter(([key]) => !/token|secret|key|credential/i.test(key))
-                    .slice(0, 8)
-                    .map(([key, value]) => (
-                      <div key={key}>
-                        <dt>{key}</dt>
-                        <dd>{typeof value === "object" ? JSON.stringify(value) : String(value)}</dd>
-                      </div>
-                    ))}
-                </dl>
-              ) : null}
-              {codexModels.length > 0 ? (
-                <ul className={styles.codexModels}>
-                  {codexModels.slice(0, 40).map((model) => {
-                    const id = typeof model.id === "string" ? model.id : typeof model.slug === "string" ? model.slug : "";
-                    if (!id) return null;
-                    return (
-                      <li key={id}>
-                        <span className={styles.mono}>{id}</span>
-                        <Button type="button" variant="ghost" onClick={() => applyCodexModel(id)} disabled={!controlEnabled}>
-                          Use profile
-                        </Button>
-                      </li>
-                    );
-                  })}
-                </ul>
               ) : null}
             </div>
 
-            {draft ? (
-              <div className={styles.providerEditor}>
-                <h3 className="control-section-title">
+            {codexOpen ? (
+              <div ref={providerEditorRef} className={styles.providerEditor}>
+                <div className={styles.sectionHeader}>
+                  <h3 className={`control-section-title ${styles.editorHeading}`} tabIndex={-1}>
+                    Edit {codexDisplayName}
+                  </h3>
+                  <Badge variant={authRunning || statusError ? "amber" : statusKnown ? (signedIn ? "lime" : "outline") : "outline"}>
+                    {codexAccountState}
+                  </Badge>
+                </div>
+                <dl className={styles.providerFacts}>
+                  <div>
+                    <dt>Provider ID</dt>
+                    <dd>
+                      <code>openai_codex_auth</code>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Protocol</dt>
+                    <dd>ChatGPT sign-in</dd>
+                  </div>
+                  <div>
+                    <dt>Base URL</dt>
+                    <dd>
+                      <code>{codexBaseUrl}</code>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Account</dt>
+                    <dd>
+                      <code>{codexAccount}</code>
+                    </dd>
+                  </div>
+                  {codexStatus?.email ? (
+                    <div>
+                      <dt>Email</dt>
+                      <dd>{codexStatus.email}</dd>
+                    </div>
+                  ) : null}
+                  <div>
+                    <dt>Plan usage</dt>
+                    <dd>{signedIn ? (codexStatus?.plan_usage ? "Enabled" : "Disabled") : "—"}</dd>
+                  </div>
+                </dl>
+
+                <div className={styles.authBlock}>
+                  <div className={styles.sectionHeader}>
+                    <span className="control-field-label">ChatGPT account</span>
+                    <div className={styles.rowActions}>
+                      {statusKnown && !statusError ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => void runAuthAction(signedIn ? "logout" : "login")}
+                          disabled={!controlEnabled || authRunning || authAction !== null}
+                        >
+                          {signedIn ? <LogOut size={14} aria-hidden /> : <LogIn size={14} aria-hidden />}
+                          {signedIn ? "Sign out" : "Sign in"}
+                        </Button>
+                      ) : statusError ? (
+                        <Button type="button" variant="outline" disabled>
+                          <RefreshCw size={14} aria-hidden /> Status unavailable
+                        </Button>
+                      ) : (
+                        <Button type="button" variant="outline" disabled>
+                          <RefreshCw size={14} aria-hidden /> Checking account…
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => void checkCodex("status")}
+                        disabled={codexBusy}
+                      >
+                        <RefreshCw size={14} aria-hidden /> Check status
+                      </Button>
+                    </div>
+                  </div>
+                  <p className={styles.hint}>
+                    {statusError
+                      ? "Account status is unavailable. Retry with Check status before signing in."
+                      : signedIn
+                        ? "This account is connected. Sign out clears its local tokens and asks OpenAI to revoke the renewable session."
+                        : "Sign in continues in ChatGPT through a local loopback that stays open for five minutes. Approve TESIS and ChatGPT plan usage to enable inference."}
+                  </p>
+                  {showAuthFlowMessage ? (
+                    authFlow?.state === "failed" ? (
+                      <p className="notice notice-error" role="alert">
+                        {authFlow?.message}
+                      </p>
+                    ) : (
+                      <p className={styles.authStatus} role="status" aria-live="polite">
+                        {authFlow?.message}
+                      </p>
+                    )
+                  ) : null}
+                  {authRunning && authFlow?.action === "login" ? (
+                    <>
+                      <div className={styles.authUrlRow}>
+                        {authFlow.authorizeUrl ? (
+                          <>
+                            <a href={authFlow.authorizeUrl} target="_blank" rel="noreferrer">
+                              Open ChatGPT sign-in
+                            </a>
+                            <CopyButton value={authFlow.authorizeUrl} label="ChatGPT sign-in URL" />
+                          </>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => void runAuthAction("cancel")}
+                          disabled={!controlEnabled || authAction !== null}
+                        >
+                          <X size={14} aria-hidden /> Cancel sign-in
+                        </Button>
+                      </div>
+                      {authFlow.authorizeUrl ? (
+                        <p className={styles.hint}>
+                          If the browser did not open, copy this link into a browser on this computer.
+                        </p>
+                      ) : null}
+                    </>
+                  ) : null}
+                </div>
+
+                <div className={styles.modelPicker}>
+                  <div className={styles.sectionHeader}>
+                    <span className="control-field-label">Models</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => void checkCodex("models")}
+                      disabled={codexBusy || !signedIn}
+                    >
+                      <CloudDownload size={14} aria-hidden /> {codexBusy ? "Fetching…" : "Fetch catalog"}
+                    </Button>
+                  </div>
+                  <p className={styles.hint}>
+                    Select one or more account models. Each selection becomes its own saved model profile.
+                  </p>
+                  {statusKnown && !statusError && !signedIn ? (
+                    <p className={styles.hint}>
+                      Sign in to fetch the account catalog. You can still enter an exact model ID.
+                    </p>
+                  ) : null}
+                  {codexError ? (
+                    <p className="notice notice-error" role="alert">
+                      {codexError}
+                    </p>
+                  ) : null}
+                  {codexModels.length > 0 ? (
+                    <>
+                      <input
+                        className="form-control"
+                        aria-label="Filter Codex models"
+                        placeholder="Filter discovered models"
+                        value={modelFilter}
+                        onChange={(event) => setModelFilter(event.target.value)}
+                      />
+                      <div className="control-checkbox-grid">
+                        {filteredCodexCatalog.slice(0, 200).map((model) => (
+                          <label key={model.id} className="control-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={codexSelected.includes(model.id)}
+                              onChange={() => toggleCodexModel(model.id)}
+                            />
+                            <span>{model.display_name || model.id}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </>
+                  ) : signedIn || !statusKnown ? (
+                    <p className={styles.hint}>Fetch the catalog or add an exact model ID.</p>
+                  ) : null}
+                  <div className={styles.inlineAdd}>
+                    <input
+                      className="form-control"
+                      aria-label="Exact Codex model ID"
+                      value={manualModel}
+                      placeholder="Exact model ID"
+                      onChange={(event) => setManualModel(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          applyManualCodexModel();
+                        }
+                      }}
+                    />
+                    <Button type="button" variant="ghost" onClick={applyManualCodexModel}>
+                      Add
+                    </Button>
+                  </div>
+                  <div className={styles.selectedModels}>
+                    {codexSelected.length > 0 ? (
+                      codexSelected.map((model) => (
+                        <button
+                          key={model}
+                          type="button"
+                          className={styles.modelChip}
+                          onClick={() => toggleCodexModel(model)}
+                          title="Remove model"
+                        >
+                          {model} ×
+                        </button>
+                      ))
+                    ) : (
+                      <span className={styles.hint}>No model selected yet.</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className={styles.rowActions}>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={applyCodexProvider}
+                    disabled={!controlEnabled || codexSelected.length === 0}
+                  >
+                    Apply provider
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => setCodexOpen(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : draft ? (
+              <div ref={providerEditorRef} className={styles.providerEditor}>
+                <h3 className={`control-section-title ${styles.editorHeading}`} tabIndex={-1}>
                   {draft.isNew ? "Add API provider" : `Edit ${draft.id}`}
                 </h3>
                 <label className="control-field" htmlFor="provider-id">
@@ -966,11 +1436,11 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
         {tab === "yaml" ? (
           <div className={styles.yamlPane}>
             <p className={styles.hint}>
-              Edits are validated by the TESIS loader before they are saved. Literal secrets appear as restorable
-              placeholders, <code>{"${VAR}"}</code> stays an environment reference, and nothing is written back to
-              this page unmasked. Profile: <code>{schema.configPath}</code>
+              Every key in the masked profile is listed here. Keys and structure are read-only; values are edited in
+              place. Comments and <code>{"${VAR}"}</code> references are preserved, literal secrets stay placeholders,
+              and the TESIS loader validates before anything is saved. Profile: <code>{schema.configPath}</code>
             </p>
-            <YamlEditor
+            <YamlKeyValue
               value={currentYaml}
               disabled={!controlEnabled || busy !== null}
               onChange={(next) => setYamlText(next)}

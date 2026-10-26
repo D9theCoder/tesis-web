@@ -68,6 +68,10 @@
   min-width: 0;
 }
 
+.editorHeading {
+  scroll-margin-top: 72px;
+}
+
 /* The editor is the second column of the same panel, not a card in a card. */
 .providerEditor {
   padding-left: 20px;
@@ -205,31 +209,23 @@
   border-top: 1px solid var(--border);
 }
 
-.authTitle {
+.authStatus {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--secondary);
+}
+
+.authUrlRow {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  gap: 12px;
 }
 
-.authKey {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.commandBlock {
-  display: block;
-  justify-self: start;
-  max-width: 100%;
-  padding: 8px 12px;
-  border-radius: 5px;
-  background: var(--surface-subtle);
-  color: var(--secondary);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.6;
-  overflow-wrap: anywhere;
+.authUrlRow > a {
+  font-size: 13px;
+  font-weight: 500;
 }
 
 
@@ -280,50 +276,6 @@
   color: var(--danger);
 }
 
-.codexStatus {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-}
-
-.codexStatus > div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-size: 12px;
-}
-
-.codexStatus dt {
-  min-width: 120px;
-  color: var(--muted);
-}
-
-.codexStatus dd {
-  margin: 0;
-  min-width: 0;
-  flex: 1;
-  overflow-wrap: anywhere;
-}
-
-.codexModels {
-  display: grid;
-  gap: 4px;
-  max-height: 220px;
-  overflow: auto;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.codexModels li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--border);
-}
-
 .scorerPane {
   display: grid;
   gap: 12px;
@@ -340,82 +292,6 @@
   display: grid;
   gap: 12px;
 }
-
-/* YAML editor: the textarea drives the box; the painted layer is pinned to it
-   and follows its scroll. Without the absolute layer the pre's full text height
-   would stretch the editor to the whole document. */
-.yamlEditor {
-  position: relative;
-  width: 100%;
-  border: 1px solid var(--control-border);
-  border-radius: 5px;
-  background: var(--surface);
-}
-
-.yamlHighlight,
-.yamlInput {
-  margin: 0;
-  padding: 12px 14px;
-  border: 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.6;
-  white-space: pre;
-  tab-size: 2;
-}
-
-.yamlHighlight {
-  position: absolute;
-  inset: 0;
-  overflow: auto;
-  pointer-events: none;
-  color: var(--text);
-  scrollbar-width: none;
-  border-radius: 5px;
-}
-
-.yamlHighlight::-webkit-scrollbar {
-  display: none;
-}
-
-.yamlInput {
-  position: relative;
-  display: block;
-  width: 100%;
-  min-height: 420px;
-  max-height: 70vh;
-  resize: vertical;
-  overflow: auto;
-  background: transparent;
-  color: transparent;
-  caret-color: var(--text);
-  overscroll-behavior: contain;
-  border-radius: 5px;
-}
-
-.yamlInput::selection {
-  background: rgb(var(--accent-rgb) / .22);
-}
-
-.yamlEditor:focus-within {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-
-.yamlInput:focus-visible {
-  outline: none;
-}
-
-/* Syntax colour stays inside the neutral ink ramp; only environment
-   references take the interaction colour, and no status hue is reused. */
-.yamlKey { color: var(--text); font-weight: 600; }
-.yamlComment { color: var(--muted); }
-.yamlString { color: var(--secondary); }
-.yamlNumber { color: var(--text); }
-.yamlLiteral { color: var(--text); font-weight: 500; }
-.yamlEnv { color: var(--accent); }
-.yamlSecret { color: var(--secondary); font-weight: 600; }
-.yamlPunctuation { color: var(--muted); }
 
 .footer {
   display: flex;
@@ -485,7 +361,7 @@
   }
 
   .providerFacts > div {
-    grid-template-columns: 60px minmax(0, 1fr);
+    grid-template-columns: 84px minmax(0, 1fr);
     gap: 10px;
   }
 }
