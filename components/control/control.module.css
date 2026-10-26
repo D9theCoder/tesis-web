@@ -1,5 +1,8 @@
+/* The control surface fills the workspace horizontally and hugs its content
+   vertically: a workbench has one card of content, so stretching it to the
+   viewport would only trade the canvas for a giant white void. */
 .page {
-  max-width: 960px;
+  max-width: min(var(--page-measure-wide), 100%);
   min-width: 0;
 }
 
@@ -25,14 +28,17 @@
 }
 
 
-/* Step navigation reads as the same underline tabs used for page views. The row
-   wraps rather than scrolls so the 2px focus ring is never clipped. */
+/* Step navigation reads as the same underline tabs used for page views, so it
+   sits flush under the card header the way the page tabs sit under the page
+   header: bleeding out of the content padding, with the first label landing on
+   the same left edge as the fields. The row wraps rather than scrolls so the
+   2px focus ring is never clipped. */
 .steps {
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
-  margin: 0 0 16px -15px;
-  padding: 0;
+  margin: -18px -18px 16px;
+  padding: 0 3px;
   list-style: none;
   border-bottom: 1px solid var(--border);
 }
@@ -64,8 +70,17 @@
   font-weight: 600;
 }
 
+/* The position is visible now, not only announced in the button's name. */
+.stepNumber {
+  margin-right: 7px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.6;
+}
+
+/* No floor: a reserved height put a band of empty card under a two-row step.
+   The step's own content sets the height, and the card ends where it ends. */
 .stepBody {
-  min-height: 220px;
+  min-height: 0;
 }
 
 /* Programmatic focus target after a step change: no ring for pointer use, the
@@ -96,6 +111,106 @@
   gap: 10px;
 }
 
+/* Four labelled groups replace a fifteen-field wall, and they sit side by
+   side when the workbench is wide: a row of named blocks across the card
+   instead of one column hugging the left edge. */
+.runtimeGroups {
+  display: grid;
+  gap: 20px 24px;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  align-items: start;
+  min-width: 0;
+}
+
+/* Fields inside a group stay close to their own label, so the group's column
+   count is independent of the step's. */
+.groupFields {
+  display: grid;
+  gap: 16px 20px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+.fieldGroup {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.groupLegend {
+  margin-bottom: 10px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Guardrails and LLM runtime stay one disclosure away from the fields every
+   run needs, so the step opens at five rows instead of eleven. */
+.advanced {
+  grid-column: 1 / -1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-subtle);
+}
+
+.advancedSummary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.advancedSummary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.advanced[open] .advancedSummary {
+  border-bottom: 1px solid var(--border);
+}
+
+.advancedBody {
+  padding: 14px 12px;
+}
+
+.advancedNote {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--danger);
+}
+
+/* The coordinate count is the number that decides cost, so the preview gets a
+   surface and names its axes instead of reading as a grey footnote. */
+.coordinateSummary {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-subtle);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.coordinateSummaryAxes {
+  color: var(--secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.coordinateSummaryPending {
+  color: var(--warning);
+}
+
 .groupHeading {
   margin: 0;
   font-size: 14px;
@@ -108,12 +223,6 @@
   font-size: 13px;
   line-height: 1.55;
   overflow-wrap: anywhere;
-}
-
-.warning {
-  color: var(--warning);
-  font-size: 12px;
-  line-height: 1.55;
 }
 
 .fullWidth {
@@ -181,20 +290,75 @@
   color: var(--warning);
 }
 
+/* Runs and Doctor are data surfaces: the table runs to the card's edges and
+   sits flush under the header, and an empty state does not stack its own
+   padding on top of the card's. */
+.console :global(.table-container) {
+  width: auto;
+  margin-inline: -18px;
+}
+
+.console > :global(.ui-card-content) > :global(.table-container):first-child {
+  margin-top: -18px;
+}
+
+.console :global(.empty-state) {
+  padding-block: 16px;
+}
+
+@media (max-width: 600px) {
+  .console :global(.table-container) {
+    margin-inline: -14px;
+  }
+
+  .console > :global(.ui-card-content) > :global(.table-container):first-child {
+    margin-top: -14px;
+  }
+}
+
 .fieldErrorList code {
   font-family: var(--font-mono);
   font-size: 11px;
 }
 
+/* An error names its field and takes the reader there. */
+.errorJump {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Pinned to the card so Next and Start stay reachable while a long step
+   scrolls. The negative margins bleed the surface to the card edges, so
+   content never shows through beside the bar. */
 .wizardFooter {
+  position: sticky;
+  bottom: var(--bottom-chrome-height, 0px);
+  z-index: 2;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 16px;
-  padding-top: 16px;
+  /* Bleeds to the card's bottom edge as well, so the card ends with the
+     buttons instead of adding the content padding as a band underneath. */
+  margin: 16px -18px -18px;
+  padding: 12px 18px;
   border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+@media (max-width: 600px) {
+  .wizardFooter {
+    margin-inline: -14px;
+    margin-bottom: -14px;
+    padding-inline: 14px;
+  }
 }
 
 .statusRow {
@@ -284,7 +448,8 @@
   }
 
   .steps {
-    margin-left: -15px;
+    margin: -14px -14px 16px;
+    padding: 0;
   }
 
   .stepButton {

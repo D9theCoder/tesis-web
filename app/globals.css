@@ -38,6 +38,15 @@
   --danger: rgb(var(--danger-rgb));
   --review: rgb(var(--review-rgb));
   --sidebar-width: 216px;
+  /* The one measure shared by capped workspace pages, so a form column never
+     reads as a strip of paper on a wide monitor. Full-bleed surfaces (the live
+     monitor, overview, results) ignore it. */
+  --page-measure: 1180px;
+  /* The control surface is a workbench, not a reading column: it fills the
+     workspace and only stops on an ultrawide display. */
+  --page-measure-wide: 1680px;
+  /* Fixed bottom chrome a pinned element must clear. Only hacker adds any. */
+  --bottom-chrome-height: 0px;
   --radius: 8px;
   --theme-switch-duration: 320ms;
   --akg-bg: var(--surface-subtle);
@@ -1006,6 +1015,7 @@ svg { flex-shrink: 0; }
   /* Inset between a page panel border and its content. The hero panel grows by
      the same amount, so header and body share one panel width and one gutter. */
   --hacker-panel-gutter: 20px;
+  --bottom-chrome-height: 30px;
   /* The fixed status bar must not cover the end of a keyboard-scrolled page. */
   scroll-padding-bottom: 52px;
 }
@@ -1545,7 +1555,7 @@ svg { flex-shrink: 0; }
 /* --- Settings page (base styles for every theme) -------------------------- */
 /* Geometry lives in the base rules so switching to hacker changes color and
    type only; the theme cards never jump size. */
-.settings-page { max-width: 960px; min-width: 0; }
+.settings-page { max-width: min(var(--page-measure), 100%); min-width: 0; }
 .settings-section {
   margin-top: 20px;
   padding: 18px;
@@ -2312,6 +2322,9 @@ svg { flex-shrink: 0; }
 /* --- Hacker responsive rules --------------------------------------------- */
 
 @media (max-width: 600px), (any-pointer: coarse) {
+  :root[data-theme="hacker"] {
+    --bottom-chrome-height: 44px;
+  }
   :root[data-theme="hacker"] .hacker-statusbar {
     min-height: 44px;
     padding-block: 0;
@@ -2393,7 +2406,15 @@ svg { flex-shrink: 0; }
 .control-checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px 16px; }
 .control-checkbox { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--text); line-height: 1.4; }
 .control-checkbox input { margin-top: 2px; width: 15px; height: 15px; accent-color: var(--accent); }
-.control-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; }
+/* Multi-choice groups wrap and stretch instead of leaving a hole in the last
+   row: three options fill one line, four pair up, and a long provider id gets
+   the width it needs rather than breaking mid-token in a 190px cell. */
+.control-checkbox-grid { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.control-checkbox-grid > .control-checkbox { flex: 1 1 190px; min-width: 0; }
+/* Column count follows the width instead of a hand-picked number: five across
+   on a full workspace, three at 1280, one on a phone. `auto-fill` keeps every
+   field the same width even when a group fills only part of its row. */
+.control-form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px 20px; }
 .control-log { contain: content; overscroll-behavior: contain; max-height: 320px; margin: 0; overflow: auto; padding: 12px 16px; border-radius: 5px; background: var(--surface-subtle); color: var(--secondary); font-family: var(--font-mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
 .control-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .control-section-title { margin-bottom: 8px; font-size: 14px; font-weight: 600; color: var(--text); }
