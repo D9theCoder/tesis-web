@@ -77,6 +77,9 @@ button links to the detailed results page.
   into a cancelled artifact and terminal descriptor) and an explicit
   **Force kill** escalation. One run at a time is enforced; set
   `TESIS_CONTROL_ALLOW_CONCURRENT_RUNS=1` to override.
+  The launch draft survives a visit to Runs or Doctor: all three panels stay
+  mounted, so scope, step, mode, and unsaved overrides are still there on
+  return. **Refresh** reloads the jobs and the saved profile together.
 - **Doctor** — offline checks, plus a two-step confirmed live check that
   contacts DVWA and the model providers.
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Ban, ExternalLink, Skull } from "lucide-react";
+import { Ban, ExternalLink, Play, Skull } from "lucide-react";
 
 import { Badge, Button, Dialog } from "@/components/ui/primitives";
 import { cancelControlRun, fetchControlLog } from "@/lib/api-client";
@@ -49,10 +49,22 @@ function resultHeadline(job: ControlJob): string {
 export type RunConsoleProps = {
   jobs: ControlJob[];
   disabled?: boolean;
+  /** The job list has not arrived yet, so an empty list means nothing. */
+  loading?: boolean;
+  /** Runs is the visible section; log polling stops while it is not. */
+  active?: boolean;
   onRefresh: () => void;
+  onStart?: () => void;
 };
 
-export function RunConsole({ jobs, disabled, onRefresh }: RunConsoleProps) {
+export function RunConsole({
+  jobs,
+  disabled,
+  loading,
+  active = true,
+  onRefresh,
+  onStart,
+}: RunConsoleProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [log, setLog] = useState<{ jobId: string | null; text: string }>({ jobId: null, text: "" });
   const [logError, setLogError] = useState<string | null>(null);
@@ -67,7 +79,7 @@ export function RunConsole({ jobs, disabled, onRefresh }: RunConsoleProps) {
   const selectedActive = selectedStatus ? ACTIVE.has(selectedStatus) : false;
 
   useEffect(() => {
-    if (!selectedJobId) return;
+    if (!selectedJobId || !active) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -96,7 +108,7 @@ export function RunConsole({ jobs, disabled, onRefresh }: RunConsoleProps) {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [selectedJobId, selectedStatus]);
+  }, [selectedJobId, selectedStatus, active]);
 
   const selectJob = (id: string) => {
     offsetRef.current = 0;
@@ -139,10 +151,24 @@ export function RunConsole({ jobs, disabled, onRefresh }: RunConsoleProps) {
 
       <div className="ui-card-content">
         {jobs.length === 0 ? (
-          <div className="empty-state">
-            <h3>No run in this session yet</h3>
-            <p>Start one from the Launch tab. Runs begun in the TUI stay out of this list, but they still appear in the live monitor and results explorer.</p>
-          </div>
+          loading ? (
+            <p className="empty-state" role="status">
+              Loading runs…
+            </p>
+          ) : (
+            <div className="empty-state">
+              <h3>No run in this session yet</h3>
+              <p>
+                Runs begun here stay in this list. Runs begun in the TUI stay out of it, but they still appear in the
+                live monitor and results explorer.
+              </p>
+              {onStart ? (
+                <Button type="button" variant="outline" onClick={onStart}>
+                  <Play size={15} aria-hidden /> Start a run
+                </Button>
+              ) : null}
+            </div>
+          )
         ) : (
           <>
             <div className="table-container">
@@ -167,7 +193,7 @@ export function RunConsole({ jobs, disabled, onRefresh }: RunConsoleProps) {
                         <button
                           type="button"
                           className={styles.rowButton}
-                          aria-pressed={selectedJobId === job.id}
+                          aria-current={selectedJobId === job.id ? "true" : undefined}
                           aria-label={`Show run started ${fmtIsoFromStr(job.createdAt)}`}
                           onClick={(event) => {
                             event.stopPropagation();
@@ -234,6 +260,10 @@ export function RunConsole({ jobs, disabled, onRefresh }: RunConsoleProps) {
                     </Link>
                   ) : null}
                 </div>
+
+                {!selectedActive ? (
+                  <p className={styles.hint}>This run has ended, so cancel and force kill no longer apply.</p>
+                ) : null}
 
                 {actionError ? (
                   <p className="notice notice-error" role="alert">

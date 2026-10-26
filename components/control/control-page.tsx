@@ -57,6 +57,8 @@ export function ControlPage({ initialSchema }: { initialSchema?: ControlSchema |
   const jobs = jobsResource.data?.jobs ?? [];
   /** A background refresh, as opposed to the first load this page paints without. */
   const refreshingJobs = jobsResource.busy && jobsResource.data !== undefined;
+  /** No schema at all yet: the launch form has nothing to render. */
+  const schemaPending = schemaResource.busy && schemaResource.data === undefined;
   const controlEnabled = schema?.control?.enabled ?? true;
   const controlReason = schema?.control?.reason ?? null;
   const activeRun =
@@ -79,14 +81,24 @@ export function ControlPage({ initialSchema }: { initialSchema?: ControlSchema |
     refreshRef.current();
   }, []);
 
+  const refreshSchema = schemaResource.refresh;
+  /**
+   * The launch form is rendered from the saved profile, so a profile edited in
+   * Settings reaches this page only when the schema is refetched as well.
+   */
+  const refreshAll = useCallback(() => {
+    refreshJobs();
+    refreshSchema();
+  }, [refreshJobs, refreshSchema]);
+
   return (
     <div className={`control-page ${styles.page}`}>
       <header className="page-header">
         <div>
           <h1 className="page-title">Experiment control</h1>
           <p className="page-description">
-            Configure the matrix, launch the runtime, watch it progress, and cancel it. Runs use the same headless
-            entry point and artifacts as the TUI and appear in the live monitor and results explorer.
+            Configure the matrix, launch the runtime, watch it progress, and cancel it. Runs appear in the live
+            monitor and results explorer.
           </p>
           {!controlEnabled || activeRun ? (
             <div className={styles.statusRow}>
@@ -96,7 +108,7 @@ export function ControlPage({ initialSchema }: { initialSchema?: ControlSchema |
           ) : null}
         </div>
         <div className="page-actions">
-          <Button type="button" variant="ghost" onClick={jobsResource.refresh} disabled={jobsResource.busy}>
+          <Button type="button" variant="ghost" onClick={refreshAll} disabled={jobsResource.busy || schemaResource.busy}>
             <RefreshCw size={15} aria-hidden /> {refreshingJobs ? "Refreshing…" : "Refresh"}
           </Button>
           <Link className="ui-button ui-button-outline" href="/settings">
@@ -137,11 +149,15 @@ export function ControlPage({ initialSchema }: { initialSchema?: ControlSchema |
       />
 
       <div id="control-panel" role="tabpanel" aria-labelledby={`control-tab-${tab}`} className={styles.panel}>
-        {tab === "launch" ? (
-          schema ? (
+        {/* All three sections stay mounted. The wizard owns the draft (mode,
+            step and overrides), so unmounting it on a tab switch would throw
+            away a configured matrix; the hidden sections are inert and their
+            polling is gated on the active tab. */}
+        <div hidden={tab !== "launch"}>
+          {schema ? (
             <LaunchWizard
               schema={schema}
-              disabled={!controlEnabled || schemaResource.busy}
+              disabled={!controlEnabled || schemaPending}
               onStarted={openRuns}
             />
           ) : (
@@ -162,16 +178,23 @@ export function ControlPage({ initialSchema }: { initialSchema?: ControlSchema |
                 )}
               </div>
             </section>
-          )
-        ) : null}
+          )}
+        </div>
 
-        {tab === "runs" ? (
-          <RunConsole jobs={runJobs} disabled={!controlEnabled} onRefresh={jobsResource.refresh} />
-        ) : null}
+        <div hidden={tab !== "runs"}>
+          <RunConsole
+            jobs={runJobs}
+            disabled={!controlEnabled}
+            loading={jobsResource.data === undefined}
+            active={tab === "runs"}
+            onRefresh={jobsResource.refresh}
+            onStart={() => setTab("launch")}
+          />
+        </div>
 
-        {tab === "doctor" ? (
+        <div hidden={tab !== "doctor"}>
           <DoctorPanel jobs={jobs} disabled={!controlEnabled} onRefresh={jobsResource.refresh} />
-        ) : null}
+        </div>
       </div>
     </div>
   );
