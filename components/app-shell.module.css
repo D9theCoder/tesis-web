@@ -58,20 +58,8 @@
     padding-inline: 0;
   }
 
-  /* Hide the wordmark and caption but keep the mark as the compact identity. */
+  /* Hide the wordmark and keep the mark as the compact identity. */
   .shell.collapsed :global(.app-sidebar .app-brand > span:last-child) {
-    display: none;
-  }
-
-  /* Keep the workspace avatar as the compact row while preserving its height. */
-  .shell.collapsed :global(.app-sidebar .workspace-label) {
-    justify-content: center;
-    min-height: 62px;
-    margin-inline: 12px;
-    padding: 12px 0;
-  }
-
-  .shell.collapsed :global(.app-sidebar .workspace-label > span:last-child) {
     display: none;
   }
 
