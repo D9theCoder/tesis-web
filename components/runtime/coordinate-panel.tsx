@@ -142,7 +142,6 @@ export function CoordinatePanel({ state }: { state: LiveRunState }) {
             <h3 id="coordinate-target-heading">
               <Target aria-hidden="true" size={15} /> Target scope
             </h3>
-            <Badge variant="outline">Contained</Badge>
           </div>
           <p className="coordinate-target-value" title={state.targetUrl ?? undefined}>
             {state.targetUrl ?? "—"}

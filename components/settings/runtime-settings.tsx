@@ -456,7 +456,7 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
           </p>
         </div>
         <div className={styles.headerBadges}>
-          {controlEnabled ? <Badge variant="outline">control plane active</Badge> : <Badge variant="amber">read-only</Badge>}
+          {controlEnabled ? null : <Badge variant="amber">read-only</Badge>}
           {dirty ? <Badge variant="amber">unsaved changes</Badge> : null}
         </div>
       </header>

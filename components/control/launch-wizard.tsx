@@ -429,9 +429,7 @@ export const LaunchWizard = memo(function LaunchWizard({ schema, disabled, onSta
               <Badge variant={axesComplete ? "outline" : "amber"}>
                 {axesComplete ? `${coordinateCount} coordinates` : "Incomplete axes"}
               </Badge>
-            ) : (
-              <Badge variant="outline">Single coordinate</Badge>
-            )}
+            ) : null}
             {dirty ? <Badge variant="amber">Draft changes</Badge> : null}
             {disabled ? <Badge variant="amber">Control endpoints unavailable</Badge> : null}
           </div>
