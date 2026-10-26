@@ -2415,3 +2415,45 @@ svg { flex-shrink: 0; }
   .control-checkbox { min-height: 44px; align-items: center; }
   .control-checkbox input { margin-top: 0; width: 18px; height: 18px; }
 }
+
+/* Hacker reads the track as a terminal chip row: square corners, a hairline
+   frame, and the filled accent that marks a selected option everywhere else in
+   the palette. Light and dark keep the rounded surface above. */
+:root[data-theme="hacker"] .control-segmented {
+  gap: 2px;
+  padding: 1px;
+  border-color: var(--hacker-line);
+  border-radius: 2px;
+  background: rgb(5 8 5 / .7);
+}
+:root[data-theme="hacker"] .control-segmented > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--secondary);
+  font: 600 10px/1 var(--font-mono);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+:root[data-theme="hacker"] .control-segmented > button:hover:not(:disabled) {
+  border-color: var(--hacker-line-strong);
+  background: transparent;
+  color: var(--text);
+}
+:root[data-theme="hacker"] .control-segmented > button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--hacker-ink);
+  font-weight: 700;
+}
+:root[data-theme="hacker"] .control-segmented > button[aria-pressed="true"]:hover:not(:disabled) {
+  border-color: var(--success);
+  background: var(--success);
+  color: var(--hacker-ink);
+}
+/* The ring stays outside the fill, which is the accent colour too. */
+:root[data-theme="hacker"] .control-segmented > button:focus-visible { outline-offset: 1px; }
