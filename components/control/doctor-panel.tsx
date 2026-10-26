@@ -106,7 +106,7 @@ export function DoctorPanel({ jobs, disabled, onRefresh }: DoctorPanelProps) {
         {!latest ? (
           <p className="empty-state">The Doctor has not run for this profile yet.</p>
         ) : (
-          <div className={styles.jobDetail}>
+          <div className={styles.doctorBody}>
             <div className={styles.statusRow}>
               <Badge variant="outline">{latest.mode === "doctor-live" ? "live" : "offline"}</Badge>
               {report ? (

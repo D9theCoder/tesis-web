@@ -404,6 +404,31 @@
   border-top: 1px solid var(--border);
 }
 
+/* The Doctor report is the tab's whole body, not a detail block sitting under
+   another table, so it hangs straight off the actions: no divider and no
+   second round of padding between the buttons and the summary line. */
+.doctorBody {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.doctorBody > .statusRow {
+  margin-top: 0;
+}
+
+/* The report also ends the card, so the last row reaches the bottom edge
+   instead of leaving the content padding as a band beneath it. */
+.doctorBody > :global(.table-container):last-child {
+  margin-bottom: -18px;
+}
+
+@media (max-width: 600px) {
+  .doctorBody > :global(.table-container):last-child {
+    margin-bottom: -14px;
+  }
+}
+
 .detailActions {
   display: flex;
   flex-wrap: wrap;

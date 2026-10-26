@@ -1,0 +1,101 @@
+/* Mobile first: the contents are a strip pinned under the top bar. It bleeds to
+   the page gutters and scrolls sideways instead of wrapping the document. */
+.contents {
+  position: sticky;
+  top: 56px;
+  z-index: 19;
+  min-width: 0;
+  margin: 0 -12px 20px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--canvas);
+}
+
+.label {
+  display: none;
+  margin: 0 0 6px;
+}
+
+.list {
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.list::-webkit-scrollbar {
+  display: none;
+}
+
+.item {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+/* The marker is the section's position in the document, not decoration: it is
+   neutral until the section is the one being read. */
+.link {
+  display: block;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 5px;
+  color: var(--secondary);
+  font-size: 13px;
+  line-height: 1.4;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+
+.link:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.link[aria-current="location"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 500;
+}
+
+/* Wide screens: the contents become a rail in their own column and stay beside
+   the section being read. */
+@media (min-width: 1081px) {
+  .contents {
+    position: sticky;
+    top: 88px;
+    margin: 0;
+    padding: 0;
+    border-bottom: 0;
+    background: transparent;
+  }
+
+  .label {
+    display: block;
+  }
+
+  .list {
+    flex-direction: column;
+    gap: 1px;
+    overflow: visible;
+  }
+
+  .item {
+    flex: initial;
+  }
+
+  .link {
+    min-height: 0;
+    margin-left: -8px;
+    padding: 6px 8px;
+    white-space: normal;
+  }
+}
+
+:global(:root[data-theme="hacker"]) .link {
+  border-radius: 2px;
+}

@@ -88,7 +88,7 @@ See `.env.example` for common defaults. Keep private values in `.env.local`; nev
 
 ## Validation
 
-Run checks proportional to the change. Before handing off code changes, use:
+Run checks proportional to the change. Before handing off a change that touches behavior, use:
 
 ```bash
 npm run test
@@ -97,6 +97,16 @@ npm run lint
 npm run build
 git diff --check
 ```
+
+Style-only changes — CSS, spacing, typography, copy, or the markup of a single presentational component — stop earlier:
+
+```bash
+npm run typecheck
+npm run lint
+git diff --check
+```
+
+Then look at the affected view once against the running dev server: one probe or screenshot pass, not repeated rounds. Skip `npm run test`, `npm run build`, and `test:browser` here, and do not start a run, a Doctor job, or any provider, DVWA, or bridge call just to see a page. Changing a shared selector in `app/globals.css` widens the visual check to every page that uses it; it does not widen the test scope. Typecheck, lint, and the visual check still apply — "minor" never means unverified.
 
 For graph, replay, responsive layout, or interaction changes, also run Playwright against a local server:
 

@@ -392,7 +392,7 @@ Hacker mode tightens cards, panels, and controls to 2px and adds bracketed title
 - **Sizing:** 36px minimum height on larger screens and 44px on small screens.
 
 ### Navigation
-- **Desktop:** A 216px sidebar with vertically stacked links, 40px minimum link height, 6px radius, and compact icon-and-label alignment. Active links use a soft accent fill and stronger accent text; hover uses a neutral surface shift.
+- **Desktop:** A 216px sidebar with vertically stacked links, 40px minimum link height, 6px radius, and compact icon-and-label alignment. Active links use a soft accent fill and stronger accent text; hover uses a neutral surface shift. The rail's first row matches the top bar's 56px and carries only the orange mark and the TESIS wordmark — the product name is never repeated as a caption under it — and the mark, the workspace avatar and the nav icons all begin on one 24px line, so the rail has a single left edge.
 - **Collapse:** A labeled button at the bottom of the rail collapses the desktop sidebar to 64px and restores it; the wordmark, nav labels, and supporting copy give way to the brand mark, centered icons, and tooltips. The preference persists locally, focus stays on the toggle, and the collapsed state is inert at 900px and below.
 - **Mobile:** Navigation opens in a left-side drawer; the top bar retains the menu control and page context. The drawer always shows full labels.
 
@@ -445,7 +445,7 @@ Hacker mode tightens cards, panels, and controls to 2px and adds bracketed title
 - Results keep the chosen coordinate and score origin connected to their detail view. Provisional runtime scores and Human or AI reviews retain distinct labels and source bindings.
 - Evidence tables pair sorting and filtering with visible counts, pagination, and a focused detail drawer. Missing values retain their unavailable state.
 - Experiment activity replaces the monitor catalog with paged source events and per-execution identity. Bounded trajectory previews link readers to the complete history.
-- The guide is a Read surface: semantic comparison tables, explicit metric denominators, and a user-controlled evidence walkthrough with a static reduced-motion alternative.
+- The guide is a Read surface inside the console, not a docs skin of its own: a page header, a section rule per topic, a 16px section title with its supporting line beneath, the console's own data tables on card surfaces, and the quiet surface for the score formula. A sticky contents rail carries wayfinding on wide screens and becomes a strip under the top bar on phones, marking the section being read with the same soft accent fill as the sidebar. Prose keeps a 68ch measure in primary ink, helper lines stay muted, and canonical codes stay monospaced. The evidence walkthrough is staged as the console's underline tabs with roving focus and no motion, so it needs no reduced-motion variant.
 - Comfortable tables wrap metadata; Compact uses limited-width single-line scanning without changing accessible content. Block disclosures retain 44px coarse-pointer targets.
 
 ### Overview and Results discovery

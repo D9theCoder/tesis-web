@@ -1,90 +1,229 @@
-.page:global(.visual-guide) :global(.page-header) {
-  margin-bottom: 6px;
+/* The guide is a Read surface inside the console: the document column carries
+   the reading, the rail carries the wayfinding, and the reference tables carry
+   the comparison. Every part borrows the console's own type scale, borders and
+   surfaces rather than bringing a docs skin of its own. */
+.page {
+  max-width: 1120px;
+  min-width: 0;
 }
 
-.page:global(.visual-guide) :global(.page-description) {
-  margin-top: 2px;
-  line-height: 1.45;
+.layout {
+  display: block;
 }
 
-.page:global(.visual-guide) :global(.help-section) {
-  margin-top: 20px;
-  scroll-margin-top: 120px;
+.document {
+  min-width: 0;
 }
 
-.page:global(.visual-guide) :global(.guide-contents) {
-  position: sticky;
-  top: 57px;
-  z-index: 19;
-  gap: 4px 12px;
-  padding-block: 2px;
-  background: var(--canvas);
+/* The layout stays a plain block where the contents are a sticky strip, so the
+   strip's containing block is the whole document and it can outlive the fold. */
+@media (min-width: 1081px) {
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 208px;
+    column-gap: 56px;
+    align-items: start;
+  }
+
+  .layout > :global(nav) {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .document {
+    grid-column: 1;
+    grid-row: 1;
+  }
 }
 
-.page :global(.guide-contents a) {
-  color: var(--secondary);
-  text-decoration: none;
+/* Sections are separated by a rule, and the heading keeps its supporting line
+   directly beneath it, the pairing the console already uses for section heads. */
+.section {
+  margin-top: 32px;
+  padding-top: 32px;
+  border-top: 1px solid var(--border);
+  scroll-margin-top: 96px;
 }
 
-.page :global(.guide-contents a:hover),
-.page :global(.guide-contents a:focus-visible) {
-  color: var(--accent);
+.section:first-child {
+  margin-top: 12px;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.heading {
+  margin-bottom: 14px;
+}
+
+.heading h2 {
+  margin: 0;
+}
+
+.deck {
+  margin: 5px 0 0;
+  max-width: 62ch;
+}
+
+.section > :global(p),
+.section > :global(ul) > :global(li) {
+  max-width: 68ch;
+  margin: 0 0 12px;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.section > :global(p.helper-copy) {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.section > :global(.notice) {
+  max-width: 68ch;
+  margin: 18px 0 0;
+}
+
+.section :global(a) {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
-.page:global(.visual-guide) :global(.guide-contents) + :global(.help-section) {
-  margin-top: 12px;
+.list {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  list-style: disc;
 }
 
-.page:global(.visual-guide) :global(.help-section > h2) {
-  margin-bottom: 6px;
+.list > :global(li)::marker {
+  color: var(--muted);
 }
 
-.page:global(.visual-guide) :global(p),
-.page:global(.visual-guide) :global(li) {
+/* A reference table is the console's own data table sitting on a card surface
+   instead of inside a card: same header band, same 12/16 cells, same dividers. */
+.table {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.table :global(th),
+.table :global(td) {
+  padding: 12px 16px;
   line-height: 1.5;
 }
 
-.page:global(.visual-guide) :global(p) {
-  margin-block: 6px;
+.table :global(thead th) {
+  border-bottom: 1px solid var(--border-strong);
 }
 
-.page:global(.visual-guide) :global(.help-section > ul > li) {
-  padding-block: 3px;
+.table :global(tbody th) {
+  width: 26%;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: normal;
 }
 
-.page :global(.guide-table) {
-  margin-block: 8px;
+.table :global(td) {
+  color: var(--text);
+  font-size: 13px;
 }
 
-.page :global(.guide-table th),
-.page :global(.guide-table td) {
-  padding: 7px 10px;
-  line-height: 1.45;
+.table :global(tbody th code) {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
 }
 
-.page :global(.guide-formula) {
-  padding: 8px;
-  overflow-wrap: normal;
+.table :global(tbody tr:last-child th) {
+  border-bottom: 0;
+}
+
+/* The formula is a value, not a figure: it sits on the quiet surface the console
+   gives code and structured data, and nothing is added around it. */
+.formula {
+  margin: 18px 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-subtle);
+  color: var(--text);
+  font-size: 15px;
+}
+
+.page .formula :global(.katex-display),
+.page .formula :global(.katex-display) > :global(.katex) {
+  margin: 0;
+  text-align: left;
+}
+
+:global(:root[data-theme="hacker"]) .table,
+:global(:root[data-theme="hacker"]) .formula {
+  border-radius: 2px;
+}
+
+@media (max-width: 1080px) {
+  .section {
+    scroll-margin-top: 132px;
+  }
 }
 
 @media (max-width: 600px) {
-  .page:global(.visual-guide) :global(.page-header) {
+  .section {
+    margin-top: 28px;
+    padding-top: 28px;
+  }
+
+  .table :global(table) {
+    min-width: 0;
+  }
+
+  .table :global(thead) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .table :global(tbody tr) {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .table :global(tbody tr:last-child) {
+    border-bottom: 0;
+  }
+
+  .table :global(tbody th),
+  .table :global(tbody td) {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+  }
+
+  .table :global(tbody th) {
     margin-bottom: 6px;
   }
 
-  .page:global(.visual-guide) :global(.help-section) {
-    scroll-margin-top: 164px;
+  .table :global(tbody td) {
+    padding-block: 5px;
   }
 
-  .page :global(.guide-table tbody tr) {
-    padding: 8px 10px;
+  .table :global(tbody td::before) {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 3px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.4;
   }
 
-  .page :global(.guide-table th[scope="row"]),
-  .page :global(.guide-table td) {
-    padding: 4px 0;
-    line-height: 1.45;
+  .formula {
+    font-size: 13px;
   }
 }

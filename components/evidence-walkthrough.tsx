@@ -1,19 +1,65 @@
 "use client";
-import { useState } from "react";
-import { Button } from "@/components/ui/primitives";
+
+import { useRef, useState } from "react";
+
 import styles from "@/components/evidence-walkthrough.module.css";
+
 const steps = [
-  { title: "Request", text: "A recorded execution attempt links the candidate, method, request and visit IDs. Executed does not mean confirmed." },
-  { title: "Response and signal", text: "Transport, response evidence and signal detection are separate facts. HTTP 200 or a detected signal does not establish exploitation." },
-  { title: "Verifier", text: "The verifier examines linked evidence and required independent controls. Missing controls can limit the conclusion; missing proof is not a negative finding." },
-  { title: "Source-bound review", text: "Independent Human and AI receipts bind to the original execution and SHA-256. Final scores require eligible candidates, complete components and valid arithmetic." },
+  { title: "Request", text: "A recorded attempt links the candidate, the method, and the request that carried it. Sending something is not evidence that it worked." },
+  { title: "Response and signal", text: "The response, the transport, and any detected signal are separate facts. A page that loads or a pattern that matches does not establish exploitation." },
+  { title: "Verifier", text: "The verifier reads the linked response against the required controls. Missing controls limit the conclusion; missing proof is not a negative finding." },
+  { title: "Review", text: "A Human or AI review is bound to the artifact it scored. A final score needs eligible candidates, every component, and arithmetic that adds up." },
 ];
+
 export function EvidenceWalkthrough() {
   const [step, setStep] = useState(0);
-  return <section className={`evidence-walkthrough ${styles.walkthrough}`} aria-label="Evidence walkthrough">
-    <ol className={styles.steps}>{steps.map((item, index) => <li key={item.title}><button className="ui-button" aria-pressed={step === index} onClick={() => setStep(index)}><span>{index + 1}</span>{item.title}</button></li>)}</ol>
-    <div className="walkthrough-reading" key={step} role="status"><h3>{steps[step].title}</h3><p>{steps[step].text}</p></div>
-    <div className="page-actions"><Button disabled={step === 0} onClick={() => setStep(step - 1)}>Previous fact</Button><Button disabled={step === steps.length - 1} onClick={() => setStep(step + 1)}>Next fact</Button><Button onClick={() => setStep(0)}>Restart walkthrough</Button></div>
-    <p className="helper-copy">Illustrative evidence flow, not an experiment result. Nothing plays automatically.</p>
-  </section>;
+  const tabs = useRef<Array<HTMLButtonElement | null>>([]);
+  const current = steps[step];
+
+  const stepTab = (delta: number) => {
+    const next = (step + delta + steps.length) % steps.length;
+    setStep(next);
+    tabs.current[next]?.focus();
+  };
+
+  return (
+    <section className={styles.walkthrough} aria-label="Evidence walkthrough">
+      <div className="ui-tabs" role="tablist" aria-label="Evidence walkthrough stages">
+        {steps.map((item, index) => (
+          <button
+            key={item.title}
+            type="button"
+            role="tab"
+            id={`evidence-tab-${index}`}
+            className="ui-tab"
+            aria-selected={step === index}
+            aria-controls="evidence-walkthrough-panel"
+            tabIndex={step === index ? 0 : -1}
+            ref={(element) => {
+              tabs.current[index] = element;
+            }}
+            onClick={() => setStep(index)}
+            onKeyDown={(event) => {
+              if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+              event.preventDefault();
+              stepTab(event.key === "ArrowRight" ? 1 : -1);
+            }}
+          >
+            {item.title}
+          </button>
+        ))}
+      </div>
+      <div
+        className={styles.panel}
+        id="evidence-walkthrough-panel"
+        role="tabpanel"
+        aria-labelledby={`evidence-tab-${step}`}
+        tabIndex={0}
+      >
+        <h3>{current.title}</h3>
+        <p key={step}>{current.text}</p>
+      </div>
+      <p className={`helper-copy ${styles.note}`}>Illustrative evidence flow, not an experiment result.</p>
+    </section>
+  );
 }

@@ -109,10 +109,11 @@ svg { flex-shrink: 0; }
 
 .app-shell { position: relative; z-index: 1; min-height: 100dvh; }
 .app-sidebar { width: var(--sidebar-width); position: fixed; inset: 0 auto 0 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 30; }
-.app-brand { height: 72px; padding: 18px 22px; color: var(--text); display: flex; align-items: center; gap: 11px; font-size: 18px; font-weight: 700; letter-spacing: .015em; text-decoration: none; }
-.brand-mark { width: 29px; height: 29px; border-radius: 6px; background: #f58220; color: #281a09; display: grid; place-items: center; font-size: 18px; }
-.brand-caption { display: block; font-size: 11px; color: var(--muted); font-weight: 500; letter-spacing: .01em; }
-.workspace-label { display: flex; gap: 10px; align-items: center; margin: 2px 12px 24px; padding: 12px 8px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 600; }
+/* The rail's first row shares the top bar's 56px, so both chrome rows end on
+   one line; the mark, the workspace avatar and the nav icons all start at x=24. */
+.app-brand { height: 56px; padding: 0 24px; color: var(--text); display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; letter-spacing: -.01em; text-decoration: none; }
+.brand-mark { flex: 0 0 auto; width: 28px; height: 28px; border-radius: 6px; background: #f58220; color: #281a09; display: grid; place-items: center; font-size: 15px; font-weight: 700; letter-spacing: -.01em; line-height: 1; }
+.workspace-label { display: flex; gap: 10px; align-items: center; margin: 0 12px 20px; padding: 12px 4px 12px 12px; border-top: 1px solid var(--border); font-size: 12px; font-weight: 600; }
 .workspace-label small { display: block; font-size: 11px; font-weight: 400; color: var(--muted); margin-top: 2px; }
 .workspace-avatar { border: 1px solid var(--border); width: 30px; height: 30px; border-radius: 6px; display: grid; place-items: center; color: var(--secondary); background: var(--surface-subtle); }
 .app-navigation { display: flex; flex-direction: column; gap: 4px; padding: 0 12px; }
@@ -310,12 +311,6 @@ svg { flex-shrink: 0; }
 .akg-layout-message[role="alert"] { color: var(--danger); }
 .akg-expanded { position: fixed; inset: 0; z-index: 100; width: 100vw; height: 100dvh; }
 .akg-edge-pulse { animation: none; }
-.help-page { max-width: 940px; }
-.help-section { margin-top: 28px; }
-.help-section h2 { margin-bottom: 12px; }
-.help-section p { color: var(--secondary); max-width: 75ch; margin-bottom: 12px; }
-.help-section li { padding: 6px 0; color: var(--secondary); }
-.help-section li a { text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 1200px) { .runtime-dashboard { grid-template-columns: minmax(0,1fr); } .runtime-sidebar { grid-template-columns: repeat(2,minmax(0,1fr)); } .runtime-sidebar > section:last-child { grid-column: 1 / -1; } }
 @media (max-width: 900px) { .app-sidebar { display: none; } .app-workspace { margin-left: 0; } .mobile-menu { display: inline-flex !important; } .app-topbar { padding: 8px 16px; } .app-main { padding: 20px 16px 28px; } }
 @media (max-width: 600px) {
@@ -736,33 +731,11 @@ svg { flex-shrink: 0; }
   .activity-event-meta { gap: 4px 8px; }
   .activity-event-meta details > summary { min-height: 44px; }
 }
-.visual-guide { max-width: 1100px; }
-.visual-guide .help-section { scroll-margin-top: 80px; margin-top: 40px; }
-.visual-guide .help-section > h2 { font-size: 22px; margin-bottom: 12px; }
-.visual-guide p, .visual-guide li { max-width: 75ch; line-height: 1.7; }
-.visual-guide p { margin-block: 12px; }
-.guide-contents { display: flex; flex-wrap: wrap; gap: 8px 20px; border-block: 1px solid var(--border); padding-block: 12px; }
-.guide-contents a { display: inline-flex; align-items: center; min-height: 44px; }
-.guide-table { margin-block: 18px; border: 1px solid var(--border); border-radius: 6px; }
-.guide-table table { min-width: 560px; }
-.guide-table th { white-space: normal; }
-.guide-table th[scope="row"] { width: 23%; color: var(--text); }
-.guide-formula { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; padding: 18px; background: var(--surface-subtle); border: 1px solid var(--border); }
-.evidence-walkthrough { border-block: 1px solid var(--border); padding-block: 20px; }
-.evidence-walkthrough ol { display: flex; flex-wrap: wrap; gap: 12px; padding: 0; list-style: none; }
-.evidence-walkthrough button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
-.walkthrough-reading { min-height: 150px; padding: 20px 0; animation: guide-reveal 180ms ease-out; }
-@keyframes guide-reveal { from { transform: translateY(4px); } to { transform: translateY(0); } }
+/* The guide owns its own composition in app/help/page.module.css and
+   components/guide-contents.module.css; only the shared coarse-pointer summary
+   target stays here. */
 @media (max-width: 600px), (any-pointer: coarse) {
   main summary { min-height: 44px; display: flex; align-items: center; gap: 8px; }
-  .visual-guide .help-section > h2 { font-size: 20px; }
-}
-@media (max-width: 600px) {
-  .guide-table table { min-width: 0; }
-  .guide-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .guide-table tbody tr { display: block; padding: 14px; border-bottom: 1px solid var(--border); }
-  .guide-table th[scope="row"], .guide-table td { display: block; width: 100%; border: 0; padding: 6px 0; }
-  .guide-table td::before { content: attr(data-label); display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
 }
 
 /* Research synthesis and experiment discovery share tokens, not page composition. */
@@ -1119,13 +1092,6 @@ svg { flex-shrink: 0; }
   color: var(--hacker-ink);
   text-shadow: none;
   box-shadow: 0 0 14px var(--hacker-glow);
-}
-:root[data-theme="hacker"] .brand-caption {
-  color: var(--muted);
-  font-size: 10px;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  text-shadow: none;
 }
 :root[data-theme="hacker"] .workspace-label {
   border-color: var(--hacker-line);

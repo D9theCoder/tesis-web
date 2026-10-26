@@ -56,7 +56,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return <div className={`app-shell ${sidebarStyles.shell}${sidebarCollapsed ? ` ${sidebarStyles.collapsed}` : ""}`}>
     <a className="skip-link" href="#main-content">Skip to content</a>
     <aside id="app-sidebar" className="app-sidebar">
-      <Link href="/" className="app-brand" aria-label="TESIS Console" title={sidebarCollapsed ? "TESIS Console" : undefined}><span className="brand-mark" aria-hidden="true">T</span><span>TESIS<span className="brand-caption">Console</span></span></Link>
+      <Link href="/" className="app-brand" aria-label="TESIS Console" title={sidebarCollapsed ? "TESIS Console" : undefined}><span className="brand-mark" aria-hidden="true">T</span><span>TESIS</span></Link>
       <div className="workspace-label" title={sidebarCollapsed ? "Research workspace — DVWA sandbox" : undefined}><span className="workspace-avatar">R</span><span>Research workspace<small>DVWA sandbox</small></span></div>
       {renderNavigation(sidebarCollapsed)}
       <button type="button" className={sidebarStyles.sidebarToggle} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} aria-expanded={!sidebarCollapsed} aria-controls="app-sidebar" title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={toggleSidebar}>
