@@ -72,6 +72,7 @@ type ProviderDraft = {
 };
 
 type Status = { tone: "ok" | "error" | "info"; message: string } | null;
+type RemovalSnapshot = { hadOverride: boolean; override: unknown; key?: string; draft: ProviderDraft };
 
 const TABS = [
   { value: "experiment", label: "Experiment" },
@@ -131,6 +132,10 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
   const [validation, setValidation] = useState<ControlValidation | null>(null);
   const [syncOpen, setSyncOpen] = useState(false);
   const [discardArmed, setDiscardArmed] = useState(false);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [providerRemovals, setProviderRemovals] = useState<Record<string, RemovalSnapshot>>({});
+  const [referenceReview, setReferenceReview] = useState<{ key: string; references?: { path: string; profile: string }[]; error?: string } | null>(null);
+  const [referenceRetry, setReferenceRetry] = useState(0);
 
   const [draft, setDraft] = useState<ProviderDraft | null>(null);
   const [catalog, setCatalog] = useState<DiscoveredModel[]>([]);
@@ -152,6 +157,7 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
   const authRequest = useRef(0);
   const statusRequest = useRef(0);
   const providerEditorRef = useRef<HTMLDivElement | null>(null);
+  const focusRemovalUndo = useRef<string | null>(null);
   const authRunning = authFlow?.state === "running";
   const signedIn = codexStatus?.signed_in === true;
   const codexAccount = schema?.codex?.account ?? "default";
@@ -198,6 +204,47 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
   const controlEnabled = schema?.control?.enabled ?? true;
 
   const currentYaml = yamlText ?? schema?.yaml ?? "";
+  const changedModels = Object.entries(overrides).some(([path, value]) => {
+    if (path.startsWith("api_providers.")) {
+      const provider = schema?.providers.find((item) => path === `api_providers.${item.id}`);
+      if (!provider) return false;
+      if (value === null) return true;
+      if (value && typeof value === "object" && !Array.isArray(value) && "models" in value && Array.isArray(value.models)) {
+        const models = value.models;
+        return provider.models.some((model) => !models.includes(model));
+      }
+    }
+    if (path.startsWith("models.")) {
+      const profile = schema?.codex?.models.find((item) => path === `models.${item.profile}`);
+      if (!profile) return false;
+      return value === null || Boolean(value && typeof value === "object" && !Array.isArray(value) && "model_name" in value && value.model_name !== profile.model);
+    }
+    return false;
+  });
+  const removalReviewKey = changedModels ? JSON.stringify([currentYaml, overrides]) : "";
+  const currentReview = removalReviewKey && referenceReview?.key === removalReviewKey ? referenceReview : null;
+  const removalReviewPending = Boolean(removalReviewKey && !currentReview);
+  const removalReferences = currentReview?.references ?? [];
+  useEffect(() => {
+    if (!removalReviewKey) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      const [yaml, staged] = JSON.parse(removalReviewKey) as [string, Record<string, unknown>];
+      validateControlDraft({ yaml, overrides: staged, form: "settings" }, controller.signal)
+        .then((result) => {
+          if (!controller.signal.aborted) setReferenceReview(result.removedProfileReferences
+            ? { key: removalReviewKey, references: result.removedProfileReferences }
+            : { key: removalReviewKey, error: "Could not check model references. Validate the provider configuration or undo removal, then retry." });
+        })
+        .catch(() => { if (!controller.signal.aborted) setReferenceReview({ key: removalReviewKey, error: "Could not check model references. Retry before saving." }); });
+    }, 250);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [removalReviewKey, referenceRetry]);
+  useEffect(() => {
+    if (!focusRemovalUndo.current) return;
+    document.getElementById(`undo-provider-${focusRemovalUndo.current}`)?.focus();
+    focusRemovalUndo.current = null;
+  }, [providerRemovals]);
   const experimentFields = useMemo(
     () => (schema?.fields ?? []).filter((field) => EXPERIMENT_CATEGORIES.has(field.category)),
     [schema?.fields],
@@ -210,6 +257,9 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
   const resetDraft = useCallback(() => {
     setOverrides({});
     setProviderKeys({});
+    setProviderRemovals({});
+    setReferenceReview(null);
+    setRemoveOpen(false);
     setYamlText(null);
     setDraft(null);
     setValidation(null);
@@ -308,7 +358,19 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
 
   const openProvider = (provider: ControlProviderSummary) => {
     setCodexOpen(false);
-    setDraft(draftFromProvider(provider));
+    const savedDraft = draftFromProvider(provider);
+    const pending = overrides[`api_providers.${provider.id}`];
+    if (pending && typeof pending === "object" && !Array.isArray(pending)) {
+      const entry = pending as Record<string, unknown>;
+      if (typeof entry.display_name === "string") savedDraft.displayName = entry.display_name;
+      if (typeof entry.protocol === "string") savedDraft.protocol = entry.protocol;
+      if (typeof entry.base_url === "string") { savedDraft.baseUrl = entry.base_url; savedDraft.baseUrlTouched = true; }
+      if (typeof entry.fetch_url === "string") { savedDraft.fetchUrl = entry.fetch_url; savedDraft.fetchUrlTouched = true; }
+      if (Array.isArray(entry.models)) savedDraft.models = entry.models.filter((model): model is string => typeof model === "string");
+      if (entry.model_options && typeof entry.model_options === "object" && !Array.isArray(entry.model_options)) savedDraft.modelOptions = entry.model_options as Record<string, Record<string, unknown>>;
+    }
+    savedDraft.apiKey = providerKeys[provider.id] ?? "";
+    setDraft(savedDraft);
     setCatalog([]);
     setCatalogError(null);
     setManualModel("");
@@ -380,9 +442,28 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
     setCatalogError(null);
   };
 
-  const removeProvider = (id: string) => {
-    setOverrides((previous) => ({ ...previous, [`api_providers.${id}`]: null }));
+  const removeProvider = () => {
+    if (!draft || draft.isNew) return;
+    const id = draft.id;
+    const path = `api_providers.${id}`;
+    focusRemovalUndo.current = id;
+    setProviderRemovals((previous) => ({ ...previous, [id]: { hadOverride: path in overrides, override: overrides[path], key: providerKeys[id], draft } }));
+    setOverrides((previous) => ({ ...previous, [path]: null }));
+    setProviderKeys((previous) => { const next = { ...previous }; delete next[id]; return next; });
+    setRemoveOpen(false);
+    setDraft(null);
     setStatus({ tone: "info", message: `Provider ${id} staged for removal. Save the profile to apply it.` });
+  };
+
+  const undoRemoveProvider = (id: string) => {
+    const snapshot = providerRemovals[id];
+    if (!snapshot) return;
+    const path = `api_providers.${id}`;
+    setOverrides((previous) => { const next = { ...previous }; if (snapshot.hadOverride) next[path] = snapshot.override; else delete next[path]; return next; });
+    setProviderKeys((previous) => { const next = { ...previous }; if (snapshot.key !== undefined) next[id] = snapshot.key; else delete next[id]; return next; });
+    setProviderRemovals((previous) => { const next = { ...previous }; delete next[id]; return next; });
+    setDraft(snapshot.draft);
+    setStatus({ tone: "info", message: `Removal of ${id} undone. Your previous provider draft is restored.` });
   };
 
   const toggleModel = (id: string) => {
@@ -605,15 +686,6 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
     setCodexOpen(false);
   };
 
-  const removeCodexProvider = () => {
-    stageCodexSelection([]);
-    setStatus({
-      tone: "info",
-      message: "All ChatGPT (Codex) model profiles staged for removal. Save the profile to apply it.",
-    });
-    setCodexOpen(false);
-  };
-
   useEffect(() => {
     if (!editorIdentity) return;
     // Below 1040px the editor stacks under the list; bring it into view and
@@ -645,7 +717,6 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
   const codexRemovalStaged = codexStaged && codexProfiles.length === 0;
   const codexModelStaged = codexStaged && !codexRemovalStaged;
   const codexConfiguredModels = codexProfiles.filter((profile) => profile.model);
-  const codexConfigured = Boolean(codex?.configured || codexConfiguredModels.length > 0);
   const codexAccountState = authRunning
     ? authFlow?.action === "login"
       ? "waiting for browser"
@@ -833,16 +904,6 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
                     >
                       Edit provider
                     </Button>
-                    {codexConfigured ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={removeCodexProvider}
-                        disabled={!controlEnabled || codexRemovalStaged}
-                      >
-                        <Trash2 size={14} aria-hidden /> Remove all models
-                      </Button>
-                    ) : null}
                   </div>
                 </li>
                 {schema.providers.map((provider) => {
@@ -929,14 +990,8 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
                           >
                             Edit provider
                           </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={() => removeProvider(provider.id)}
-                            disabled={!controlEnabled || stagedRemoval}
-                          >
-                            <Trash2 size={14} aria-hidden /> Remove
-                          </Button>
+                          {stagedRemoval && providerRemovals[provider.id] ? <Button id={`undo-provider-${provider.id}`} type="button" variant="ghost"
+                            onClick={() => undoRemoveProvider(provider.id)} disabled={!controlEnabled}>Undo removal</Button> : null}
                         </div>
                       </li>
                     );
@@ -1032,7 +1087,7 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
                     {statusError
                       ? "Account status is unavailable. Retry with Check status before signing in."
                       : signedIn
-                        ? "This account is connected. Sign out clears its local tokens and asks OpenAI to revoke the renewable session."
+                        ? "This account is connected. Sign out clears its local tokens and asks OpenAI to revoke the renewable session. Saved model profiles remain in the settings."
                         : "Sign in continues in ChatGPT through a local loopback that stays open for five minutes. Approve TESIS and ChatGPT plan usage to enable inference."}
                   </p>
                   {showAuthFlowMessage ? (
@@ -1339,6 +1394,9 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
                   <Button type="button" variant="ghost" onClick={() => setDraft(null)}>
                     Cancel
                   </Button>
+                  {!draft.isNew ? <Button type="button" variant="danger" onClick={() => setRemoveOpen(true)} disabled={!controlEnabled || busy !== null}>
+                    <Trash2 size={14} aria-hidden /> Delete provider
+                  </Button> : null}
                 </div>
               </div>
             ) : null}
@@ -1492,6 +1550,14 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
         ) : null}
       </div>
 
+      {removalReviewPending ? <p className="notice" role="status">Checking settings for references to removed models…</p> : null}
+      {currentReview?.error ? <div className="notice notice-error" role="alert">{currentReview.error}{" "}<Button type="button" variant="ghost" onClick={() => { setReferenceReview(null); setReferenceRetry((value) => value + 1); }}>Retry check</Button></div> : null}
+      {removalReferences.length ? <div className="notice notice-error" role="alert">
+        <p>These settings reference removed or replaced model profiles. Choose an available model or restore the previous selection before saving:</p>
+        <ul>{removalReferences.map((reference) => <li key={`${reference.path}:${reference.profile}`}><code>{reference.path}</code>: <code>{reference.profile}</code></li>)}</ul>
+        <div className={styles.rowActions}><Button type="button" variant="ghost" onClick={() => setTab("experiment")}>Experiment</Button><Button type="button" variant="ghost" onClick={() => setTab("scorer")}>AI scorer</Button><Button type="button" variant="ghost" onClick={() => setTab("yaml")}>Config keys</Button></div>
+      </div> : null}
+
       <footer className={styles.footer}>
         <dl className={styles.profilePaths}>
           <div>
@@ -1539,12 +1605,20 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
             variant="primary"
             className={styles.footerWide}
             onClick={() => void save()}
-            disabled={busy !== null || !dirty || !controlEnabled}
+            disabled={busy !== null || !dirty || !controlEnabled || removalReviewPending || Boolean(currentReview?.error) || removalReferences.length > 0}
           >
             <Save size={15} aria-hidden /> {busy === "saving" ? "Saving…" : "Save profile"}
           </Button>
         </div>
       </footer>
+
+      <Dialog open={removeOpen} onClose={() => setRemoveOpen(false)} title="Delete provider" footer={<>
+        <Button type="button" variant="ghost" data-dialog-initial-focus onClick={() => setRemoveOpen(false)}>Cancel</Button>
+        <Button type="button" variant="danger" onClick={removeProvider}>Stage provider removal</Button>
+      </>}>
+        <p>Remove <strong>{draft?.displayName || draft?.id}</strong> and its models from this profile?</p>
+        <p>The removal is staged until you save and can be undone. API keys stored separately remain and are not revoked. Settings that use these models may need a replacement.</p>
+      </Dialog>
 
       <Dialog
         open={syncOpen}

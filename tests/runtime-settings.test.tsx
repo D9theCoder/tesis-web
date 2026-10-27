@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RuntimeSettings } from "@/components/settings/runtime-settings";
@@ -24,6 +24,7 @@ const {
   fetchChatGPTAccount,
   saveControlConfig,
   configureReasoning,
+  validateControlDraft,
 } = await import("@/lib/api-client");
 
 const idleAuthFlow: ControlAuthFlow = {
@@ -109,9 +110,80 @@ beforeEach(() => {
   });
   vi.mocked(saveControlConfig).mockReset().mockResolvedValue({ saved: true, fieldErrors: {} });
   vi.mocked(fetchControlSchema).mockResolvedValue(schema);
+  vi.mocked(validateControlDraft).mockReset().mockResolvedValue({ valid: true, fieldErrors: {}, coordinates: [], totalCoordinates: 0, removedProfileReferences: [] });
 });
 
 describe("RuntimeSettings", () => {
+  const providerSchema = { ...schema, providers: [{ id: "river", displayName: "River", protocol: "openai_compatible", baseUrl: "https://example.invalid/v1", fetchUrl: "", models: ["fixture"], modelOptions: {}, keyRef: "${RIVER_KEY}", hasKey: true }] };
+
+  it("places provider removal inside the editor and confirms before staging", async () => {
+    render(<RuntimeSettings initialSchema={{ ...providerSchema, codex: { ...schema.codex, configured: true, model: "gpt-fixture", models: [{ profile: "openai_codex_auth", model: "gpt-fixture", account: "default", timeout: 60, reasoningEffort: null, reasoningEfforts: null }] } }} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Model providers" }));
+    expect(screen.queryByRole("button", { name: /Remove all models|^Remove$/ })).not.toBeInTheDocument();
+    const row = screen.getByRole("heading", { name: "River" }).closest("li")!;
+    fireEvent.click(within(row).getByRole("button", { name: "Edit provider" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete provider" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete provider" });
+    expect(within(dialog).getByText(/API keys stored separately remain and are not revoked/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByText("removal staged")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Delete provider" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Delete provider" })).getByRole("button", { name: "Stage provider removal" }));
+    expect(within(row).getByRole("button", { name: "Undo removal" })).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: "Undo removal" })).toHaveFocus();
+    await waitFor(() => expect(validateControlDraft).toHaveBeenCalled());
+  });
+
+  it("removes a pending key when staging deletion and restores the prior draft on undo", async () => {
+    render(<RuntimeSettings initialSchema={providerSchema} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Model providers" }));
+    const row = screen.getByRole("heading", { name: "River" }).closest("li")!;
+    fireEvent.click(within(row).getByRole("button", { name: "Edit provider" }));
+    fireEvent.change(screen.getByLabelText(/^API key/), { target: { value: "pending-key" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply provider" }));
+    fireEvent.click(within(row).getByRole("button", { name: "Edit provider" }));
+    expect(screen.getByLabelText(/^API key/)).toHaveValue("pending-key");
+    fireEvent.click(screen.getByRole("button", { name: "Delete provider" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Delete provider" })).getByRole("button", { name: "Stage provider removal" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save profile" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    await waitFor(() => expect(saveControlConfig).toHaveBeenCalledWith(expect.objectContaining({ overrides: { "api_providers.river": null }, apiProviderKeys: {} })));
+  });
+
+  it("undoes removal without losing a staged API key or unsaved editor fields", async () => {
+    render(<RuntimeSettings initialSchema={providerSchema} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Model providers" }));
+    const row = screen.getByRole("heading", { name: "River" }).closest("li")!;
+    fireEvent.click(within(row).getByRole("button", { name: "Edit provider" }));
+    fireEvent.change(screen.getByLabelText(/^API key/), { target: { value: "pending-key" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply provider" }));
+    fireEvent.click(within(row).getByRole("button", { name: "Edit provider" }));
+    fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Unsaved display" } });
+    fireEvent.click(screen.getByRole("button", { name: "Delete provider" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Delete provider" })).getByRole("button", { name: "Stage provider removal" }));
+    fireEvent.click(within(row).getByRole("button", { name: "Undo removal" }));
+    expect(screen.getByLabelText(/^API key/)).toHaveValue("pending-key");
+    expect(screen.getByLabelText("Display name")).toHaveValue("Unsaved display");
+    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    await waitFor(() => expect(saveControlConfig).toHaveBeenCalledWith(expect.objectContaining({ apiProviderKeys: { river: "pending-key" }, overrides: expect.objectContaining({ "api_providers.river": expect.any(Object) }) })));
+  });
+
+  it("reports removed profile references and blocks save until they are addressed", async () => {
+    vi.mocked(validateControlDraft).mockResolvedValueOnce({ valid: false, fieldErrors: {}, coordinates: [], totalCoordinates: 0, removedProfileReferences: [{ path: "scoring_evaluator.provider", profile: "river__fixture_123" }] })
+      .mockResolvedValue({ valid: true, fieldErrors: {}, coordinates: [], totalCoordinates: 0, removedProfileReferences: [] });
+    render(<RuntimeSettings initialSchema={{ ...providerSchema, modelProfiles: [{ id: "river__fixture_123", label: "River model" }, { id: "other", label: "Other model" }], scoring: { ...schema.scoring, mode: "ai", evaluator: { ...schema.scoring.evaluator, provider: "river__fixture_123" } } }} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Model providers" }));
+    const row = screen.getByRole("heading", { name: "River" }).closest("li")!;
+    fireEvent.click(within(row).getByRole("button", { name: "Edit provider" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete provider" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Delete provider" })).getByRole("button", { name: "Stage provider removal" }));
+    expect(await screen.findByText("scoring_evaluator.provider")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save profile" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "AI scorer" }));
+    fireEvent.change(screen.getByLabelText("Evaluator model profile"), { target: { value: "other" } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save profile" })).toBeEnabled());
+    expect(screen.queryByText("scoring_evaluator.provider")).not.toBeInTheDocument();
+  });
   it("saves a staged reasoning change alongside other unsaved experiment edits", async () => {
     vi.mocked(configureReasoning).mockResolvedValueOnce({
       targets: [{ id: "gpt", label: "GPT fixture", model: "gpt-fixture", effort: null, efforts: ["low", "high"], supported: true }],

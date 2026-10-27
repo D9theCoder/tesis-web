@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 const requestSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("models") }).strict(),
   z.object({ action: z.literal("send"), target: z.string().min(1).max(200),
-    effort: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/).nullable(), generateTitle: z.boolean(),
+    expectedModel: z.string().min(1).max(500), effort: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/).nullable(), generateTitle: z.boolean(),
     messages: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(50000) }).strict()).min(1).max(100),
   }).strict(),
 ]);

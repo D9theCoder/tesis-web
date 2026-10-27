@@ -212,6 +212,7 @@ export const controlValidationResponse = z
     resolved: z.record(z.unknown()).nullish(),
     coordinates: z.array(controlCoordinateSchema).default([]),
     totalCoordinates: z.number().default(0),
+    removedProfileReferences: z.array(z.object({ path: z.string(), profile: z.string() })).nullish(),
   })
   .passthrough();
 

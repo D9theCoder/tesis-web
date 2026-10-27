@@ -14,7 +14,7 @@ describe("chat control boundary", () => {
     expect((await POST(request({ action: "models" }))).status).toBe(403);
   });
   it("rejects requests that contain connection settings or invalid message history", async () => {
-    expect((await POST(request({ action: "send", target: "model", effort: null, generateTitle: false, messages: [{ role: "user", content: "hello" }], baseUrl: "https://example.invalid" }))).status).toBe(400);
-    expect((await POST(request({ action: "send", target: "model", effort: null, generateTitle: false, messages: [{ role: "assistant", content: "hello" }] }))).status).toBe(400);
+    expect((await POST(request({ action: "send", target: "model", expectedModel: "fixture", effort: null, generateTitle: false, messages: [{ role: "user", content: "hello" }], baseUrl: "https://example.invalid" }))).status).toBe(400);
+    expect((await POST(request({ action: "send", target: "model", expectedModel: "fixture", effort: null, generateTitle: false, messages: [{ role: "assistant", content: "hello" }] }))).status).toBe(400);
   });
 });

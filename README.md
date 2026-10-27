@@ -98,6 +98,17 @@ remote revocation. The footer offers **Validate**, **Discard changes**
 confirmed **Write to TESIS config.yaml**. The appearance options (theme, cheat
 code) remain below it.
 
+To remove an API provider, open **Edit provider** and choose **Delete provider**.
+The confirmation stages the removal; it can be undone before **Save profile**.
+Keys stored separately remain and are not revoked, and pending key changes are restored if the
+removal is undone. Explicit profile settings that still reference a removed or replaced
+model are listed for correction before saving. Environment overrides are not included
+in this reference check. ChatGPT sign-out removes its local tokens;
+its saved model profiles remain in the web profile.
+When a saved chat's profile points to a different model, the chat asks for a
+new selection or confirmation before sending. Older browser histories acquire
+this model identity when they next send a message.
+
 Reasoning uses the same `llm.reasoning` exact-model catalog and provider probe as
 the TESIS TUI. Advertised catalog choices take precedence over `reasoning_catalog`
 presets; unknown models expose fallback choices and a custom effort field. Values

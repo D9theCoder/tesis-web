@@ -27,7 +27,7 @@ class ChatBridgeTests(unittest.TestCase):
         self.addCleanup(env.stop)
 
     def test_chat_uses_saved_profile_and_effort(self):
-        request = {"target": "openai_codex_auth", "effort": "high", "messages": [{"role": "user", "content": "hello"}],
+        request = {"target": "openai_codex_auth", "expectedModel": "gpt-fixture", "effort": "high", "messages": [{"role": "user", "content": "hello"}],
                    "documentation": True, "excerpts": [{"id": "S1", "source": "tesis/README.md", "line": 2, "text": "reference"}]}
         with patch.object(bridge, "_stream_codex_chat") as stream:
             result = bridge.command_chat(request)
@@ -40,6 +40,9 @@ class ChatBridgeTests(unittest.TestCase):
         self.assertEqual(result["type"], "done")
         request["effort"] = "unadvertised"
         with self.assertRaises(bridge.BridgeError):
+            bridge.command_chat(request)
+        request.update(effort="high", expectedModel="old-model")
+        with self.assertRaisesRegex(bridge.BridgeError, "model has changed"):
             bridge.command_chat(request)
 
     def test_codex_names_use_model_without_profile_number(self):
@@ -89,7 +92,7 @@ class ChatBridgeTests(unittest.TestCase):
         client = SimpleNamespace(stream=lambda messages: iter([AIMessageChunk(content="answer", additional_kwargs={"reasoning_content": "trace"})]))
         output = io.StringIO()
         with patch("llm.provider.get_llm_from_model_config", return_value=client), contextlib.redirect_stdout(output):
-            bridge.command_chat({"target": "api", "effort": "high", "messages": [{"role": "user", "content": "hello"}]})
+            bridge.command_chat({"target": "api", "expectedModel": "fixture", "effort": "high", "messages": [{"role": "user", "content": "hello"}]})
         events = [json.loads(line) for line in output.getvalue().splitlines()]
         self.assertEqual(events, [{"type": "text", "text": "answer"}, {"type": "trace", "text": "trace"}])
         self.assertNotIn("secret", output.getvalue())
@@ -102,7 +105,7 @@ class ChatBridgeTests(unittest.TestCase):
                 emit("text", "A useful answer")
         output = io.StringIO()
         with patch.object(bridge, "_stream_codex_chat", side_effect=stream) as mocked, contextlib.redirect_stdout(output):
-            result = bridge.command_chat({"target": "openai_codex_auth", "effort": "high", "generateTitle": True, "messages": [{"role": "user", "content": "hello"}]})
+            result = bridge.command_chat({"target": "openai_codex_auth", "expectedModel": "gpt-fixture", "effort": "high", "generateTitle": True, "messages": [{"role": "user", "content": "hello"}]})
         events = [json.loads(line) for line in output.getvalue().splitlines()]
         self.assertEqual([event["type"] for event in events], ["text", "response_done", "title"])
         self.assertEqual(events[-1]["text"], "A useful title")

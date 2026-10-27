@@ -527,6 +527,7 @@ def command_validate(request: dict[str, Any]) -> dict[str, Any]:
         return {"ok": True, "valid": False, "error": sanitize_config_error(exc), "fieldErrors": {}}
     if not isinstance(payload, dict):
         return {"ok": True, "valid": False, "error": "Configuration must be a YAML mapping.", "fieldErrors": {}}
+    original_payload = copy.deepcopy(payload)
     try:
         payload = _apply_overrides(payload, request.get("overrides"))
     except BridgeError as exc:
@@ -542,7 +543,44 @@ def command_validate(request: dict[str, Any]) -> dict[str, Any]:
         "yaml": dump_yaml_config(payload),
         "coordinates": _coordinates(resolved) if resolved else [],
         "totalCoordinates": _total_coordinates(resolved) if resolved else 0,
+        "removedProfileReferences": _removed_profile_references(original_payload, payload),
     }
+
+
+def _removed_profile_references(original: dict[str, Any], draft: dict[str, Any]) -> list[dict[str, str]] | None:
+    """Report explicit selections that still name removed configured profiles."""
+    from tesis.provider_registry import expanded_model_sections
+
+    try:
+        before = expanded_model_sections(original)
+        after = expanded_model_sections(draft)
+        removed = {name for name, profile in before.items() if name not in after or
+                   (profile.get("model_name"), profile.get("provider", name)) !=
+                   (after[name].get("model_name"), after[name].get("provider", name))}
+    except (AttributeError, TypeError, ValueError):
+        return None  # The loader reports malformed provider configuration separately.
+    result: list[dict[str, str]] = []
+
+    def add(path: str, value: Any) -> None:
+        values = value if isinstance(value, list) else [value]
+        for item in values:
+            if isinstance(item, str) and item in removed:
+                result.append({"path": path, "profile": item})
+
+    for key in ("provider", "providers", "llm_providers", "model_profile"):
+        add(key, draft.get(key))
+    runtime = draft.get("llm_runtime") or {}
+    roles = runtime.get("roles") if isinstance(runtime, dict) else None
+    if isinstance(roles, dict):
+        for role, settings in roles.items():
+            if isinstance(settings, dict):
+                for key in ("model_profile", "profile"):
+                    add(f"llm_runtime.roles.{role}.{key}", settings.get(key))
+    scorer = draft.get("scoring_evaluator") or {}
+    if isinstance(scorer, dict):
+        for key in ("model_profile", "provider"):
+            add(f"scoring_evaluator.{key}", scorer.get(key))
+    return result
 
 
 def command_save(request: dict[str, Any]) -> dict[str, Any]:
@@ -871,6 +909,8 @@ def command_chat(request: dict[str, Any]) -> dict[str, Any]:
     target = targets.get(request.get("target"))
     if not target or target["id"] == "__evaluator__":
         raise BridgeError("Choose a configured model in Settings.")
+    if request.get("expectedModel") != target["model"]:
+        raise BridgeError("The selected model has changed. Choose a model again.")
     effort = validate_reasoning_effort(request.get("effort"))
     if effort and (not target["supported"] or effort not in (target["efforts"] or [])):
         raise BridgeError("Choose an effort advertised for this model, or use its saved setting.")
