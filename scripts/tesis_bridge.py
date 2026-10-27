@@ -696,11 +696,21 @@ def _reasoning_targets(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
     profiles = expanded_model_sections(payload)
     labels = model_profile_labels(payload)
+    def reasoning_label(name: str, profile: dict[str, Any], model: str) -> str:
+        label = labels[name]
+        if profile.get("provider", name) == "openai_codex_auth":
+            if label == "openai_codex_auth" or label.startswith("openai_codex_auth_"):
+                label = "codex" + label[len("openai_codex_auth"):]
+            if model:
+                label = f"{label} / {model}"
+        return label
+
     targets = {}
     for name, profile in profiles.items():
         profile = {**profile, "provider": profile.get("provider", name)}
+        label = reasoning_label(name, profile, profile.get("model_name", ""))
         targets[name] = {
-            "id": name, "label": labels[name], "model": profile.get("model_name", ""),
+            "id": name, "label": label, "model": profile.get("model_name", ""),
             "effort": _configured_reasoning_effort(profile, f"models.{name}.reasoning_effort"),
             "efforts": model_efforts(payload, profile.get("model_name", ""), profile),
             "supported": supports_reasoning_effort(profile.get("provider", name)),
@@ -725,8 +735,9 @@ def _reasoning_targets(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
         for key in ("base_url", "api_key", "account", "use_responses_api"):
             if evaluator.get(key) is not None:
                 profile[key] = evaluator[key]
+        label = reasoning_label(selected, profile, model)
         targets["__evaluator__"] = {
-            "id": "__evaluator__", "label": f"AI scorer / {labels[selected]}", "model": model,
+            "id": "__evaluator__", "label": f"AI scorer / {label}", "model": model,
             "effort": _configured_reasoning_effort(evaluator, "scoring_evaluator.reasoning_effort"),
             "efforts": model_efforts(payload, model, profile),
             "supported": supports_reasoning_effort(profile.get("provider", selected)),
