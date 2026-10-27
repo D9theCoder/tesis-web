@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Plus, Send, Square, Trash2 } from "lucide-react";
 import { z } from "zod";
 import { Button, Dialog } from "@/components/ui/primitives";
+import { ChatMarkdown } from "@/components/chat/markdown";
 import type { ReasoningTarget } from "@/lib/control-contract";
 import styles from "./chat-workspace.module.css";
 
@@ -149,11 +150,11 @@ export function ChatWorkspace() {
           <div className={styles.messages} aria-label="Messages" ref={messageList} onScroll={(event) => { const el = event.currentTarget; followOutput.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
             {!active.messages.length ? <div className={styles.emptyMessages}><h2>Ready when you are</h2><p>Messages go to the selected provider and may use credits or ChatGPT plan usage.</p></div> : active.messages.map((message) => <article key={message.id} className={message.role === "user" ? styles.userMessage : styles.assistantMessage}>
               <div className={styles.messageHeading}><strong>{message.role === "user" ? "You" : message.model || "Assistant"}</strong>{message.status === "streaming" ? <span role="status">Responding…</span> : message.status === "stopped" ? <span>Stopped</span> : message.status === "error" ? <span>Incomplete</span> : null}</div>
-              {message.summary ? <details className={styles.reasoning}><summary>Reasoning summary</summary><div>{message.summary}</div></details> : null}
-              {message.trace ? <details className={styles.reasoning}><summary>Reasoning trace</summary><div>{message.trace}</div></details> : null}
+              {message.summary ? <details className={styles.reasoning}><summary>Reasoning summary</summary><ChatMarkdown>{message.summary}</ChatMarkdown></details> : null}
+              {message.trace ? <details className={styles.reasoning}><summary>Reasoning trace</summary><ChatMarkdown>{message.trace}</ChatMarkdown></details> : null}
               {message.sources ? <details className={styles.sources}><summary>Documentation supplied ({message.sources.length})</summary>{message.sources.length ? <ul>{message.sources.map((source) => <li key={source.id}>[{source.id}] {source.source}:{source.line}</li>)}</ul> : <p>No matching documentation found.</p>}</details> : null}
-              {message.text ? <div className={styles.messageText}>{message.text}</div> : message.status === "streaming" ? <p className={styles.muted}>Waiting for response…</p> : null}
-              {message.role === "assistant" && message.status === "complete" && !message.summary && !message.trace ? <p className={styles.muted}>No reasoning was returned by the provider.</p> : null}
+              {message.text ? message.role === "assistant" ? <ChatMarkdown>{message.text}</ChatMarkdown> : <div className={styles.messageText}>{message.text}</div> : message.status === "streaming" ? <p className={styles.muted}>Waiting for response…</p> : null}
+              {message.role === "assistant" && message.status === "complete" && !message.summary && !message.trace ? <p className={styles.muted}>No reasoning summary or trace was returned by the provider.</p> : null}
               {message.error ? <p className="notice notice-error" role="alert">{message.error}</p> : null}
             </article>)}
           </div>

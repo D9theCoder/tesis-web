@@ -6,6 +6,10 @@ import {
 
 /** Format helpers shared by the live dashboard and results pages. */
 
+export function fmtProvider(value: string | null | undefined): string | undefined {
+  return value?.replace(/^openai_codex_auth(?:_\d+)?$/, "codex");
+}
+
 export function fmtClock(epochSec: number | null | undefined): string {
   if (epochSec == null || !Number.isFinite(epochSec)) return "—";
   const d = new Date(epochSec * 1000);

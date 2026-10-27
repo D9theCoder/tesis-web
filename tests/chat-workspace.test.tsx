@@ -8,6 +8,26 @@ beforeEach(() => { localStorage.clear(); });
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe("chat workspace", () => {
+  it("shows a completed Codex summary without requiring a raw trace", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init: RequestInit) => {
+      if (JSON.parse(String(init.body)).action === "models") return Response.json({ targets: [model] });
+      return new Response([
+        { type: "text", text: "answer" }, { type: "replace_summary", text: "Provider summary" }, { type: "done" },
+      ].map((event) => JSON.stringify(event)).join("\n") + "\n");
+    }));
+    render(<ChatWorkspace />);
+    fireEvent.click(screen.getByRole("button", { name: "New conversation" }));
+    await screen.findByRole("option", { name: "codex / model-one" });
+    fireEvent.change(screen.getByLabelText("Message"), { target: { value: "Hello" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByText("Provider summary")).toBeInTheDocument();
+    expect(screen.getByText("Reasoning summary")).toBeInTheDocument();
+    expect(screen.queryByText("Reasoning trace")).not.toBeInTheDocument();
+    expect(screen.queryByText(/No reasoning/)).not.toBeInTheDocument();
+    await waitFor(() => expect(localStorage.getItem("tesis.chat.v1")).toContain('"status":"complete"'));
+    expect(localStorage.getItem("tesis.chat.v1")).toContain("Provider summary");
+  });
+
   it("streams distinct reasoning and answer events and keeps model choices local to the chat", async () => {
     const calls: unknown[] = [];
     vi.stubGlobal("fetch", vi.fn(async (_url: string, init: RequestInit) => {
@@ -15,7 +35,7 @@ describe("chat workspace", () => {
       if (body.action === "models") return Response.json({ targets: [model] });
       const encoder = new TextEncoder();
       return new Response(new ReadableStream({ start(controller) {
-        for (const event of [{ type: "summary", text: "summary text" }, { type: "trace", text: "trace text" }, { type: "text", text: "answer" }, { type: "done" }]) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+        for (const event of [{ type: "summary", text: "**summary text**" }, { type: "trace", text: "`trace text`" }, { type: "text", text: "**answer**" }, { type: "done" }]) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
         controller.close();
       } }));
     }));
@@ -25,11 +45,11 @@ describe("chat workspace", () => {
     fireEvent.change(screen.getByLabelText("Reasoning effort"), { target: { value: "high" } });
     fireEvent.change(screen.getByLabelText("Message"), { target: { value: "Hello" } });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
-    expect(await screen.findByText("answer")).toBeInTheDocument();
-    expect(screen.getByText("summary text")).toBeInTheDocument();
-    expect(screen.getByText("trace text")).toBeInTheDocument();
+    expect(await screen.findByText("answer", { selector: "strong" })).toBeInTheDocument();
+    expect(screen.getByText("summary text", { selector: "strong" })).toBeInTheDocument();
+    expect(screen.getByText("trace text", { selector: "code" })).toBeInTheDocument();
     expect(calls[1]).toEqual({ action: "send", target: "codex_profile", expectedModel: "model-one", effort: "high", generateTitle: true, messages: [{ role: "user", content: "Hello" }] });
-    await waitFor(() => expect(localStorage.getItem("tesis.chat.v1")).toContain("summary text"));
+    await waitFor(() => expect(localStorage.getItem("tesis.chat.v1")).toContain("**summary text**"));
     expect(within(screen.getByRole("region", { name: "Chat conversation" })).getByText("Reasoning summary")).toBeInTheDocument();
   });
 

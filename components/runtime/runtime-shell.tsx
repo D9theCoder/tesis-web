@@ -21,7 +21,7 @@ import { CoordinatePanel } from "@/components/runtime/coordinate-panel";
 import { TrajectoryPanel } from "@/components/runtime/trajectory-panel";
 import { OutcomePanel } from "@/components/runtime/outcome-panel";
 import { ResizableRuntimeDashboard } from "@/components/runtime/resizable-dashboard";
-import { fmtDuration, normalizeRunStatus } from "@/lib/formatters";
+import { fmtProvider, fmtDuration, normalizeRunStatus } from "@/lib/formatters";
 import { AKG_SNAPSHOT } from "@/lib/akg-static";
 import { normalizeAkgSnapshot } from "@/lib/akg-snapshot";
 import {
@@ -390,7 +390,7 @@ export function RuntimeShell() {
       <div className="summary-grid runtime-summary" aria-label="Current execution summary">
         <div className="summary-item"><span>Execution</span><strong>{(state.executionStatus ?? "unknown").replace(/_/g, " ")}</strong><small>{activeId ?? "Waiting for a run"}</small></div>
         <div className="summary-item"><span>Security outcome</span><strong>{(state.securityOutcome ?? "unknown").replace(/_/g, " ")}</strong><small>Independent of execution completion</small></div>
-        <div className="summary-item"><span>Model</span><strong>{state.model ?? "Unavailable"}</strong><small>{state.provider ?? "Provider not recorded"}</small></div>
+        <div className="summary-item"><span>Model</span><strong>{state.model ?? "Unavailable"}</strong><small>{fmtProvider(state.provider) ?? "Provider not recorded"}</small></div>
         <div className="summary-item"><span>Elapsed</span><strong>{fmtDuration(state.elapsedMs)}</strong><small>{mock ? "Mock replay" : "Runtime journal"}</small></div>
       </div>
 

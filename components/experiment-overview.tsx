@@ -9,7 +9,7 @@ import { experimentLabel, inventoryHref, resultHref, type ExperimentOverview } f
 import { useReadResource } from "@/lib/use-read-resource";
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@/components/ui/primitives";
 import { CopyButton } from "@/components/ui/copy-button";
-import { fmtIsoFromStr } from "@/lib/formatters";
+import { fmtProvider, fmtIsoFromStr } from "@/lib/formatters";
 import styles from "./experiment-overview.module.css";
 
 const MEMORY_KEY = "tesis.overview.scope.v1";
@@ -38,7 +38,7 @@ export function ExperimentOverviewPage() {
       <section className="scope-context" aria-labelledby="scope-title">
         <div>
           <h2 id="scope-title">{experimentLabel(selected)}</h2>
-          <p>{selected.mode === "matrix" ? "Matrix experiment" : selected.hasArtifact ? "Standalone evidence" : "Declared standalone execution"} · {[selected.provider, selected.model].filter(Boolean).join(" / ") || "Provider / model unavailable"} · {selected.startedAt ? fmtIsoFromStr(selected.startedAt) : "Stored date unavailable"}</p>
+          <p>{selected.mode === "matrix" ? "Matrix experiment" : selected.hasArtifact ? "Standalone evidence" : "Declared standalone execution"} · {[fmtProvider(selected.provider), selected.model].filter(Boolean).join(" / ") || "Provider / model unavailable"} · {selected.startedAt ? fmtIsoFromStr(selected.startedAt) : "Stored date unavailable"}</p>
           <div className="scope-meta-row">
             <div className="execution-identifier"><code>{selected.executionId}</code><CopyButton value={selected.executionId} label="execution ID" /></div>
             <p className="scope-freshness">Refreshed {fmtIsoFromStr(data.refreshedAt)} · {data.partial ? "Incomplete summary — inspect limitations below" : "Saved-source summary"}</p>

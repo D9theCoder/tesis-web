@@ -30,7 +30,7 @@ import type {
 import { selectChatGPTAccount } from "@/lib/control-contract";
 import { effectiveCodexProfiles, stageCodexModels } from "@/lib/control-codex";
 import { EXTRA_FIELDS, extraFieldBaseline } from "@/lib/control-fields";
-import { PROTOCOL_LABELS, SCORING_MODE_LABELS, controlOptionLabels } from "@/lib/control-options";
+import { PROTOCOL_LABELS, SCORING_MODE_LABELS, controlOptionLabels, labelFor } from "@/lib/control-options";
 import { useReadResource } from "@/lib/use-read-resource";
 import styles from "./runtime-settings.module.css";
 
@@ -1515,7 +1515,7 @@ export function RuntimeSettings({ initialSchema }: { initialSchema?: ControlSche
             ) : null}
             {scoring?.configured ? (
               <p className={styles.hint}>
-                Current evaluator: <code>{scoring.evaluator.provider || "—"}</code>
+                Current evaluator: <code>{labelFor(optionLabels.provider, scoring.evaluator.provider)}</code>
                 {scoring.evaluator.model ? <code> · {scoring.evaluator.model}</code> : null}
               </p>
             ) : null}

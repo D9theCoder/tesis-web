@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { CoordinateSummary, NormalizedResult } from "@/lib/schemas";
 import { Badge, Button } from "@/components/ui/primitives";
-import { fmtScore } from "@/lib/formatters";
+import { fmtProvider, fmtScore } from "@/lib/formatters";
 
 type SortKey = "index" | "execution" | "outcome" | "condition" | "method" | "score";
 
@@ -167,7 +167,7 @@ export function CoordinateIndex({
                   </td>
                   <td>
                     <span>{coordinate.selectedMethod ?? coordinate.targetMethod ?? "Unavailable"}</span>
-                    <small>{[coordinate.provider, coordinate.model].filter(Boolean).join(" · ") || "Provider details unavailable"}</small>
+                    <small>{[fmtProvider(coordinate.provider), coordinate.model].filter(Boolean).join(" · ") || "Provider details unavailable"}</small>
                   </td>
                   <td><StatusBadge value={executionStatus} /></td>
                   <td><StatusBadge value={securityOutcome} outcome /></td>

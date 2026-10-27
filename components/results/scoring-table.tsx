@@ -6,7 +6,7 @@ import type { CoordinateSummary, NormalizedResult, ScoreRow } from "@/lib/schema
 import { Badge, Button } from "@/components/ui/primitives";
 import { CopyButton } from "@/components/ui/copy-button";
 import { buildScoreRows, compositeFormula } from "@/lib/result-normalizer";
-import { fmtCost, fmtNumber, fmtPercent, fmtScore } from "@/lib/formatters";
+import { fmtProvider, fmtCost, fmtNumber, fmtPercent, fmtScore } from "@/lib/formatters";
 
 type ScoreOrigin = "runtime" | "human" | "ai";
 type MatrixSortKey = "index" | "condition" | "method" | "execution" | "outcome" | "repeat" | "score";
@@ -249,7 +249,7 @@ function MatrixComparison({
                   </td>
                   <td>
                     <span>{coordinate.selectedMethod ?? coordinate.targetMethod ?? "Unavailable"}</span>
-                    <small>{[coordinate.provider, coordinate.model].filter(Boolean).join(" · ") || "Provider details unavailable"}</small>
+                    <small>{[fmtProvider(coordinate.provider), coordinate.model].filter(Boolean).join(" · ") || "Provider details unavailable"}</small>
                   </td>
                   <td><Badge variant={coordinate.executionStatus === "completed" ? "lime" : coordinate.executionStatus === "failed" ? "red" : "outline"}>{readable(coordinate.executionStatus ?? "unknown")}</Badge></td>
                   <td><OutcomeBadge value={coordinate.securityOutcome ?? "unknown"} /></td>

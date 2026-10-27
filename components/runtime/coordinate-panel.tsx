@@ -3,7 +3,7 @@
 import { Activity, ArrowRight, Clock3, Route, Target } from "lucide-react";
 import type { LiveRunState, RunConnectionStatus } from "@/lib/schemas";
 import { Badge } from "@/components/ui/primitives";
-import { fmtClock, fmtDuration } from "@/lib/formatters";
+import { fmtProvider, fmtClock, fmtDuration } from "@/lib/formatters";
 
 const CONNECTION_STYLE: Record<
   RunConnectionStatus,
@@ -88,7 +88,7 @@ export function CoordinatePanel({ state }: { state: LiveRunState }) {
             <MetadataField label="Condition" value={state.experimentCondition ?? "—"} />
             <MetadataField label="Surface" value={state.surface ?? "—"} />
             <MetadataField label="Security level" value={state.securityLevel ?? "—"} />
-            <MetadataField label="Provider" value={state.provider ?? "—"} />
+            <MetadataField label="Provider" value={fmtProvider(state.provider) ?? "—"} />
             <MetadataField label="Model" value={state.model ?? "—"} mono />
             <MetadataField label="Payload mode" value={state.payloadMode ?? "—"} />
             <MetadataField label="Target method" value={state.targetMethod ?? "—"} mono />

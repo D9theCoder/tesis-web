@@ -20,7 +20,7 @@ import { MetricsSummary, ScoringTable } from "@/components/results/scoring-table
 import { CoordinateIndex } from "@/components/results/coordinate-index";
 import { EvidenceDrawer } from "@/components/results/evidence-drawer";
 import { CopyButton } from "@/components/ui/copy-button";
-import { fmtDuration, fmtIsoFromStr, normalizeRunStatus, prettyJson } from "@/lib/formatters";
+import { fmtProvider, fmtDuration, fmtIsoFromStr, normalizeRunStatus, prettyJson } from "@/lib/formatters";
 import { ResultsSummary } from "@/components/results/status-details";
 import { normalizeResult } from "@/lib/result-normalizer";
 import { evidenceForReference } from "@/lib/evidence-ref";
@@ -186,7 +186,7 @@ function ResultsExplorer({ executionId }: { executionId: string }) {
         <dl className="metadata-grid execution-metadata mt-4">
           <Metadata label="Started" value={fmtIsoFromStr(header.startedAt)} />
           <Metadata label="Duration" value={fmtDuration(header.durationMs)} />
-          <Metadata label="Provider" value={header.provider ?? "Unavailable"} />
+          <Metadata label="Provider" value={fmtProvider(header.provider) ?? "Unavailable"} />
           <Metadata label="Model" value={header.model ?? "Unavailable"} />
           <Metadata label="Target" value={header.targetUrl ?? "Unavailable"} />
           {coordRunId && <Metadata label="Selected coordinate" value={`#${(selectedSummary?.index ?? 0) + 1} · ${coordRunId}`} mono />}

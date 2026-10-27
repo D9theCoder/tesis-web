@@ -411,6 +411,9 @@ Hacker mode tightens cards, panels, and controls to 2px and adds bracketed title
 - Small mutually exclusive choices (experiment mode, payload review preset) use one bordered segmented track that sizes to its content; it never stretches across the card.
 - The appearance section keeps only the theme decision. Rain and the session cinematics live in the hacker status bar; motion behavior follows the OS setting; storage behavior stays in the implementation, not in explanatory copy.
 
+### Chat content
+- Assistant answers, reasoning summaries, and reasoning traces share compact Markdown typography. Bold and emphasis, lists, links, quotes, code, and tables inherit the active theme's text, surface, border, and accent tokens. Headings stay close to body size; code blocks and wide tables scroll within their message. User messages retain their entered line breaks. Saved conversations keep the original source text and render with the same formatting after reload. Embedded HTML is ignored and images remain explicit links.
+
 ### Runtime control
 - `/control` is an Operate surface in one card at a time: Launch, Runs, and Doctor are page tabs, and the Launch card repeats the same underline treatment for its four steps so the two levels read as one system. Each step carries its numeral before the label, so the position is visible and not only announced in the button's accessible name. The step row wraps onto a second line instead of scrolling, because a horizontal scroller clips the 2px focus ring; steps keep 44px targets on small screens and coarse pointers.
 - The step body sets no minimum height: the card ends where its content ends. The Launch card's footer is pinned to the bottom of the card, so Next and Start stay reachable while a long step scrolls under them. It clears `--bottom-chrome-height`, which is zero in light and dark and the hacker status bar's height in hacker, so a pinned action never hides behind fixed chrome.

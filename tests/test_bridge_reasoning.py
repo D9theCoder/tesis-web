@@ -45,14 +45,14 @@ class ReasoningBridgeTests(unittest.TestCase):
         self.assertEqual(targets[self.model]["efforts"], ["off", "low", "high", "xhigh"])
         self.assertIsNone(targets[model_profile_id("gateway", "unknown-model")]["efforts"])
         self.assertEqual(targets["gpt"]["efforts"], ["low", "high"])
-        self.assertEqual(targets["gpt"]["label"], "gpt / gpt-model")
+        self.assertEqual(targets["gpt"]["label"], "codex / gpt-model")
         self.assertNotIn("literal-secret", json.dumps(result))
         self.assertNotIn("api_key", json.dumps(result))
 
     def test_codex_scorer_label_uses_its_effective_model(self):
         self.payload["scoring_evaluator"] = {"model_profile": "gpt", "model": "scorer-model"}
         targets = {item["id"]: item for item in self.request(action="describe")["targets"]}
-        self.assertEqual(targets["__evaluator__"]["label"], "AI scorer / gpt / scorer-model")
+        self.assertEqual(targets["__evaluator__"]["label"], "AI scorer / codex / scorer-model")
 
     def test_codex_profile_names_are_shortened_in_labels(self):
         self.payload["models"]["openai_codex_auth"] = {"model_name": "gpt-one"}
@@ -60,8 +60,8 @@ class ReasoningBridgeTests(unittest.TestCase):
         self.payload["scoring_evaluator"] = {"model_profile": "openai_codex_auth_2"}
         targets = {item["id"]: item for item in self.request(action="describe")["targets"]}
         self.assertEqual(targets["openai_codex_auth"]["label"], "codex / gpt-one")
-        self.assertEqual(targets["openai_codex_auth_2"]["label"], "codex_2 / gpt-two")
-        self.assertEqual(targets["__evaluator__"]["label"], "AI scorer / codex_2 / gpt-two")
+        self.assertEqual(targets["openai_codex_auth_2"]["label"], "codex / gpt-two")
+        self.assertEqual(targets["__evaluator__"]["label"], "AI scorer / codex / gpt-two")
 
     def test_live_metadata_wins_over_exact_catalog(self):
         self.payload["api_providers"]["gateway"]["model_options"]["org/model.v1"]["reasoning_efforts"] = ["medium"]

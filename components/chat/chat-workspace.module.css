@@ -18,10 +18,10 @@
 .userMessage { background: var(--surface-subtle); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
 .messageHeading { display: flex; gap: 10px; align-items: baseline; margin-bottom: 8px; color: var(--secondary); font-size: 12px; overflow-wrap: anywhere; }
 .messageHeading span, .muted { color: var(--muted); font-size: 12px; }
-.messageText, .reasoning div { white-space: pre-wrap; overflow-wrap: anywhere; }
+.messageText { white-space: pre-wrap; overflow-wrap: anywhere; }
 .reasoning { border-left: 2px solid var(--border-strong); padding: 0 0 0 12px; margin: 0 0 12px; color: var(--secondary); }
 .reasoning summary { font-weight: 600; font-size: 12px; }
-.reasoning div { padding-top: 8px; font-size: 13px; }
+.reasoning > div { padding-top: 8px; font-size: 13px; }
 .sources { margin: 0 0 12px; color: var(--secondary); font-size: 12px; overflow-wrap: anywhere; }
 .sources summary { font-weight: 600; }
 .sources ul { margin: 6px 0 0; padding-left: 20px; }

@@ -8,7 +8,7 @@ import { experimentLabel, inventoryQuerySchema, inventoryHref, resultHref, type 
 import { useReadResource } from "@/lib/use-read-resource";
 import { Badge, Button, Card } from "@/components/ui/primitives";
 import { CopyButton } from "@/components/ui/copy-button";
-import { fmtIsoFromStr } from "@/lib/formatters";
+import { fmtProvider, fmtIsoFromStr } from "@/lib/formatters";
 import styles from "./experiment-inventory.module.css";
 
 export function ExperimentInventoryPage() {
@@ -62,7 +62,7 @@ function ExperimentRow({ entry }: { entry: ExperimentEntry }) {
     </td>
     <td role="cell">
       <span className="experiment-cell-label" aria-hidden="true">Provider / model / date</span>
-      <span>{run.provider ?? "Provider unavailable"}</span>
+      <span>{fmtProvider(run.provider) ?? "Provider unavailable"}</span>
       <div className="table-secondary">{run.model ?? "Model unavailable"}</div>
       <div className="table-secondary">{fmtIsoFromStr(run.startedAt)}</div>
       <div className="table-secondary">{run.mode}</div>

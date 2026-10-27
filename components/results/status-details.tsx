@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { NormalizedResult, ReviewWorkflow, StatusReason } from "@/lib/schemas";
 import { Badge } from "@/components/ui/primitives";
 import { CopyButton } from "@/components/ui/copy-button";
-import { fmtDuration, fmtIsoFromStr, fmtNumber, fmtScore, prettyJson } from "@/lib/formatters";
+import { fmtProvider, fmtDuration, fmtIsoFromStr, fmtNumber, fmtScore, prettyJson } from "@/lib/formatters";
 
 export function ResultsSummary({
   result,
@@ -32,7 +32,7 @@ export function ResultsSummary({
           <SummaryValue label="Condition">{result.experimentCondition ?? "Unavailable"}</SummaryValue>
           <SummaryValue label="Surface and level">{[result.surface, result.securityLevel].filter(isPresentString).map(readable).join(" · ") || "Unavailable"}</SummaryValue>
           <SummaryValue label="Method">{result.selectedMethod ?? result.targetMethod ?? "Unavailable"}</SummaryValue>
-          <SummaryValue label="Provider and model">{[result.provider, result.model].filter(Boolean).join(" · ") || "Unavailable"}</SummaryValue>
+          <SummaryValue label="Provider and model">{[fmtProvider(result.provider), result.model].filter(Boolean).join(" · ") || "Unavailable"}</SummaryValue>
           <SummaryValue label="Payload mode">{result.payloadMode ? readable(result.payloadMode) : "Unavailable"}</SummaryValue>
           <SummaryValue label="Repeat">{result.repeatIndex == null ? "Unavailable" : fmtNumber(result.repeatIndex)}</SummaryValue>
         </SummarySection>

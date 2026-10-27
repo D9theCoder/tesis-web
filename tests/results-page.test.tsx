@@ -51,6 +51,19 @@ async function flush() { await act(async () => { await Promise.resolve(); }); }
 function openCoordinateBrowser() { fireEvent.click(screen.getByText("Browse coordinates")); }
 beforeEach(() => { vi.resetAllMocks(); navigation.url = "/results/matrix-a"; route.executionId="matrix-a"; vi.mocked(api.fetchResult).mockResolvedValue(matrix()); vi.mocked(api.fetchCoordinateResult).mockResolvedValue(null); });
 describe("source-consistent result selection", () => {
+  it("shows an unnumbered Codex provider while preserving its ID in raw evidence", async () => {
+    vi.mocked(api.fetchResult).mockResolvedValue(normalizeResult({
+      execution_id: "codex-run", provider: "openai_codex_auth_2", model: "gpt-fixture", config: {},
+    }));
+    render(<ResultsPage />); await flush();
+    expect(screen.getByText("codex")).toBeVisible();
+    expect(screen.getByText("codex · gpt-fixture")).toBeVisible();
+    expect(screen.queryByText("openai_codex_auth_2")).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: /JSON/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Raw" }));
+    expect(screen.getByText(/openai_codex_auth_2/)).toBeVisible();
+  });
+
   it("ignores a late child response, switches the header and downloads to the selected child", async () => {
     const a = deferred<NormalizedResult|null>(), b = deferred<NormalizedResult|null>();
     vi.mocked(api.fetchCoordinateResult).mockImplementation((_parent,id) => id === "child-a" ? a.promise : b.promise);

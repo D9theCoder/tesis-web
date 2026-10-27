@@ -111,7 +111,9 @@ this model identity when they next send a message.
 
 Reasoning uses the same `llm.reasoning` exact-model catalog and provider probe as
 the TESIS TUI. Advertised catalog choices take precedence over `reasoning_catalog`
-presets; unknown models expose fallback choices and a custom effort field. Values
+presets; unknown models expose fallback choices and a custom effort field. The
+`gpt-6.1-terra` preset contains `none`, `low`, `medium`, `high`, `xhigh`, and `max`
+([model reference](https://developers.openai.com/api/docs/models/gpt-6.1-terra)). Values
 outside a model's catalog require **Check reasoning support** before **Apply effort**.
 The confirmation dialog describes the short provider request and potential credit
 or ChatGPT usage. Acceptance confirms the request setting, not internal reasoning.
@@ -131,7 +133,20 @@ stream. Provider-returned reasoning traces and summaries are shown separately
 when available; the provider may return neither. Conversations, including their
 reasoning and partial responses, are stored in this browser's local storage and
 can be deleted from the chat page. Clearing browser storage removes them.
+Assistant replies, reasoning summaries, and traces render Markdown, including
+lists, links, code blocks, and tables. The original Markdown stays in saved
+history. Embedded HTML is ignored, and Markdown images appear as links.
 Enter sends a message and Shift+Enter inserts a newline.
+Codex model labels use `codex / model` across chat, Settings, and the launcher;
+provider fields in run summaries and results display `codex`.
+Saved profile IDs stay unchanged. Chat and experiments share the TESIS SSE
+parser. It accepts valid events without a content-type header and retains
+completed output items when the terminal output list is empty. A terminal
+completion event is still required; partial deltas never establish success.
+Codex chat and experiments explicitly request reasoning summaries. Summary
+text and completed summary-part events are retained even when the final output
+contains only the answer. Summaries stay separate from raw traces, and a
+reasoning-token count alone never becomes visible reasoning text.
 After the first reply, the selected model receives a separate short request to
 name the conversation; this can incur additional provider or plan usage. If it
 fails, the first message remains the title.

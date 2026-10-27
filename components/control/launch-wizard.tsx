@@ -436,7 +436,7 @@ export const LaunchWizard = memo(function LaunchWizard({ schema, disabled, onSta
                     </div>
                     <div>
                       <dt>Provider</dt>
-                      <dd>{String(validation.resolved?.provider ?? "—")}</dd>
+                      <dd>{labelFor(optionLabels.provider, validation.resolved?.provider)}</dd>
                     </div>
                     <div>
                       <dt>Coordinate</dt>

@@ -734,19 +734,10 @@ def _reasoning_targets(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
     profiles = expanded_model_sections(payload)
     labels = model_profile_labels(payload)
-    def reasoning_label(name: str, profile: dict[str, Any], model: str) -> str:
-        label = labels[name]
-        if profile.get("provider", name) == "openai_codex_auth":
-            if label == "openai_codex_auth" or label.startswith("openai_codex_auth_"):
-                label = "codex" + label[len("openai_codex_auth"):]
-            if model:
-                label = f"{label} / {model}"
-        return label
-
     targets = {}
     for name, profile in profiles.items():
         profile = {**profile, "provider": profile.get("provider", name)}
-        label = reasoning_label(name, profile, profile.get("model_name", ""))
+        label = labels[name]
         targets[name] = {
             "id": name, "label": label, "model": profile.get("model_name", ""),
             "effort": _configured_reasoning_effort(profile, f"models.{name}.reasoning_effort"),
@@ -773,7 +764,7 @@ def _reasoning_targets(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
         for key in ("base_url", "api_key", "account", "use_responses_api"):
             if evaluator.get(key) is not None:
                 profile[key] = evaluator[key]
-        label = reasoning_label(selected, profile, model)
+        label = f"codex / {model}" if profile["provider"] == "openai_codex_auth" else labels[selected]
         targets["__evaluator__"] = {
             "id": "__evaluator__", "label": f"AI scorer / {label}", "model": model,
             "effort": _configured_reasoning_effort(evaluator, "scoring_evaluator.reasoning_effort"),
@@ -891,8 +882,6 @@ def command_chat_models(_request: dict[str, Any]) -> dict[str, Any]:
         if key == "__evaluator__" or not target["model"]:
             continue
         item = {name: value for name, value in target.items() if name != "profile"}
-        if target["profile"].get("provider") == "openai_codex_auth":
-            item["label"] = f"codex / {target['model']}"
         results.append(item)
     return {"ok": True, "targets": results}
 
@@ -989,8 +978,8 @@ def _stream_codex_chat(model: Any, messages: list[Any], effort: str | None, emit
     """Forward SIWC Responses deltas and require an authoritative terminal event."""
     import time
     from llm.siwc import RESOURCE
-    from llm.siwc.oauth import SIWCSession, response_error
-    from llm.siwc.provider import _events
+    from llm.siwc.oauth import SIWCRequestError, SIWCSession, response_error
+    from llm.siwc.provider import response_events
 
     account = model.extra.get("account", "default")
     body: dict[str, Any] = {"model": model.model_name, "store": False, "stream": True,
@@ -1002,38 +991,35 @@ def _stream_codex_chat(model: Any, messages: list[Any], effort: str | None, emit
     token = session.access_token(account)
     final = None
     terminal = None
-    with session.http() as client:
-        with client.stream("POST", f"{RESOURCE}/responses", json=body, timeout=model.timeout,
-                           headers={"Authorization": f"Bearer {token}", "Accept": "text/event-stream"}) as response:
-            if response.status_code != 200:
-                response.read()
-                raise response_error(response, "ChatGPT inference")
-            if "text/event-stream" not in response.headers.get("content-type", ""):
-                raise BridgeError("ChatGPT returned an invalid stream.")
-            for event in _events(response, deadline=time.monotonic() + model.timeout):
-                kind, delta = event.get("type"), event.get("delta")
-                if kind in {"response.output_text.delta", "response.reasoning_summary_text.delta"}:
-                    if not isinstance(delta, str):
-                        raise BridgeError("ChatGPT returned an invalid stream.")
-                    emit("text" if kind == "response.output_text.delta" else "summary", delta)
-                elif kind in {"response.completed", "response.incomplete"}:
-                    terminal, final = kind, event.get("response")
-                    break
-                elif kind in {"response.failed", "error"}:
-                    raise BridgeError("ChatGPT could not complete the response.")
-    if not isinstance(final, dict) or final.get("status") != ("completed" if terminal == "response.completed" else "incomplete"):
-        raise BridgeError("ChatGPT stream ended without a valid terminal response.")
-    output = final.get("output")
-    if not isinstance(output, list) or any(not isinstance(item, dict) for item in output):
-        raise BridgeError("ChatGPT returned an invalid terminal response.")
+    try:
+        with session.http() as client:
+            with client.stream("POST", f"{RESOURCE}/responses", json=body, timeout=model.timeout,
+                               headers={"Authorization": f"Bearer {token}", "Accept": "text/event-stream"}) as response:
+                if response.status_code != 200:
+                    response.read()
+                    raise response_error(response, "ChatGPT inference")
+                for event in response_events(response, deadline=time.monotonic() + model.timeout):
+                    kind = event["type"]
+                    if kind in {"response.output_text.delta", "response.reasoning_summary_text.delta"}:
+                        emit("text" if kind == "response.output_text.delta" else "summary", event["delta"])
+                    elif kind in {"response.completed", "response.incomplete"}:
+                        terminal, final = kind, event["response"]
+                        break
+    except SIWCRequestError as exc:
+        message = {
+            "invalid_stream": "ChatGPT returned an invalid stream.",
+            "interrupted_stream": "ChatGPT stream ended without a valid terminal response.",
+            "invalid_terminal_event": "ChatGPT returned an invalid terminal response.",
+        }.get(exc.code, str(exc))
+        raise BridgeError(message) from None
+    assert final is not None  # The shared parser requires a validated terminal response.
+    output = final["output"]
     text = "".join(part.get("text", "") for item in output if item.get("type") == "message"
                    for part in item.get("content", []) if part.get("type") == "output_text")
     refusal = "".join(part.get("refusal", "") for item in output if item.get("type") == "message"
                       for part in item.get("content", []) if part.get("type") == "refusal")
     emit("replace_text", refusal or text)
-    summaries = [part.get("text", "") for item in output if item.get("type") == "reasoning"
-                 for part in item.get("summary", []) if part.get("type") == "summary_text"]
-    emit("replace_summary", "\n".join(summaries))
+    emit("replace_summary", final["reasoning_summary"])
     if terminal == "response.incomplete":
         raise BridgeError("ChatGPT returned an incomplete response.")
 
