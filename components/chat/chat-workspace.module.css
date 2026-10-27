@@ -1,0 +1,33 @@
+.page { max-width: var(--page-measure-wide); margin: 0 auto; display: grid; gap: 16px; }
+.workspace { display: grid; grid-template-columns: 240px minmax(0, 1fr); height: max(520px, calc(100dvh - 190px)); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.history { padding: 18px 12px; background: var(--surface-subtle); border-right: 1px solid var(--border); min-width: 0; min-height: 0; overflow-y: auto; }
+.historyHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 4px 14px; }
+.historyHeader button, .composer button, .empty button { display: inline-flex; align-items: center; gap: 7px; }
+.chatList { list-style: none; padding: 0; margin: 0; display: grid; gap: 3px; }
+.chatList button { text-align: left; width: 100%; border: 0; border-radius: 5px; padding: 9px 10px; background: transparent; color: var(--secondary); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.chatList button:hover { background: var(--surface-hover); }
+.chatList button.selected { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.conversation { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.toolbar { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: end; gap: 12px; }
+.toolbar label { display: grid; gap: 4px; color: var(--secondary); font-size: 12px; font-weight: 600; min-width: 0; }
+.toolbar label:first-child { flex: 1; max-width: 440px; }
+.toolbar select { width: 100%; }
+.toolbar > button { margin-left: auto; }
+.messages { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 22px; min-height: 0; }
+.userMessage, .assistantMessage { max-width: 850px; width: 100%; margin: 0 auto; min-width: 0; }
+.userMessage { background: var(--surface-subtle); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+.messageHeading { display: flex; gap: 10px; align-items: baseline; margin-bottom: 8px; color: var(--secondary); font-size: 12px; overflow-wrap: anywhere; }
+.messageHeading span, .muted { color: var(--muted); font-size: 12px; }
+.messageText, .reasoning div { white-space: pre-wrap; overflow-wrap: anywhere; }
+.reasoning { border-left: 2px solid var(--border-strong); padding: 0 0 0 12px; margin: 0 0 12px; color: var(--secondary); }
+.reasoning summary { font-weight: 600; font-size: 12px; }
+.reasoning div { padding-top: 8px; font-size: 13px; }
+.sources { margin: 0 0 12px; color: var(--secondary); font-size: 12px; overflow-wrap: anywhere; }
+.sources summary { font-weight: 600; }
+.sources ul { margin: 6px 0 0; padding-left: 20px; }
+.empty, .emptyMessages { margin: auto; text-align: center; max-width: 400px; padding: 40px 24px; color: var(--secondary); display: grid; justify-items: center; gap: 10px; }
+.composer { padding: 16px 20px 20px; border-top: 1px solid var(--border); display: grid; gap: 7px; }
+.composer label { color: var(--secondary); font-size: 12px; font-weight: 600; }
+.composer textarea { width: 100%; resize: vertical; }
+.composerFooter { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 12px; }
+@media (max-width: 700px) { .workspace { display: flex; flex-direction: column; height: auto; min-height: 620px; } .history { border-right: 0; border-bottom: 1px solid var(--border); padding: 12px; } .historyHeader { padding-bottom: 8px; } .chatList { display: flex; overflow-x: auto; } .chatList li { flex: 0 0 180px; } .conversation { flex: 1; } .toolbar { flex-wrap: wrap; padding: 12px; } .toolbar label:first-child { flex: 1 1 100%; } .toolbar label:nth-child(2) { flex: 1; } .messages { padding: 20px 14px; min-height: 240px; max-height: 45dvh; } .composer { padding: 12px; } }

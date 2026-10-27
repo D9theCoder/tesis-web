@@ -103,6 +103,7 @@ describe("collapsible desktop sidebar", () => {
     const collapsedLinks = within(collapsedNav).getAllByRole("link");
     expect(collapsedLinks.map(link => link.textContent)).toEqual([
       "Control",
+      "Chat",
       "Live monitor",
       "Overview",
       "Results",

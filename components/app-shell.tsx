@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, ArrowUpRight, BookOpen, ChevronRight, LayoutDashboard, ListFilter, Menu, PanelLeftClose, PanelLeftOpen, Settings, SlidersHorizontal } from "lucide-react";
+import { Activity, ArrowUpRight, BookOpen, ChevronRight, LayoutDashboard, ListFilter, Menu, MessageSquare, PanelLeftClose, PanelLeftOpen, Settings, SlidersHorizontal } from "lucide-react";
 import { HackerChrome } from "@/components/hacker/hacker-chrome";
 import { HackerCinema } from "@/components/hacker/hacker-cinema";
 import sidebarStyles from "@/components/app-shell.module.css";
@@ -15,6 +15,7 @@ import { useTheme } from "@/lib/use-theme";
 
 const navigation = [
   { href: "/control", label: "Control", icon: SlidersHorizontal },
+  { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/", label: "Live monitor", icon: Activity },
   { href: "/overview", label: "Overview", icon: LayoutDashboard },
   { href: "/results", label: "Results", icon: ListFilter },

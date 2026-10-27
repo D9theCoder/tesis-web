@@ -46,6 +46,9 @@ coverage, and scoring provenance.
   quieter system/user/model-only read.
 - `/results/[executionId]` provides completed-execution inspection, matrix
   coordinate selection, scoring, evidence details, and redacted exports.
+- `/chat` sends conversations to saved model profiles, streams provider output,
+  and retrieves local documentation excerpts. Conversation history is kept in
+  the browser; provider calls are explicit and subject to the control gate.
 - The local mock flow replays `data/akg-simulation.yaml` in the browser to verify
   reducer and graph behavior.
 

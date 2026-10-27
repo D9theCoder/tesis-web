@@ -112,6 +112,30 @@ profiles use `models.<profile>.reasoning_effort`. The scorer override is
 Existing `llm_runtime.roles.*.reasoning_effort` overrides still take precedence for
 experiment roles and can be cleared in Config keys.
 
+`/chat` lets you converse with models in the saved web profile. Each conversation
+has its own model and advertised reasoning-effort choice; changing either does
+not modify Settings or experiment roles. Sending a message contacts that model's
+provider and may use API credits or ChatGPT plan usage. Stop cancels the local
+stream. Provider-returned reasoning traces and summaries are shown separately
+when available; the provider may return neither. Conversations, including their
+reasoning and partial responses, are stored in this browser's local storage and
+can be deleted from the chat page. Clearing browser storage removes them.
+Enter sends a message and Shift+Enter inserts a newline.
+After the first reply, the selected model receives a separate short request to
+name the conversation; this can incur additional provider or plan usage. If it
+fails, the first message remains the title.
+
+Chat locally ranks Markdown excerpts from the TESIS Web README and
+product documentation and the TESIS README, guide, reference documentation, and
+completed handoffs. Up to five matching excerpts are sent to the selected model;
+the response lists the source paths and line numbers supplied. Historical handoffs
+may describe an older state. Retrieval
+uses local keyword matching, not embeddings, and may miss relevant material or
+return no matches. It excludes runtime artifacts, configuration, credential files,
+and agent instruction files; recognizable secrets are redacted before excerpts
+are sent. A source list
+shows what was provided, not proof that a generated claim is correct.
+
 Which file is authoritative:
 
 | Document | Written by | Read by |
@@ -142,6 +166,7 @@ browser requests:
 - `POST /api/control/config/sync` — write the profile over `TESIS_ROOT/config.yaml`
 - `POST /api/control/config/models` — fetch a provider model catalog
 - `POST /api/control/config/reasoning` — describe model effort choices, stage a known/default effort, or explicitly check support; returns a draft patch without saving
+- `POST /api/control/chat` — list saved model profiles or stream a conversation as newline-delimited JSON; guarded by the control gate and restricted to the request origin
 - `GET /api/control/auth?action=status|models|flow` — ChatGPT account state, model catalogue, or supervised account action
 - `POST /api/control/auth` — start a ChatGPT `login`/`logout` or `cancel` a waiting sign-in
 - `GET /api/control/runs` · `POST /api/control/runs` — list or start a run/matrix
@@ -495,6 +520,7 @@ probe, so they remain offline:
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 "$TESIS_ROOT/.venv/bin/python" tests/test_bridge_reasoning.py
+PYTHONDONTWRITEBYTECODE=1 "$TESIS_ROOT/.venv/bin/python" -m unittest discover -s tests -p test_bridge_chat.py
 ```
 
 Playwright checks 1440×900, 1920×1080, 1024×768 and 390×844, writing overview,
