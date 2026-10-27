@@ -151,16 +151,41 @@ After the first reply, the selected model receives a separate short request to
 name the conversation; this can incur additional provider or plan usage. If it
 fails, the first message remains the title.
 
-Chat locally ranks Markdown excerpts from the TESIS Web README and
-product documentation and the TESIS README, guide, reference documentation, and
-completed handoffs. Up to five matching excerpts are sent to the selected model;
-the response lists the source paths and line numbers supplied. Historical handoffs
-may describe an older state. Retrieval
-uses local keyword matching, not embeddings, and may miss relevant material or
-return no matches. It excludes runtime artifacts, configuration, credential files,
-and agent instruction files; recognizable secrets are redacted before excerpts
-are sent. A source list
-shows what was provided, not proof that a generated claim is correct.
+Chat searches Markdown documentation in the root and `docs/` directories of both
+checkouts. It combines exact keyword matching with local multilingual embeddings,
+so Indonesian questions can also find relevant English passages. Embeddings are
+compared in memory and cached as a local file; no vector database is required.
+The strongest keyword match has a reserved context slot so exact identifiers and
+error messages can be retrieved even outside the semantic shortlist.
+The first semantic search downloads the quantized `multilingual-e5-small` model
+(about 118 MB for the weights, plus tokenizer files) into the web state directory.
+Later searches can use the cached model offline. The first indexing pass takes
+longer; if the model is unavailable, chat reports that it used keyword search.
+
+**Shared files** accepts UTF-8 Markdown and text files and PDFs with selectable
+text, including CJK fonts that use PDF.js's bundled local character maps.
+Each file is limited to 10 MiB and 2 million extracted characters; PDFs are
+limited to 200 pages. Scanned PDFs need OCR before upload. Extracted text and
+the embedding cache live in `TESIS_WEB_STATE_DIR`, outside the TESIS checkout,
+and the files are searchable in every conversation. Removing a file deletes its
+stored text and clears the derived embedding cache. The original uploaded PDF or
+text file is not stored.
+
+**Select run artifact** lists and searches saved runs by recorded context, date,
+status, and model. Date searches use the recorded ISO date, such as `2026-10-20`;
+status searches match execution status and security outcome before pagination.
+Selecting one attaches that exact execution and source hash to
+the conversation. Its recorded summary is always supplied, and relevant excerpts
+from its redacted artifact can also be retrieved. Artifact text over one million
+characters is truncated for search. If the selected source changes or becomes
+unavailable, select it again; the chat does not substitute another run.
+
+Up to five excerpts, including the selected run summary, are sent to the selected
+chat provider. The source list records what was supplied, not proof of a claim.
+Historical handoffs may describe an older state. Agent instruction files,
+configuration, credentials, and unselected runtime artifacts are excluded from
+automatic documentation search. Recognizable secrets are redacted before sources
+are stored or sent, but users should review sensitive files and provider choice.
 
 Which file is authoritative:
 
@@ -193,6 +218,8 @@ browser requests:
 - `POST /api/control/config/models` — fetch a provider model catalog
 - `POST /api/control/config/reasoning` — describe model effort choices, stage a known/default effort, or explicitly check support; returns a draft patch without saving
 - `POST /api/control/chat` — list saved model profiles or stream a conversation as newline-delimited JSON; guarded by the control gate and restricted to the request origin
+- `GET|POST|DELETE /api/control/chat/knowledge` — list, add, or remove shared chat documents
+- `GET /api/control/chat/runs` — search recent saved run artifacts for an explicit chat attachment
 - `GET /api/control/auth?action=status|models|flow` — ChatGPT account state, model catalogue, or supervised account action
 - `POST /api/control/auth` — start a ChatGPT `login`/`logout` or `cancel` a waiting sign-in
 - `GET /api/control/runs` · `POST /api/control/runs` — list or start a run/matrix
@@ -547,6 +574,13 @@ probe, so they remain offline:
 ```bash
 PYTHONDONTWRITEBYTECODE=1 "$TESIS_ROOT/.venv/bin/python" tests/test_bridge_reasoning.py
 PYTHONDONTWRITEBYTECODE=1 "$TESIS_ROOT/.venv/bin/python" -m unittest discover -s tests -p test_bridge_chat.py
+```
+
+To check Indonesian-to-English retrieval using an already downloaded local model,
+set the cache path explicitly. This does not call a chat provider:
+
+```bash
+TESIS_WEB_TEST_MODEL_CACHE="$PWD/.tesis-web/chat-models" npx vitest run tests/chat-semantic-model.test.ts
 ```
 
 Playwright checks 1440×900, 1920×1080, 1024×768 and 390×844, writing overview,

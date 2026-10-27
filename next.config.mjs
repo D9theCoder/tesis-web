@@ -21,6 +21,10 @@ const configuredDevOrigins = (process.env.NEXT_ALLOWED_DEV_ORIGINS ?? "")
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  serverExternalPackages: ["@huggingface/transformers", "pdfjs-dist"],
+  outputFileTracingIncludes: {
+    "/api/control/chat/knowledge": ["./node_modules/pdfjs-dist/cmaps/*.bcmap"],
+  },
   experimental: { useTypeScriptCli: false },
   // Next 16 protects dev bundles loaded through a non-default host. Include
   // loopback and the current machine addresses so WSL/Windows browser access

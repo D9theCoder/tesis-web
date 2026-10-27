@@ -6,16 +6,17 @@ import { Plus, Send, Square, Trash2 } from "lucide-react";
 import { z } from "zod";
 import { Button, Dialog } from "@/components/ui/primitives";
 import { ChatMarkdown } from "@/components/chat/markdown";
+import { KnowledgeControls, type SelectedRun } from "@/components/chat/knowledge-controls";
 import type { ReasoningTarget } from "@/lib/control-contract";
 import styles from "./chat-workspace.module.css";
 
 type Source = { id: string; source: string; line: number };
-type Message = { id: string; role: "user" | "assistant"; text: string; trace?: string; summary?: string; model?: string; sources?: Source[]; status?: "streaming" | "complete" | "stopped" | "error"; error?: string };
-type Chat = { id: string; title: string; target: string; modelName?: string; effort: string; messages: Message[] };
-type Event = { type: string; text?: string; error?: string; sources?: Source[] };
+type Message = { id: string; role: "user" | "assistant"; text: string; trace?: string; summary?: string; model?: string; sources?: Source[]; retrievalMode?: "hybrid" | "keyword"; progress?: string; status?: "streaming" | "complete" | "stopped" | "error"; error?: string };
+type Chat = { id: string; title: string; target: string; modelName?: string; effort: string; messages: Message[]; artifact?: SelectedRun };
+type Event = { type: string; text?: string; error?: string; sources?: Source[]; mode?: "hybrid" | "keyword" };
 const STORAGE = "tesis.chat.v1";
-const savedMessage = z.object({ id: z.string(), role: z.enum(["user", "assistant"]), text: z.string(), trace: z.string().optional(), summary: z.string().optional(), model: z.string().optional(), sources: z.array(z.object({ id: z.string(), source: z.string(), line: z.number() })).optional(), status: z.enum(["streaming", "complete", "stopped", "error"]).optional(), error: z.string().optional() });
-const savedChats = z.array(z.object({ id: z.string(), title: z.string(), target: z.string(), modelName: z.string().optional(), effort: z.string(), messages: z.array(savedMessage) }));
+const savedMessage = z.object({ id: z.string(), role: z.enum(["user", "assistant"]), text: z.string(), trace: z.string().optional(), summary: z.string().optional(), model: z.string().optional(), sources: z.array(z.object({ id: z.string(), source: z.string(), line: z.number() })).optional(), retrievalMode: z.enum(["hybrid", "keyword"]).optional(), progress: z.string().optional(), status: z.enum(["streaming", "complete", "stopped", "error"]).optional(), error: z.string().optional() });
+const savedChats = z.array(z.object({ id: z.string(), title: z.string(), target: z.string(), modelName: z.string().optional(), effort: z.string(), messages: z.array(savedMessage), artifact: z.object({ executionId: z.string(), sha256: z.string(), name: z.string(), startedAt: z.string().nullable(), executionStatus: z.string().nullable() }).optional() }));
 const newChat = (): Chat => ({ id: crypto.randomUUID(), title: "New conversation", target: "", effort: "", messages: [] });
 
 export function ChatWorkspace() {
@@ -83,7 +84,8 @@ export function ChatWorkspace() {
     let responseDone = false;
     try {
       const response = await fetch("/api/control/chat", { method: "POST", headers: { "Content-Type": "application/json" }, signal: abort.signal,
-        body: JSON.stringify({ action: "send", target: target.id, expectedModel: target.model, effort: active.effort || null, generateTitle: history.length === 0, messages }) });
+        body: JSON.stringify({ action: "send", target: target.id, expectedModel: target.model, effort: active.effort || null, generateTitle: history.length === 0, messages,
+          ...(active.artifact ? { artifact: { executionId: active.artifact.executionId, sha256: active.artifact.sha256 } } : {}) }) });
       if (!response.ok || !response.body) { const data = await response.json(); throw new Error(data.error || "Could not start the chat."); }
       const reader = response.body.getReader(); const decoder = new TextDecoder(); let pending = "";
       while (true) {
@@ -99,12 +101,13 @@ export function ChatWorkspace() {
           if (event.type === "title" && event.text) { const title = event.text; updateChat(chatId, (chat) => ({ ...chat, title })); continue; }
           const value = event.text ?? "";
           updateMessage((message) => {
-            if (event.type === "text") return { ...message, text: message.text + value };
+            if (event.type === "text") return { ...message, progress: undefined, text: message.text + value };
             if (event.type === "trace") return { ...message, trace: (message.trace ?? "") + value };
             if (event.type === "summary") return { ...message, summary: (message.summary ?? "") + value };
             if (event.type === "replace_text") return { ...message, text: value };
             if (event.type === "replace_summary") return { ...message, summary: value };
-            if (event.type === "sources") return { ...message, sources: event.sources ?? [] };
+            if (event.type === "retrieval") return { ...message, progress: value };
+            if (event.type === "sources") return { ...message, progress: undefined, sources: event.sources ?? [], retrievalMode: event.mode };
             return message;
           });
         }
@@ -152,15 +155,17 @@ export function ChatWorkspace() {
               <div className={styles.messageHeading}><strong>{message.role === "user" ? "You" : message.model || "Assistant"}</strong>{message.status === "streaming" ? <span role="status">Responding…</span> : message.status === "stopped" ? <span>Stopped</span> : message.status === "error" ? <span>Incomplete</span> : null}</div>
               {message.summary ? <details className={styles.reasoning}><summary>Reasoning summary</summary><ChatMarkdown>{message.summary}</ChatMarkdown></details> : null}
               {message.trace ? <details className={styles.reasoning}><summary>Reasoning trace</summary><ChatMarkdown>{message.trace}</ChatMarkdown></details> : null}
-              {message.sources ? <details className={styles.sources}><summary>Documentation supplied ({message.sources.length})</summary>{message.sources.length ? <ul>{message.sources.map((source) => <li key={source.id}>[{source.id}] {source.source}:{source.line}</li>)}</ul> : <p>No matching documentation found.</p>}</details> : null}
-              {message.text ? message.role === "assistant" ? <ChatMarkdown>{message.text}</ChatMarkdown> : <div className={styles.messageText}>{message.text}</div> : message.status === "streaming" ? <p className={styles.muted}>Waiting for response…</p> : null}
+              {message.retrievalMode === "keyword" ? <p className="notice">Semantic search was unavailable; keyword search was used.</p> : null}
+              {message.sources ? <details className={styles.sources}><summary>Sources supplied ({message.sources.length})</summary>{message.sources.length ? <ul>{message.sources.map((source) => <li key={source.id}>[{source.id}] {source.source}:{source.line}</li>)}</ul> : <p>No matching sources found.</p>}</details> : null}
+              {message.text ? message.role === "assistant" ? <ChatMarkdown>{message.text}</ChatMarkdown> : <div className={styles.messageText}>{message.text}</div> : message.status === "streaming" ? <p className={styles.muted} role="status">{message.progress || "Waiting for response…"}</p> : null}
               {message.role === "assistant" && message.status === "complete" && !message.summary && !message.trace ? <p className={styles.muted}>No reasoning summary or trace was returned by the provider.</p> : null}
               {message.error ? <p className="notice notice-error" role="alert">{message.error}</p> : null}
             </article>)}
           </div>
           <form className={styles.composer} onSubmit={(event) => { event.preventDefault(); void send(); }}>
+            <KnowledgeControls key={active.id} selected={active.artifact} disabled={busy} onSelect={(artifact) => updateChat(active.id, (chat) => ({ ...chat, artifact }))} />
             <label htmlFor="chat-input">Message</label><textarea id="chat-input" className="form-control" rows={3} maxLength={50000} placeholder="Write a message…" value={draft} disabled={busy || !target || changedTarget} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} />
-            <div className={styles.composerFooter}><span>{naming ? "Naming conversation with the selected model…" : "Enter to send · Shift+Enter for a new line. Relevant documentation is sent to the provider. The first reply includes a separate title request."}</span>{busy ? <Button variant="outline" onClick={() => controller.current?.abort()}><Square size={14} /> Stop</Button> : <Button type="submit" variant="primary" disabled={!target || changedTarget || !draft.trim()}><Send size={15} /> Send</Button>}</div>
+            <div className={styles.composerFooter}><span>{naming ? "Naming conversation with the selected model…" : "Enter to send · Shift+Enter for a new line. Relevant sources are sent to the provider. The first reply includes a separate title request."}</span>{busy ? <Button variant="outline" onClick={() => controller.current?.abort()}><Square size={14} /> Stop</Button> : <Button type="submit" variant="primary" disabled={!target || changedTarget || !draft.trim()}><Send size={15} /> Send</Button>}</div>
           </form>
         </>}
       </section>

@@ -82,7 +82,7 @@ test("chat streams an answer and reasoning, and restores the conversation", asyn
   await expect(page.getByText("A provider summary.")).toBeVisible();
   await page.getByText("Reasoning trace", { exact: true }).click();
   await expect(page.getByText("A provider trace.")).toBeVisible();
-  await page.getByText("Documentation supplied (1)").click();
+  await page.getByText("Sources supplied (1)").click();
   await expect(page.getByText("[S1] tesis/README.md:12")).toBeVisible();
   await expect.poll(() => page.evaluate(() => localStorage.getItem("tesis.chat.v1"))).toContain("A streamed answer [S1].");
   await page.reload();
@@ -103,6 +103,47 @@ test("a long conversation list stays reachable", async ({ page }) => {
   await expect(last).toBeVisible();
   await last.click();
   await expect(last).toHaveAttribute("aria-current", "true");
+});
+
+for (const width of [1440, 390]) test(`shared files and selecting a run work at ${width}px`, async ({ page }, testInfo) => {
+  await page.setViewportSize({ width, height: 900 });
+  const run = { executionId: "run-123", sha256: "a".repeat(64), name: "SQL injection · form", kind: "standalone", startedAt: "2026-10-20T10:00:00Z", executionStatus: "failed", securityOutcome: "confirmed", model: "fixture-model", surface: "form", securityLevel: "low" };
+  let uploaded = false;
+  let sentArtifact: unknown;
+  await page.route("**/api/control/chat/knowledge", async (route) => {
+    if (route.request().method() === "POST") { uploaded = true; return route.fulfill({ json: { file: { id: "upload-1", name: "notes.md", createdAt: "2026-10-28T00:00:00Z", pages: 1 } } }); }
+    return route.fulfill({ json: { files: uploaded ? [{ id: "upload-1", name: "notes.md", createdAt: "2026-10-28T00:00:00Z", pages: 1 }] : [] } });
+  });
+  await page.route("**/api/control/chat/runs?**", (route) => route.fulfill({ json: { runs: [run], nextCursor: null, partial: false } }));
+  await page.route("**/api/control/chat", async (route) => {
+    const body = route.request().postDataJSON();
+    if (body.action === "models") return route.fulfill({ json: { targets: [{ id: "fixture", label: "Fixture model", model: "fixture", effort: null, efforts: ["low"], supported: true }] } });
+    sentArtifact = body.artifact;
+    return route.fulfill({ contentType: "application/x-ndjson", body: '{"type":"text","text":"Run analysis."}\n{"type":"done"}\n' });
+  });
+  await page.goto("/chat");
+  await page.getByRole("button", { name: "New conversation" }).click();
+  await expect(page.getByRole("option", { name: "Fixture model" })).toHaveCount(1);
+  await page.getByText("Shared files", { exact: true }).click();
+  await page.getByLabel("Add a file").setInputFiles({ name: "notes.md", mimeType: "text/markdown", buffer: Buffer.from("shared note") });
+  await expect(page.getByText("notes.md")).toBeVisible();
+  await page.getByText("Select run artifact").click();
+  await expect(page.getByLabel("Add a file")).not.toBeVisible();
+  const option = page.getByRole("button", { name: /SQL injection · form/ });
+  await expect(option).toContainText("fixture-model");
+  await expect(option).toContainText("failed");
+  const nameBox = await option.locator("strong").boundingBox();
+  const detailBox = await option.locator("span").first().boundingBox();
+  expect(nameBox && detailBox && detailBox.y >= nameBox.y + nameBox.height).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath(`run-picker-${width}.png`), fullPage: true, animations: "disabled" });
+  await option.click();
+  await expect(page.getByText(/Attached:/)).toContainText("run-123");
+  await page.getByLabel("Message", { exact: true }).fill("Analyze this run");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText("Run analysis.")).toBeVisible();
+  expect(sentArtifact).toEqual({ executionId: "run-123", sha256: "a".repeat(64) });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath(`knowledge-${width}.png`), fullPage: true, animations: "disabled" });
 });
 
 test("streamed output follows the bottom without pulling a reader away from older messages", async ({ page }) => {

@@ -10,7 +10,8 @@ import { bridgeScriptPath, profileConfigPath, tesisPython } from "@/lib/server/c
 import { readJsonBody } from "@/lib/server/control/request";
 import { controlResponse } from "@/lib/server/control/response";
 import { isSecretKey, tesisRoot } from "@/lib/server/fs-util";
-import { retrieveDocumentation } from "@/lib/server/chat/retrieval";
+import { retrieveChatContext } from "@/lib/server/chat/retrieval";
+import { attachedRunChunks, runAttachmentSchema } from "@/lib/server/chat/runs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +21,7 @@ const requestSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("send"), target: z.string().min(1).max(200),
     expectedModel: z.string().min(1).max(500), effort: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/).nullable(), generateTitle: z.boolean(),
     messages: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(50000) }).strict()).min(1).max(100),
+    artifact: runAttachmentSchema.optional(),
   }).strict(),
 ]);
 
@@ -41,34 +43,41 @@ export async function POST(req: Request) {
     const env = await tesisProcessEnv({ TESIS_ROOT: tesisRoot(), TESIS_WEB_CONFIG_PATH: profileConfigPath() });
     const knownSecrets = Object.entries(env).filter(([key, value]) => isSecretKey(key) && typeof value === "string" && value.length >= 4).map(([, value]) => value!);
     const query = body.messages.filter((message) => message.role === "user").slice(-2).reverse().map((message) => message.content.slice(0, 4000)).join("\n");
-    const excerpts = await retrieveDocumentation(query, process.cwd(), tesisRoot(), knownSecrets);
-    const child = spawn(tesisPython(), [bridgeScriptPath(), "chat"], {
-      cwd: tesisRoot(), env, stdio: ["pipe", "pipe", "pipe"],
-    });
+    const extra = body.artifact ? await attachedRunChunks(body.artifact, knownSecrets) : [];
     const encoder = new TextEncoder();
     let closed = false;
     let bytes = 0;
-    const stop = () => { if (!closed) child.kill("SIGKILL"); };
-    const timer = setTimeout(stop, 180_000);
+    let child: ReturnType<typeof spawn> | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stop = () => { if (!closed) child?.kill("SIGKILL"); };
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        const end = () => { if (closed) return; closed = true; clearTimeout(timer); req.signal.removeEventListener("abort", stop); controller.close(); };
+        const end = () => { if (closed) return; closed = true; if (timer) clearTimeout(timer); req.signal.removeEventListener("abort", stop); controller.close(); };
         const fail = () => { if (!closed) controller.enqueue(encoder.encode(`${JSON.stringify({ type: "error", error: "The chat stream ended unexpectedly." })}\n`)); };
-        controller.enqueue(encoder.encode(`${JSON.stringify({ type: "sources", sources: excerpts.map(({ id, source, line }) => ({ id, source, line })) })}\n`));
-        child.stdout.on("data", (chunk: Buffer) => {
-          bytes += chunk.length;
-          if (bytes > 4 * 1024 * 1024) { fail(); stop(); return; }
-          if (!closed) controller.enqueue(new Uint8Array(chunk));
-        });
-        child.stderr.resume();
-        child.on("error", () => { fail(); end(); });
-        child.on("close", (code) => { if (code !== 0) fail(); end(); });
-        child.stdin.on("error", () => {});
-        child.stdin.end(JSON.stringify({ ...body, documentation: true, excerpts }));
         req.signal.addEventListener("abort", stop, { once: true });
-        if (req.signal.aborted) stop();
+        controller.enqueue(encoder.encode(`${JSON.stringify({ type: "retrieval", text: "Preparing local document search…" })}\n`));
+        void (async () => {
+          try {
+            const { excerpts, mode } = await retrieveChatContext(query, { knownSecrets, extra, signal: req.signal });
+            if (closed || req.signal.aborted) { end(); return; }
+            controller.enqueue(encoder.encode(`${JSON.stringify({ type: "sources", mode, sources: excerpts.map(({ id, source, line }) => ({ id, source, line })) })}\n`));
+            child = spawn(tesisPython(), [bridgeScriptPath(), "chat"], { cwd: tesisRoot(), env, stdio: ["pipe", "pipe", "pipe"] });
+            timer = setTimeout(stop, 180_000);
+            child.stdout?.on("data", (chunk: Buffer) => {
+              bytes += chunk.length;
+              if (bytes > 4 * 1024 * 1024) { fail(); stop(); return; }
+              if (!closed) controller.enqueue(new Uint8Array(chunk));
+            });
+            child.stderr?.resume();
+            child.on("error", () => { fail(); end(); });
+            child.on("close", (code) => { if (code !== 0) fail(); end(); });
+            child.stdin?.on("error", () => {});
+            child.stdin?.end(JSON.stringify({ ...body, documentation: true, excerpts }));
+            if (req.signal.aborted) stop();
+          } catch { if (!req.signal.aborted) fail(); end(); }
+        })();
       },
-      cancel() { stop(); closed = true; clearTimeout(timer); req.signal.removeEventListener("abort", stop); },
+      cancel() { stop(); closed = true; if (timer) clearTimeout(timer); req.signal.removeEventListener("abort", stop); },
     });
     return new Response(stream, { headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store, no-transform", "X-Accel-Buffering": "no" } });
   } catch (error) {

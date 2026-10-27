@@ -30,4 +30,25 @@
 .composer label { color: var(--secondary); font-size: 12px; font-weight: 600; }
 .composer textarea { width: 100%; resize: vertical; }
 .composerFooter { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 12px; }
-@media (max-width: 700px) { .workspace { display: flex; flex-direction: column; height: auto; min-height: 620px; } .history { border-right: 0; border-bottom: 1px solid var(--border); padding: 12px; } .historyHeader { padding-bottom: 8px; } .chatList { display: flex; overflow-x: auto; } .chatList li { flex: 0 0 180px; } .conversation { flex: 1; } .toolbar { flex-wrap: wrap; padding: 12px; } .toolbar label:first-child { flex: 1 1 100%; } .toolbar label:nth-child(2) { flex: 1; } .messages { padding: 20px 14px; min-height: 240px; max-height: 45dvh; } .composer { padding: 12px; } }
+.knowledge { display: grid; gap: 7px; min-width: 0; }
+.knowledgeActions { display: flex; flex-wrap: wrap; gap: 8px; align-items: start; }
+.knowledgeActions details[open] { flex-basis: 100%; }
+.knowledgeActions summary { display: flex; width: fit-content; align-items: center; gap: 6px; min-height: 34px; padding: 6px 10px; border: 1px solid var(--control-border); border-radius: 5px; color: var(--secondary); font-size: 12px; font-weight: 600; cursor: pointer; }
+.knowledgeActions summary:hover { background: var(--surface-hover); }
+.knowledgePanel { max-height: min(280px, 35dvh); overflow: auto; margin-top: 8px; padding: 10px 12px; background: var(--surface-subtle); border: 1px solid var(--border); border-radius: 5px; color: var(--secondary); font-size: 12px; }
+.knowledgePanel p { margin: 0 0 8px; }
+.knowledgePanel p:last-child { margin-bottom: 0; }
+.fileLabel { display: grid; gap: 5px; margin: 10px 0; }
+.fileLabel input { max-width: 100%; color: var(--text); font-size: 12px; font-weight: 400; }
+.runSearch { display: flex; align-items: end; gap: 8px; margin: 8px 0; }
+.runSearch label { display: grid; flex: 1; gap: 4px; min-width: 0; }
+.runSearch input { width: 100%; }
+.fileList, .runList { list-style: none; display: grid; gap: 4px; margin: 8px 0; padding: 0; }
+.fileList li, .attachment { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
+.composer .runOption { display: grid; gap: 3px; width: 100%; min-width: 0; padding: 9px 10px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--text); text-align: left; overflow-wrap: anywhere; }
+.runOption:hover { border-color: var(--border-strong); background: var(--surface-hover); }
+.runOption[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.runOption span, .runId { color: var(--secondary); font-size: 12px; }
+.attachment { padding: 7px 10px; border: 1px solid var(--border); border-radius: 5px; color: var(--secondary); font-size: 12px; }
+.attachment small { display: block; color: var(--muted); overflow-wrap: anywhere; }
+@media (max-width: 700px) { .workspace { display: flex; flex-direction: column; height: auto; min-height: 620px; } .history { border-right: 0; border-bottom: 1px solid var(--border); padding: 12px; } .historyHeader { padding-bottom: 8px; } .chatList { display: flex; overflow-x: auto; } .chatList li { flex: 0 0 180px; } .conversation { flex: 1; } .toolbar { flex-wrap: wrap; padding: 12px; } .toolbar label:first-child { flex: 1 1 100%; } .toolbar label:nth-child(2) { flex: 1; } .messages { padding: 20px 14px; min-height: 240px; max-height: 45dvh; } .composer { padding: 12px; } .knowledgeActions summary, .runOption { min-height: 44px; } }

@@ -139,7 +139,7 @@ export async function listExperiments(params: URLSearchParams, options: { fresh?
     const context = [run, ...children.map(summariseRun)];
     return (!scopedIds || scopedIds.has(run.executionId)) &&
       (query.artifacts === "all" || (query.artifacts === "available" ? run.hasArtifact : !run.hasArtifact)) &&
-      (!needle || context.some(row => [row.executionId, row.provider, row.model, row.surface, row.securityLevel, row.experimentCondition, row.targetMethod].filter(Boolean).join(" ").toLowerCase().includes(needle))) &&
+      (!needle || context.some(row => [row.executionId, row.provider, row.model, row.surface, row.securityLevel, row.experimentCondition, row.targetMethod, row.startedAt, row.executionStatus, row.securityOutcome].filter(Boolean).join(" ").toLowerCase().includes(needle))) &&
       (query.execution === "all" || (query.execution === "unknown" && !Object.keys(entry.lifecycle).length) || (entry.lifecycle[query.execution] ?? 0) > 0) &&
       (query.outcome === "all" || (query.outcome === "unknown" ? entry.unknownOutcomes === null || entry.unknownOutcomes > 0 : (entry.outcomes[query.outcome] ?? 0) > 0));
   });
