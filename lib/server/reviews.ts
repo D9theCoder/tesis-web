@@ -2,7 +2,7 @@ import { boundProjectionPath } from "@/lib/server/projections";
 import path from "node:path";
 import { reviewReceiptSchema, reviewStatusSchema, reviewBundleSchema, type ReviewWorkflow, type SourceBinding } from "@/lib/schemas";
 import { record, text, mergeArtifact } from "@/lib/artifact-contract";
-import { containedPath, readSource, reviewRoots, artifactRoots, redact, type Root } from "@/lib/server/fs-util";
+import { containedPath, readSource, reviewRoots, artifactRoots, type Root } from "@/lib/server/fs-util";
 import { scanJson, type ResolvedRun } from "@/lib/server/resolve-run";
 
 const WEIGHTS = { Smethod: .2, Spayload: .2, Sexploit: .3, Schain: .1, Soutput: .2 };
@@ -25,10 +25,13 @@ export async function receiptProblem(raw: Record<string, unknown>, run: Resolved
   if (r.source_sha256 !== run.sha256) return "receipt_source_hash_mismatch";
   const safe = await containedPath(r.source_path, artifactRoots());
   if (!safe || safe.path !== run.primaryPath) return "receipt_source_path_mismatch";
-  const selection = text(m.scoring_mode ?? record(m.config).scoring_mode);
+  const sourceMode = text(record(m.config).scoring_mode) ?? text(m.scoring_mode);
+  const declared = text(r.selection);
+  if (declared && sourceMode && declared !== sourceMode) return "receipt_workflow_mismatch";
+  const selection = sourceMode ?? declared;
   if (selection && selection !== "both" && selection !== r.scoring_mode) return "receipt_workflow_mismatch";
   if (r.method !== text(m.selected_method ?? m.target_method)) return "receipt_method_mismatch";
-  if (stable(redact(r.config)) !== stable(redact(record(m.config)))) return "receipt_config_mismatch";
+  if (stable(r.config) !== stable(record(m.config))) return "receipt_config_mismatch";
   const sourceRubric = text(record(m.config).scoring_rubric_version ?? record(m.config).rubric_version);
   if (sourceRubric && r.rubric_version !== sourceRubric) return "receipt_rubric_mismatch";
   const ids = r.candidate_grades.map(c => c.candidate_id);
@@ -129,7 +132,8 @@ export async function resolveReviews(run: ResolvedRun, diagnostics: string[]) {
     path: string; sha256: string; workflow: string; accepted: boolean; reason: string | null; receipt: Record<string, unknown>
   }[] };
   for (const mode of ["human", "ai"] as const) {
-    const sourceMode = text(mergeArtifact(run.raw ?? {}).scoring_mode ?? record(mergeArtifact(run.raw ?? {}).config).scoring_mode);
+    const merged = mergeArtifact(run.raw ?? {});
+    const sourceMode = text(record(merged.config).scoring_mode) ?? text(merged.scoring_mode);
     if (sourceMode && sourceMode !== "both" && sourceMode !== mode) { bundle[mode] = missingWorkflow("unavailable", "workflow_not_selected"); continue; }
     const finals: ReviewFile[] = [];
     const historical = files.filter(file => file.raw.artifact_type === "thesis_score_receipt" && file.raw.scoring_mode === mode &&
@@ -155,7 +159,7 @@ export async function resolveReviews(run: ResolvedRun, diagnostics: string[]) {
       const parsed = reviewStatusSchema.safeParse(file.raw); if (!parsed.success) continue;
       const r = parsed.data, m = mergeArtifact(run.raw ?? {});
       if (!r.workflows[mode] || r.rubric_version !== "scoring.v4" || r.method !== text(m.selected_method ?? m.target_method) ||
-        stable(redact(r.config)) !== stable(redact(record(m.config)))) continue;
+        stable(r.config) !== stable(record(m.config))) continue;
       if (r.execution_id) {
         if (r.execution_id !== run.executionId || !r.source_path || !r.generated_at || !Number.isFinite(Date.parse(r.generated_at))) continue;
         const safe = await containedPath(r.source_path);

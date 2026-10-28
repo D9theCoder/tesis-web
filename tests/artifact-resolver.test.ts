@@ -224,13 +224,19 @@ describe("bounded journal pages", () => {
     const page = await response.json(); expect(page.events).toHaveLength(1); expect(page.nextCursor).toBe(Buffer.byteLength(lines)); expect(page.status).toBe("completed");
   });
 });
-async function receiptFixture() {
-  const file = await write("source.json",primary("receipt-source")), run = (await resolveRun("receipt-source"))!;
+async function receiptFixture(extra: Record<string, unknown> = {}) {
+  const artifact = primary("receipt-source", extra);
+  const file = await write("source.json", artifact), run = (await resolveRun("receipt-source"))!;
   return { run, receipt: { artifact_type: "thesis_score_receipt", execution_id: run.executionId, run_id: "shared-run-id", source_path: file, source_sha256: run.sha256,
-    rubric_version: "scoring.v4", scoring_mode: "ai", status: "final", generated_at: "2026-10-12T00:00:00Z", method: "method-a", config: { rubric_version: "scoring.v4" },
+    rubric_version: "scoring.v4", scoring_mode: "ai", status: "final", generated_at: "2026-10-12T00:00:00Z", method: "method-a", config: artifact.config,
     components: { Smethod: 2.5, Spayload: 1.5, Sexploit: 2, Schain: 1, Soutput: 4 }, Spayload_final: 1.5, Srun_final: 2.3,
     formula: { Smethod: .2, Spayload: .2, Sexploit: .3, Schain: .1, Soutput: .2 }, numerator: 3, denominator: 2,
     candidate_grades: [{ candidate_id: "candidate-a", score: 1 },{ candidate_id: "candidate-b", score: 2 }], component_evidence_refs: {} } };
+}
+function profileConfig() {
+  return { rubric_version: "scoring.v4", scoring_profile: { scenarios: {
+    "sqli:low": { sqli_union: { fit_predicates: [{ key: "expected_predicate" }] } },
+  } } };
 }
 describe("source-bound independent reviews", () => {
   it("accepts fractional finals and rejects each binding/arithmetic mismatch", async () => {
@@ -245,6 +251,79 @@ describe("source-bound independent reviews", () => {
     await write("reviews/stale.ai-verified.json",{ ...receipt, source_sha256: "0".repeat(64), generated_at: "2026-10-13T00:00:00Z" });
     const bundle = await resolveReviews(run,[]); expect(bundle.ai.status).toBe("final"); expect(bundle.ai.components?.Smethod).toBe(2.5);
     expect(bundle.human.status).toBe("missing"); expect(bundle.history).toHaveLength(2); expect(bundle.ai.SrunFinal).toBe(2.3);
+  });
+  it("accepts current metric records without changing receipt binding or arithmetic", async () => {
+    const { run, receipt } = await receiptFixture();
+    const metrics = {
+      schema_version: "research-metrics.v2", metrics_epoch: "scoring-policy.v4.2",
+      values: { payload_validity_rate: 0, first_choice_accuracy: null },
+      availability: { payload_validity_rate: true, first_choice_accuracy: false },
+      unavailable_reason: { payload_validity_rate: null, first_choice_accuracy: "no_model_decision" },
+      denominators: {
+        payload_validity_rate: { numerator: 0, denominator: 2, population: "model_candidates",
+          origin: "model", method: "method-a", visit_id: null, coverage: 0.5, definition_version: "v1" },
+        first_choice_accuracy: { numerator: null, denominator: null, population: "model_decisions",
+          origin: null, method: "method-a", visit_id: null, reason: "no_model_decision" },
+      },
+      definition_versions: { payload_validity_rate: "v1" },
+    };
+    expect(await receiptProblem({ ...receipt, metrics }, run)).toBeNull();
+    await write("reviews/current.ai-verified.json", { ...receipt, metrics });
+    const bundle = await resolveReviews(run, []);
+    expect(bundle.ai.status).toBe("final");
+    expect(bundle.ai.metrics).toEqual(metrics);
+    expect(await receiptProblem({ ...receipt, metrics: { ...metrics, denominators: {
+      ...metrics.denominators, payload_validity_rate: { ...metrics.denominators.payload_validity_rate, numerator: "0" },
+    } } }, run)).toBe("receipt_schema_or_rubric_invalid");
+    expect(await receiptProblem({ ...receipt, metrics, Srun_final: 0 }, run)).toBe("receipt_composite_arithmetic_mismatch");
+  });
+  it("keeps the frozen both selection when the artifact top-level scoring_mode is stale", async () => {
+    const config = { scoring_mode: "both", rubric_version: "scoring.v4" };
+    const { run, receipt } = await receiptFixture({ scoring_mode: "human", config });
+    expect(await receiptProblem(receipt, run)).toBeNull();
+    await write("reviews/stale-mode.ai-verified.json", receipt);
+    const bundle = await resolveReviews(run, []);
+    expect(bundle.ai.status).toBe("final");
+    expect(bundle.human.status).toBe("missing");
+  });
+  it("validates a supplied receipt selection against the frozen selection and accepts legacy absence", async () => {
+    const config = { scoring_mode: "both", rubric_version: "scoring.v4" };
+    const { run, receipt } = await receiptFixture({ scoring_mode: "human", config });
+    expect(await receiptProblem({ ...receipt, selection: "human" }, run)).toBe("receipt_workflow_mismatch");
+    expect(await receiptProblem({ ...receipt, selection: "both" }, run)).toBeNull();
+    expect(await receiptProblem(receipt, run)).toBeNull();
+  });
+  it("does not let a receipt selection override a legacy source top-level mode", async () => {
+    const { run, receipt } = await receiptFixture({ scoring_mode: "human" });
+    expect(await receiptProblem({ ...receipt, selection: "both" }, run)).toBe("receipt_workflow_mismatch");
+    expect(await receiptProblem({ ...receipt, scoring_mode: "human", selection: "human" }, run)).toBeNull();
+    expect(await receiptProblem({ ...receipt, scoring_mode: "human" }, run)).toBeNull();
+  });
+  it("rejects a final receipt whose only config delta is a scoring-profile predicate key", async () => {
+    const config = profileConfig(), tamperedConfig = profileConfig();
+    tamperedConfig.scoring_profile.scenarios["sqli:low"].sqli_union.fit_predicates[0].key = "forged_predicate";
+    const { run, receipt } = await receiptFixture({ config });
+    expect(await receiptProblem(receipt, run)).toBeNull();
+    const tampered = { ...receipt, config: tamperedConfig };
+    expect(await receiptProblem(tampered, run)).toBe("receipt_config_mismatch");
+    await write("reviews/tampered.ai-verified.json", tampered);
+    const bundle = await resolveReviews(run, []);
+    expect(bundle.ai.status).toBe("stale");
+    expect(bundle.history[0]).toMatchObject({ accepted: false, reason: "receipt_config_mismatch" });
+  });
+  it("rejects a newer pending status whose only config delta is a scoring-profile predicate key", async () => {
+    const config = profileConfig(), tamperedConfig = profileConfig();
+    tamperedConfig.scoring_profile.scenarios["sqli:low"].sqli_union.fit_predicates[0].key = "forged_predicate";
+    const { run } = await receiptFixture({ config });
+    const base = { artifact_type: "thesis_review_status", execution_id: run.executionId, source_path: run.primaryPath!, source_sha256: run.sha256!,
+      generated_at: "2026-10-12T00:00:00Z", rubric_version: "scoring.v4", method: "method-a", config,
+      workflows: { ai: { status: "pending", reason: "legit_pending" } } };
+    await write("reviews/valid.review-status.json", base);
+    expect((await resolveReviews(run, [])).ai).toMatchObject({ status: "pending", reason: "legit_pending" });
+    await write("reviews/tampered.review-status.json", { ...base, config: tamperedConfig,
+      generated_at: "2026-10-13T00:00:00Z", workflows: { ai: { status: "pending", reason: "forged_pending" } } });
+    clearReviewCache();
+    expect((await resolveReviews(run, [])).ai).toMatchObject({ status: "pending", reason: "legit_pending" });
   });
   it("joins legacy pending status only through an explicitly selected source-bound index and ledger", async () => {
     const { run,receipt } = await receiptFixture(); const ledger = await write("external/ledger.decisions.json",[]);

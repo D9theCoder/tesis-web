@@ -165,6 +165,18 @@ describe("source-bound review readiness", () => {
     expect(data.reviews.ai.states.stale).toBe(1); expect(data.reviews.ai.states.final).toBe(0);
     expect(data.reviews.human.states.pending).toBe(0);
   });
+  it("keeps AI eligibility and a valid AI final when the artifact top-level mode is stale", async () => {
+    const both = source("both-stale", { scoring_mode: "human" }), file = await save("both-stale.json", both);
+    const hash = createHash("sha256").update(await fs.readFile(file)).digest("hex");
+    await save("reviews/both-stale.ai-verified.json", { artifact_type: "thesis_score_receipt", execution_id: "both-stale", run_id: "nonunique",
+      source_path: file, source_sha256: hash, scoring_mode: "ai", rubric_version: "scoring.v4", status: "final", generated_at: "2026-10-17T00:00:00Z",
+      method: "saved-method", config: both.config, components: { Smethod: 2.5, Spayload: 1.5, Sexploit: 2, Schain: 1, Soutput: 4 },
+      Spayload_final: 1.5, Srun_final: 2.3, formula: { Smethod: .2, Spayload: .2, Sexploit: .3, Schain: .1, Soutput: .2 },
+      numerator: 3, denominator: 2, candidate_grades: [{ candidate_id: "a", score: 1 }, { candidate_id: "b", score: 2 }], component_evidence_refs: {} });
+    const data = await summary("scope=both-stale");
+    expect(data.reviews.human).toMatchObject({ eligible: 1, states: { missing: 1 } });
+    expect(data.reviews.ai).toMatchObject({ eligible: 1, states: { final: 1, not_selected: 0 } });
+  });
   it("limits receipt scans without reporting unscanned sources as missing or pending", async () => {
     const children = Array.from({ length: 101 }, (_,i) => source(`bounded-${i}`, { final_state: {} }));
     await save("matrix.json", { schema_version: "stage8.v1", execution_id: "matrix-a", runs: children });

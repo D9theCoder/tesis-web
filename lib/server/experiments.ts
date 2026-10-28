@@ -195,7 +195,7 @@ export async function experimentOverview(scope?: string, previous?: string, opti
   }
   for (const [i, member] of members.entries()) {
     const summary = summariseRun(member), saved = mergeArtifact(member.raw ?? {});
-    const mode = text(saved.scoring_mode ?? record(saved.config).scoring_mode);
+    const mode = text(record(saved.config).scoring_mode) ?? text(saved.scoring_mode);
     if (!member.raw) { reviews.complete = false; attention("missing", member, ["primary_unavailable"]); }
     if (!summary.executionStatus || !summary.securityOutcome) attention("attribution", member, [!summary.executionStatus ? "execution_status_unknown" : "", !summary.securityOutcome ? "security_outcome_unknown" : ""].filter(Boolean));
     const diagnostics = member.diagnostics.filter(d => d !== "embedded_child_source" && d !== "primary_unavailable");
