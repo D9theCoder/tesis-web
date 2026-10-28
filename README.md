@@ -72,6 +72,8 @@ button links to the detailed results page.
   coordinate count. Review resolves the request through the real TESIS loader
   and is the only step with **Start**, which saves the reviewed document to the
   web profile and launches `python -m tesis run --headless --mode … --json`.
+  The runtime's `llm_template` choice is shown as **Template**; its strict
+  candidate and control policy is enforced by TESIS, not by the web UI.
 - **Runs** — supervised jobs with status, elapsed time, log tail, artifact and
   execution identity, **Cancel run** (graceful `SIGINT`, which the runtime turns
   into a cancelled artifact and terminal descriptor) and an explicit
@@ -198,7 +200,10 @@ Which file is authoritative:
 The profile is seeded from `TESIS_ROOT/config.yaml` on first use so existing
 settings carry over. `${VAR}` references are resolved from the checkout `.env`,
 so credentials that already work in the TUI keep working here without being
-copied.
+copied. File-backed `scoring_oracles` and `scoring_profile` references retain
+their source directory when the profile is seeded or explicitly synced back.
+The bridge relocates relative paths while preserving comments, inline evidence
+and environment placeholders; it leaves existing Web profiles intact.
 
 Both pages render the profile on the server, so the launch form and the runtime
 form are in the first paint rather than a placeholder that grows when the bridge
@@ -424,6 +429,10 @@ ID/path/hash/timestamp metadata. Finals require a source-bound scoring.v4 receip
 correct method/config/workflow, finite components, distinct candidate grades,
 and valid mean/composite arithmetic. Eligible finals are ordered by stored
 timestamp with a deterministic path tie-breaker. Stale receipts remain inspectable.
+The frozen `config.scoring_mode` owns review selection; legacy source-level
+values are used only when the config omits it. A receipt's declared selection
+cannot override either source. Receipt and pending-status configs are compared
+exactly as persisted, without applying display redaction to evidence identity.
 
 The UI separates execution from security outcome, planned/represented/completed/
 confirmed coverage, and provisional scoring.v2 from Human/AI finals. Missing
@@ -437,6 +446,11 @@ rejects old responses; journal identity and cursor checkpoints reset replay when
 a file is replaced, truncated or rewritten. Oversized journal lines are reported:
 complete records are skipped with bounded memory so later events remain reachable;
 unterminated records retain their byte cursor until the writer completes them.
+
+Final review metrics retain their recorded population, numerator, denominator,
+coverage and unavailable reason. Current `research-metrics.v2` records and
+historical numeric denominator entries are both displayed without substituting
+provisional runtime metrics.
 
 ## Safety
 
@@ -638,3 +652,20 @@ are not a claim of current historical-cohort parity.
 TESIS `workflow.v2` artifacts and `graph.state` events expose a method-visit budget, stop policy, method coverage, and stop reason. The live coordinate panel and completed execution summary display these values separately from matrix-coordinate coverage. Each preparation reserves one method visit; routing through the orchestrator, chaining, or fallback uses the same budget. An infeasible preparation consumes its reserved visit without claiming method execution or coverage.
 
 The observer validates this optional contract and continues accepting older artifacts. Legacy iteration counts retain their original label. Active candidate IDs and preparation failures remain inspectable as evidence; historical validation receipts retain their visit ownership. Checkpoint thread IDs are internal identity metadata and do not change the observer's execution or source binding.
+
+### AKG and oracle compatibility (TESIS `ad53a15` → `ed4faf9`)
+
+The connected historical `akg_path` and the active branch are distinct. Web
+reads routed branches from `akg.route.selected.data.chain` and optional
+`current_chain` snapshots. The coordinate panel and trajectory show the active
+branch, while the graph retains its recorded traversal and highlights the active
+branch destination. Repeated historical snapshots do not reset that destination.
+
+The evidence ledger includes frozen oracle documents, positive and negative
+attestations, replay records, controls and causal dependencies. Exact
+`oracle_ref`, `negative_oracle_ref` and dependency references connect the records;
+source IDs, origins and hashes remain inspectable. Pending controls and
+`not_dependent` outcomes retain their stored reasons. Web displays these source
+records without evaluating attestations, changing scores or deriving a security
+outcome from missing signals. Source-bound TESIS outcomes and review receipts
+remain authoritative.
