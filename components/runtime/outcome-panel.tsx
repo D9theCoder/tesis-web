@@ -225,7 +225,7 @@ export function OutcomePanel({ state }: { state: LiveRunState }) {
           </div>
           <div className="outcome-budget-row">
             <div className="outcome-budget-heading">
-              <span>Iterations</span>
+              <span>{state.workflow ? "Method visits" : "Iterations"}</span>
               <strong>
                 {iterationLimitSet
                   ? `${fmtNumber(iterationUsed)} / ${fmtNumber(metrics.maxIterations)}`
@@ -245,7 +245,7 @@ export function OutcomePanel({ state }: { state: LiveRunState }) {
             <div className="outcome-budget-heading">
               <span>Guardrail rate</span>
               <strong>
-                {fmtPercent(guardrailRate, 1)} · {fmtNumber(metrics.guardrailCount)} / {fmtNumber(metrics.iterationCount)} iterations
+                {fmtPercent(guardrailRate, 1)} · {fmtNumber(metrics.guardrailCount)} / {fmtNumber(metrics.iterationCount)} {state.workflow ? "method visits" : "iterations"}
               </strong>
             </div>
             {metrics.iterationCount > 0 && (

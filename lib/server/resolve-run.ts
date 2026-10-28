@@ -18,7 +18,7 @@ export interface Catalog { runs: Map<string, ResolvedRun[]>; diagnostics: string
 export class RetrievalError extends Error {
   constructor(message: string, public status = 409) { super(message); }
 }
-const SIDECAR = /\.(rich|failure|events|decisions|review-status|human-verified|ai-verified|evaluator|review-history)\.json$/;
+const SIDECAR = /\.(rich|failure|events|decisions|review-status|human-verified|ai-verified|evaluator|review-history|resume)\.json$/;
 const EXCLUDED_DIRS = new Set(["node_modules", ".git", ".venv", "reviews"]);
 export async function scanJson(roots: Root[], diagnostics: string[], skipReviewDirs = false) {
   const files: { path: string; root: Root }[] = [], visited = new Set<string>();

@@ -2,7 +2,7 @@ import {
   resultBundleSchema, artifactSchema, historicalAnalysisSchema, normalizedResultSchema,
   type CoordinateSummary, type EvidenceRow, type NormalizedResult, type ScoreDimension, type ScoreRow,
 } from "@/lib/schemas";
-import { canonicalStatus, coverage, finite, mergeArtifact, metricReading, record, text } from "@/lib/artifact-contract";
+import { canonicalStatus, coverage, finite, mergeArtifact, metricReading, record, text, workflowProgress } from "@/lib/artifact-contract";
 import { extractText, truncate } from "@/lib/formatters";
 
 export function compositeFormula() { return "Srun = 0.20·Smethod + 0.20·Spayload + 0.30·Sexploit + 0.10·Schain + 0.20·Soutput"; }
@@ -100,7 +100,7 @@ function references(value: unknown, out = new Set<string>()): Set<string> {
 export function buildEvidenceRows(m: Record<string, unknown>): EvidenceRow[] {
   const rows: EvidenceRow[] = [], joins = new Map<string, Set<string>>(), rowRefs = new Map<string, Set<string>>();
   const fields = ["execution_log", "request_evidence", "method_execution_inputs", "payload_validation_results", "response_evidence", "timing_evidence",
-    "verifier_history", "verifier_decision", "candidate_dispositions", "payload_candidates", "chain_history", "scoring_decisions", "llm_performance", "recon_events",
+    "verifier_history", "verifier_decision", "candidate_dispositions", "payload_candidates", "active_payload_candidates", "preparation_failures", "chain_history", "scoring_decisions", "llm_performance", "recon_events",
     "guardrail_activations", "containment_events", "invalid_json_events", "fallback_events", "payload_guardrail_activations"];
   const identityOccurrences = new Map<string, number>();
   for (const field of fields) for (const { entry: e, ref } of entries(m[field], `#/${field}`)) {
@@ -168,6 +168,7 @@ export function normalizeResult(rawJson: unknown, sourceMode?: string): Normaliz
     }
   }
   const result: NormalizedResult = {
+    workflow: workflowProgress(m),
     executionId, runId: text(m.run_id), mode: isMatrix ? "matrix" : "single-run", status: text(m.status) ?? "unknown", ...canonicalStatus(m),
     matrixExecutionId: bundle?.matrixExecutionId ?? text(m.matrix_execution_id), repeatIndex: finite(m.repeat_index ?? config.repeat_index),
     source: bundle?.source ?? null, reviews: bundle?.reviews ?? null, diagnostics: bundle?.diagnostics ?? [],

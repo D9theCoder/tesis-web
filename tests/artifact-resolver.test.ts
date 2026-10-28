@@ -50,6 +50,7 @@ describe("configured exact artifact catalog", () => {
     await write("matrix/experiment.manifest.json", { artifact_type: "experiment_manifest", mode: "matrix", aggregate: { execution_id: "matrix-a", artifact: "matrix.json" }, runs: [{ execution_id: "child-a", artifact: "child/a.json", index: 1, experiment_condition: "condition-a", target_method: "method-a" }] });
     await write("dated/runtime.json", { schema_version: "runtime-descriptor.v1", execution_id: "single-a", status: "finished", mode: "single-run" });
     await write("dated/single-a.rich.json", primary("fake-rich"));
+    await write("dated/single-a.resume.json", primary("single-a"));
     await write("dated/audit.json", { artifact_type: "audit", execution_id: "fake-audit", config: {}, status: "final" });
     const catalog = await getCatalog(); expect([...catalog.runs.keys()].sort()).toEqual(["child-a","child-b","matrix-a","old-id","single-a"]);
     const child = await resolveCoordinate("matrix-a","child-a"); expect(child?.dir).toBe(path.join(root,"matrix/child"));

@@ -34,6 +34,13 @@ export function ResultsSummary({
           <SummaryValue label="Method">{result.selectedMethod ?? result.targetMethod ?? "Unavailable"}</SummaryValue>
           <SummaryValue label="Provider and model">{[fmtProvider(result.provider), result.model].filter(Boolean).join(" · ") || "Unavailable"}</SummaryValue>
           <SummaryValue label="Payload mode">{result.payloadMode ? readable(result.payloadMode) : "Unavailable"}</SummaryValue>
+          {result.workflow && <>
+            <SummaryValue label="Stop policy">{readable(result.workflow.stop_policy)}</SummaryValue>
+            <SummaryValue label="Method visits">{result.workflow.iteration_count} / {result.workflow.max_iterations}</SummaryValue>
+            <SummaryValue label="Method coverage">{result.workflow.method_coverage.attempted} / {result.workflow.method_coverage.total} ({Math.round(result.workflow.method_coverage.ratio * 100)}%)</SummaryValue>
+            {result.workflow.stop_policy === "coverage" && <SummaryValue label="Coverage target">{Math.round(result.workflow.coverage_target * 100)}%</SummaryValue>}
+            <SummaryValue label="Stop reason">{result.workflow.stop_reason ? readable(result.workflow.stop_reason) : "Not recorded"}</SummaryValue>
+          </>}
           <SummaryValue label="Repeat">{result.repeatIndex == null ? "Unavailable" : fmtNumber(result.repeatIndex)}</SummaryValue>
         </SummarySection>
 

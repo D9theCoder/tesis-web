@@ -255,6 +255,7 @@ export interface CoordinateSummary {
 }
 
 export interface NormalizedResult {
+  workflow?: WorkflowProgress | null;
   executionStatus: ExecutionStatus | null;
   securityOutcome: SecurityOutcome | null;
   executionReason: StatusReason | null;
@@ -423,7 +424,26 @@ export const resultBundleSchema = z.object({
   historicalAnalysis: historicalAnalysisSchema.nullable(), matrixExecutionId: z.string().nullable(),
   coordinateIndex: z.number().int().nonnegative().nullable(),
 });
+export const workflowProgressSchema = z.object({
+  protocol_version: z.literal("workflow.v2"), iteration_unit: z.literal("method_visit"),
+  iteration_count: z.number().int().nonnegative(), max_iterations: z.number().int().positive(),
+  stop_policy: z.enum(["impact", "coverage"]), coverage_target: z.number().min(0).max(1),
+  method_coverage: z.object({ attempted: z.number().int().nonnegative(), total: z.number().int().nonnegative(),
+    ratio: z.number().min(0).max(1), methods: z.array(z.string()) }),
+  stop_reason: z.string().nullable(),
+}).superRefine((value, context) => {
+  const coverage = value.method_coverage;
+  if (value.iteration_count > value.max_iterations || coverage.attempted > coverage.total
+      || new Set(coverage.methods).size !== coverage.attempted
+      || coverage.methods.length !== coverage.attempted
+      || Math.abs(coverage.ratio - (coverage.total ? coverage.attempted / coverage.total : 0)) > 1e-9) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Inconsistent workflow progress" });
+  }
+});
+export type WorkflowProgress = z.infer<typeof workflowProgressSchema>;
+
 export const normalizedResultSchema = z.object({
+  workflow: workflowProgressSchema.nullable().optional(),
   executionId: z.string(), runId: z.string().nullable(), mode: z.enum(["single-run", "matrix"]), status: z.string(),
   executionStatus: executionStatusSchema.nullable(), securityOutcome: securityOutcomeSchema.nullable(),
   executionReason: reasonSchema.nullable(), securityOutcomeReason: reasonSchema.nullable(),
@@ -478,6 +498,7 @@ export interface OutcomeMetrics {
 }
 
 export interface LiveRunState {
+  workflow: WorkflowProgress | null;
   children: Record<string, LiveRunState>;
   executionStatus: ExecutionStatus | null;
   securityOutcome: SecurityOutcome | null;

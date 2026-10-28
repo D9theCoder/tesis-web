@@ -127,7 +127,12 @@ export function CoordinatePanel({ state }: { state: LiveRunState }) {
                 )
               }
             />
-            <MetadataField label="Iteration" value={state.metrics.iterationCount} mono />
+            <MetadataField label={state.workflow ? "Method visits" : "Iteration"} value={state.metrics.iterationCount} mono />
+            {state.workflow && <>
+              <MetadataField label="Stop policy" value={state.workflow.stop_policy} />
+              <MetadataField label="Method coverage" value={`${state.workflow.method_coverage.attempted} / ${state.workflow.method_coverage.total}`} />
+              <MetadataField label="Stop reason" value={state.workflow.stop_reason?.replace(/_/g, " ") ?? "Pending"} />
+            </>}
           </dl>
           <div className="coordinate-path">
             <h4>

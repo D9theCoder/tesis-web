@@ -632,3 +632,9 @@ switching, and loading/error/empty distinctions. Fixture-gated checks skip unles
 Historical 2026-10-12 non-browser acceptance records remain under
 `results/validation/artifact-retrieval-2026-10-12/implementation.md`; those records
 are not a claim of current historical-cohort parity.
+
+### Workflow progress compatibility
+
+TESIS `workflow.v2` artifacts and `graph.state` events expose a method-visit budget, stop policy, method coverage, and stop reason. The live coordinate panel and completed execution summary display these values separately from matrix-coordinate coverage. Each preparation reserves one method visit; routing through the orchestrator, chaining, or fallback uses the same budget. An infeasible preparation consumes its reserved visit without claiming method execution or coverage.
+
+The observer validates this optional contract and continues accepting older artifacts. Legacy iteration counts retain their original label. Active candidate IDs and preparation failures remain inspectable as evidence; historical validation receipts retain their visit ownership. Checkpoint thread IDs are internal identity metadata and do not change the observer's execution or source binding.

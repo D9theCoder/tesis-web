@@ -1,5 +1,5 @@
 import {
-  canonicalStatusSchema, executionStatusSchema, securityOutcomeSchema, reasonSchema,
+  canonicalStatusSchema, executionStatusSchema, securityOutcomeSchema, reasonSchema, workflowProgressSchema,
   type Coverage, type MetricReading,
 } from "@/lib/schemas";
 
@@ -14,6 +14,12 @@ export function text(value: unknown): string | null {
 }
 export function mergeArtifact(raw: Record<string, unknown>) {
   return { ...record(raw.final_state ?? raw.state), ...raw };
+}
+export function workflowProgress(raw: Record<string, unknown>) {
+  const merged = mergeArtifact(raw);
+  const value = merged.workflow ?? record(record(merged.report).summary).workflow ?? record(merged.summary).workflow;
+  const parsed = workflowProgressSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 export function canonicalStatus(raw: Record<string, unknown>) {
   const m = mergeArtifact(raw);

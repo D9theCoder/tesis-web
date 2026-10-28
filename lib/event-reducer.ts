@@ -5,7 +5,7 @@ import type {
   RunConnectionStatus,
   RunEvent,
 } from "@/lib/schemas";
-import { canonicalStatus } from "@/lib/artifact-contract";
+import { canonicalStatus, workflowProgress } from "@/lib/artifact-contract";
 import { asNum, asStr, extractText, normalizeRunStatus } from "@/lib/formatters";
 
 /**
@@ -116,7 +116,7 @@ function emptyMetrics(): OutcomeMetrics {
 
 export function initialState(executionId?: string | null): LiveRunState {
   return {
-    children: {}, executionStatus: null, securityOutcome: null, executionReason: null, securityOutcomeReason: null, journalIdentity: null, diagnostics: [],
+    workflow: null, children: {}, executionStatus: null, securityOutcome: null, executionReason: null, securityOutcomeReason: null, journalIdentity: null, diagnostics: [],
     cursor: 0,
     lastPolledAt: 0,
     status: "waiting",
@@ -277,6 +277,11 @@ export function reduceEvents(
     const data = event.data ?? {};
     const type = event.event_type.startsWith("matrix.run.") ? event.event_type.replace("matrix.run.", "run.") : event.event_type;
     const ts = event.timestamp ?? 0;
+    const workflow = workflowProgress(data);
+    if (workflow && (!next.workflow || workflow.iteration_count >= next.workflow.iteration_count)) {
+      next.workflow = { ...workflow, stop_reason: workflow.stop_reason ?? next.workflow?.stop_reason ?? null };
+      next.metrics = updateSnapshotCounters(next.metrics, workflow);
+    }
 
     // --- node / method / graph traversal ---
     if (type === "run.started" || type === "matrix.started") {

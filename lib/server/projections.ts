@@ -2,7 +2,7 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { executionStatusSchema, securityOutcomeSchema, reasonSchema } from "@/lib/schemas";
+import { executionStatusSchema, securityOutcomeSchema, reasonSchema, workflowProgressSchema } from "@/lib/schemas";
 import { record } from "@/lib/artifact-contract";
 import { artifactRoots, reviewRoots, containedPath, readSource, type Root } from "@/lib/server/fs-util";
 import type { Catalog } from "@/lib/server/resolve-run";
@@ -14,6 +14,7 @@ export const observerProjectionSchema = z.object({
   runs: z.array(z.object({ identity: z.object({ execution_id: z.string().nullable(), matrix_execution_id: z.string().nullable(), coordinate_index: z.number().int().nonnegative().nullable() }).passthrough(),
     source: projectionBindingSchema, execution: z.object({ status: executionStatusSchema.nullable(), reason: reasonSchema.nullable() }).passthrough(),
     security: z.object({ outcome: securityOutcomeSchema.nullable(), reason: reasonSchema.nullable(), historical_analysis: z.record(z.unknown()).nullable().optional() }),
+    workflow: workflowProgressSchema.nullable().optional(),
     runtime_scores: z.record(z.unknown()), thesis_review: z.record(z.unknown()), metrics: z.record(z.unknown()),
     diagnostics: z.array(z.record(z.unknown())), ambiguous: z.boolean(), detail: z.record(z.unknown()),
   })),
@@ -55,7 +56,7 @@ export async function applyProjections(catalog: Catalog) {
         if (matched.has(run.executionId)) throw new Error("projection_duplicate_identity");
         matched.add(run.executionId);
         if (run.matrixExecutionId !== row.identity.matrix_execution_id || run.coordinateIndex !== row.identity.coordinate_index) throw new Error("projection_membership_mismatch");
-        run.raw = { ...run.raw!, execution_status: row.execution.status, execution_reason: row.execution.reason,
+        run.raw = { ...run.raw!, ...(row.workflow !== undefined ? { workflow: row.workflow } : {}), execution_status: row.execution.status, execution_reason: row.execution.reason,
           security_outcome: row.security.outcome, security_outcome_reason: row.security.reason,
           observer_projection: { path: filename, sha256: source.sha256, epoch }, observer_runtime_scores: row.runtime_scores,
           observer_metrics: row.metrics };
