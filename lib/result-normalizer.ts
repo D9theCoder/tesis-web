@@ -91,7 +91,7 @@ const ID_FIELDS = ["evidence_id", "event_id", "request_id", "validation_id", "ve
 function references(value: unknown, out = new Set<string>()): Set<string> {
   if (Array.isArray(value)) value.forEach(v => references(v,out));
   else if (value && typeof value === "object") for (const [k,v] of Object.entries(value)) {
-    if ((ID_FIELDS.includes(k) || /(?:evidence|event|request|response|validation|dependency)_refs?$/.test(k)) && typeof v === "string") out.add(v);
+    if ((ID_FIELDS.includes(k) || /(?:evidence|event|request|response|validation|dependency|oracle|negative_oracle)_refs?$/.test(k)) && typeof v === "string") out.add(v);
     if (k.endsWith("_refs") && Array.isArray(v)) v.forEach(item => { if (typeof item === "string") out.add(item); });
     if (v && typeof v === "object") references(v,out);
   }
@@ -103,7 +103,21 @@ export function buildEvidenceRows(m: Record<string, unknown>): EvidenceRow[] {
     "verifier_history", "verifier_decision", "candidate_dispositions", "payload_candidates", "active_payload_candidates", "preparation_failures", "chain_history", "scoring_decisions", "llm_performance", "recon_events",
     "guardrail_activations", "containment_events", "invalid_json_events", "fallback_events", "payload_guardrail_activations"];
   const identityOccurrences = new Map<string, number>();
-  for (const field of fields) for (const { entry: e, ref } of entries(m[field], `#/${field}`)) {
+  const sources: { field: string; entry: Record<string, unknown>; ref: string;
+    oracleSource?: { sourceId: string | null; origin: string | null; sha256: string | null } }[] =
+    fields.flatMap(field => entries(m[field], `#/${field}`).map(item => ({ field, ...item })));
+  const oracles = record(m.config).scoring_oracles;
+  if (Array.isArray(oracles)) oracles.forEach((value, index) => {
+    const source = record(value), document = record(source.document);
+    if (!Object.keys(document).length) return;
+    const ref = `#/config/scoring_oracles/${index}/document`;
+    const oracleSource = { sourceId: text(source.source_id), origin: text(source.origin), sha256: text(source.sha256) };
+    sources.push({ field: "scoring_oracles", entry: document, ref, oracleSource });
+    for (const field of ["attestations", "negative_attestations", "controls", "dependency_controls", "dependencies", "candidate_replay", "requests", "policy_evidence"]) {
+      for (const item of entries(document[field], `${ref}/${field}`)) sources.push({ field, ...item, oracleSource });
+    }
+  });
+  for (const { field, entry: e, ref, oracleSource } of sources) {
     const data = record(e.data), persistent = text(e.evidence_id ?? e.event_id ?? e.verifier_id ?? e.validation_id ?? e.request_id ?? e.call_id ?? e.decision_id);
     const base = persistent ?? `${field}:${stableId(e)}`;
     const occurrence = identityOccurrences.get(base) ?? 0;
@@ -111,14 +125,15 @@ export function buildEvidenceRows(m: Record<string, unknown>): EvidenceRow[] {
     const id = occurrence ? `${base}:${occurrence}` : base;
     const ts = epoch(e.timestamp ?? e.created_at ?? e.started_at ?? data.timestamp);
     const phase = text(e.event_type) ?? field;
-    const decision = text(e.decision ?? e.verification_reason ?? record(e.verifier_decision).decision);
+    const decision = text(e.decision ?? e.verification_reason ?? record(e.verifier_decision).decision ?? (oracleSource ? e.outcome : null));
     const isResponse = field === "response_evidence", isSafety = /guardrail|containment|invalid_json|fallback/.test(field);
     const transport = e.transport_ok === true ? "ok" : e.transport_ok === false ? "error" : "unknown";
     const signal = e.signal_detected === true ? "detected" : e.signal_detected === false ? "absent" : "unknown";
     const result = isResponse ? `transport: ${transport} · signal: ${signal} · verifier: ${decision ?? "unknown"}` :
-      text(e.message ?? e.reason ?? e.status ?? e.result ?? e.decision) ?? phase;
+      text(e.message ?? e.reason ?? e.status ?? e.result ?? e.decision ?? e.outcome) ?? phase;
     const refs = references(e);
-    refs.add(ref); refs.add(ref.replace(/^#\//,"#/final_state/"));
+    refs.add(ref);
+    if (!oracleSource) refs.add(ref.replace(/^#\//,"#/final_state/"));
     if (persistent) refs.add(persistent);
     rowRefs.set(id,refs);
     for (const reference of refs) { const matches = joins.get(reference) ?? new Set(); matches.add(id); joins.set(reference,matches); }
@@ -128,7 +143,7 @@ export function buildEvidenceRows(m: Record<string, unknown>): EvidenceRow[] {
       candidate: e.candidate ?? e.payload ?? e.candidate_id ?? null, result,
       status: isSafety ? "safety" : decision === "confirmed" ? "success" : isResponse && e.transport_ok === false ? "failure" : field === "llm_performance" ? "model" : "info",
       signal: isResponse ? signal : decision, safety: isSafety ? "high" : "low",
-      details: { ...e, sourceRef: ref, responseExcerpt: e.response_excerpt ?? e.response_snippet ?? null,
+      details: { ...e, ...(oracleSource ? { oracleSource } : {}), sourceRef: ref, responseExcerpt: e.response_excerpt ?? e.response_snippet ?? null,
         transportStatus: isResponse ? transport : null, verifierOutcome: decision }, relatedEventIds: [] });
   }
   for (const row of rows) row.relatedEventIds = [...new Set([...rowRefs.get(row.id) ?? []].flatMap(ref => [...joins.get(ref) ?? []]))].filter(id => id !== row.id);

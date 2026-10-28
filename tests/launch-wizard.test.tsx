@@ -169,7 +169,7 @@ const schema: ControlSchema = {
       category: "matrix",
       kind: "multi_select",
       valueType: "list",
-      choices: ["static_only", "hybrid"],
+      choices: ["static_only", "hybrid", "llm_template"],
       value: ["static_only"],
       secret: false,
       multiple: true,
@@ -210,6 +210,16 @@ describe("LaunchWizard", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Matrix$/ }));
     // The footer badge tracks the axes without leaving the Scope step.
     expect(screen.getByText("1 coordinates")).toBeInTheDocument();
+  });
+
+  it("lets the operator select the Template payload mode", () => {
+    render(<LaunchWizard schema={schema} onStarted={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Matrix$/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Step 2 of 4: Coordinates" }));
+    const template = screen.getByRole("checkbox", { name: "Template" });
+    fireEvent.click(template);
+    expect(template).toBeChecked();
+    expect(screen.getByRole("status", { name: "Matrix coordinate preview" })).toHaveTextContent("2 coordinates");
   });
 
   it("resolves the reviewed request and starts it with the frozen overrides", async () => {

@@ -306,7 +306,7 @@ const REASONING_SUMMARY_KEYS = ["reasoning_summary", "reasoningSummary"];
 const REASONING_SUMMARY_SOURCE_KEYS = ["reasoning_summary_source", "reasoningSummarySource"];
 const MODEL_KEYS = ["model", "model_name", "modelName", "model_id", "modelId"];
 const TOOL_KEYS = ["tool", "tool_name", "toolName"];
-const PATH_KEYS = ["akg_path", "akgPath"];
+const PATH_KEYS = ["current_chain", "currentChain", "chain", "akg_path", "akgPath"];
 
 function recordOf(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value)

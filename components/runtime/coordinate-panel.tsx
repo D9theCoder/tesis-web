@@ -39,7 +39,7 @@ function MetadataField({
 
 export function CoordinatePanel({ state }: { state: LiveRunState }) {
   const connection = CONNECTION_STYLE[state.connection];
-  const path = state.akgPath.length ? state.akgPath : state.chain;
+  const path = state.chain.length ? state.chain : state.akgPath;
 
   return (
     <div className="runtime-panel">

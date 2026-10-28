@@ -11,6 +11,7 @@ unexpected crash; handled failures are reported as ``{"ok": false, "error": …}
 
 Commands
 --------
+seed-profile Copy checkout settings while preserving file-backed scoring inputs.
 schema    Effective field specs, choices, masked YAML, and resolved summary.
 validate  Field validation plus a full config resolution of the supplied YAML.
 save      Restore masked secrets and atomically persist config (+ API keys).
@@ -49,6 +50,7 @@ from tesis.config_loader import (  # noqa: E402
     load_yaml_config,
     load_and_resolve_config,
     save_yaml_config,
+    resolve_env_references,
 )
 from tesis.doctor import sanitize_config_error  # noqa: E402
 from tesis.provider_settings import (  # noqa: E402
@@ -647,6 +649,37 @@ def command_save(request: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _relocate_scoring_files(payload: dict[str, Any], source: Path) -> dict[str, Any]:
+    """Keep TESIS file-backed scoring inputs bound when moving a YAML document."""
+    relocated = copy.deepcopy(payload)
+    for key in ("scoring_profile", "scoring_oracles"):
+        value = relocated.get(key)
+        if not isinstance(value, str):
+            continue
+        try:
+            expanded = resolve_env_references({"path": value})["path"]
+        except ConfigError:
+            # Keep unresolved placeholders editable; the loader reports them
+            # during validation, just as it does for the original document.
+            continue
+        if not Path(expanded).is_absolute():
+            relocated[key] = str(source.resolve().parent / value)
+    return relocated
+
+
+def command_seed_profile(request: dict[str, Any]) -> dict[str, Any]:
+    """Seed a private web profile without moving its relative scoring inputs."""
+    target = _state_config_path()
+    if target.exists():
+        return {"ok": True, "seeded": False}
+    source = _source_config_path()
+    payload = _relocate_scoring_files(load_yaml_config(source), source)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with open(target, "x", encoding="utf-8", opener=lambda name, flags: os.open(name, flags, 0o600)) as output:
+        output.write(dump_yaml_config(payload))
+    return {"ok": True, "seeded": True}
+
+
 def command_write_tesis_config(request: dict[str, Any]) -> dict[str, Any]:
     """Mirror the web profile into the TESIS checkout as an explicit action."""
 
@@ -657,7 +690,7 @@ def command_write_tesis_config(request: dict[str, Any]) -> dict[str, Any]:
     try:
         backup = target.with_suffix(".yaml.web-backup")
         backup.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
-        save_provider_settings(target, copy.deepcopy(payload), {})
+        save_provider_settings(target, _relocate_scoring_files(payload, _state_config_path()), {})
     except Exception as exc:
         return {"ok": True, "written": False, "error": sanitize_config_error(exc)}
     return {"ok": True, "written": True, "path": str(target), "backup": str(backup)}
@@ -1025,6 +1058,7 @@ def _stream_codex_chat(model: Any, messages: list[Any], effort: str | None, emit
 
 
 COMMANDS = {
+    "seed-profile": command_seed_profile,
     "schema": command_schema,
     "validate": command_validate,
     "save": command_save,

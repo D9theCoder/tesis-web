@@ -129,14 +129,21 @@ export async function ensureProfile(): Promise<string> {
   } catch {
     /* Seed below. */
   }
-  let seed = SEED_CONFIG;
+  let sourceAvailable = false;
   try {
-    seed = await fs.readFile(sourceConfigPath(), "utf8");
+    await fs.access(sourceConfigPath());
+    sourceAvailable = true;
   } catch {
     /* The checkout has no config.yaml; fall back to the minimal document. */
   }
+  if (sourceAvailable) {
+    // The Python bridge owns TESIS configuration semantics, including relative
+    // scoring JSON paths that must keep their meaning outside the checkout.
+    await runBridge("seed-profile");
+    return target;
+  }
   await fs.mkdir(path.dirname(target), { recursive: true });
-  await fs.writeFile(target, seed, { encoding: "utf8", mode: 0o600 });
+  await fs.writeFile(target, SEED_CONFIG, { encoding: "utf8", mode: 0o600 });
   return target;
 }
 

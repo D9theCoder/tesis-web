@@ -19,6 +19,7 @@ export const PAYLOAD_MODE_LABELS: Record<string, string> = {
   static_only: "Static only",
   hybrid: "Hybrid",
   llm_mutation_only: "LLM mutation only",
+  llm_template: "Template",
 };
 
 export const CONDITION_LABELS: Record<string, string> = {

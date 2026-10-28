@@ -17,7 +17,8 @@ test("final review metrics retain origin, zero and unavailable reasons", async (
   const metrics = page.getByRole("region", { name: "AI review metrics" });
   await expect(metrics.getByText("no_preregistered_optimal_method_ranking")).toBeVisible();
   await expect(metrics.locator("dl > div").filter({ hasText: "Full Exploit Rate" })).toContainText("0");
-  await expect(metrics.locator("dl > div").filter({ hasText: "Returned Llm Outputs" })).toContainText("4");
+  await expect(metrics.locator("dl > div").filter({ hasText: "Full Exploit Rate" })).toContainText("Numerator / denominator: 0 / 2");
+  await expect(metrics.locator("dl > div").filter({ hasText: "Full Exploit Rate" })).toContainText("Coverage: 50.00%");
   await page.getByRole("button", { name: "Human review", exact: true }).click();
   await expect(page.getByRole("region", { name: "Human review metrics" })).toContainText("No metric vector");
   await expect(page.getByRole("region", { name: "AI review metrics" })).toHaveCount(0);

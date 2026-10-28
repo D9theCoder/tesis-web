@@ -21,6 +21,7 @@ import { CoordinateIndex } from "@/components/results/coordinate-index";
 import { EvidenceDrawer } from "@/components/results/evidence-drawer";
 import { CopyButton } from "@/components/ui/copy-button";
 import { fmtProvider, fmtDuration, fmtIsoFromStr, normalizeRunStatus, prettyJson } from "@/lib/formatters";
+import { CONDITION_LABELS, LEVEL_LABELS, PAYLOAD_MODE_LABELS, SURFACE_LABELS, labelFor } from "@/lib/control-options";
 import { ResultsSummary } from "@/components/results/status-details";
 import { normalizeResult } from "@/lib/result-normalizer";
 import { evidenceForReference } from "@/lib/evidence-ref";
@@ -167,9 +168,9 @@ function ResultsExplorer({ executionId }: { executionId: string }) {
               {header.taskResult && <Badge variant="outline">Legacy task · {readable(header.taskResult)}</Badge>}
             </div>
             <p className="page-description">
-              {header.experimentCondition || "Execution record"}
-              {header.surface && <> · {readable(header.surface)}{header.securityLevel ? ` · ${readable(header.securityLevel)}` : ""}</>}
-              {header.payloadMode && <> · {readable(header.payloadMode)}</>}
+              {header.experimentCondition ? labelFor(CONDITION_LABELS, header.experimentCondition) : "Execution record"}
+              {header.surface && <> · {labelFor(SURFACE_LABELS, header.surface)}{header.securityLevel ? ` · ${labelFor(LEVEL_LABELS, header.securityLevel)}` : ""}</>}
+              {header.payloadMode && <> · {labelFor(PAYLOAD_MODE_LABELS, header.payloadMode)}</>}
               {(header.selectedMethod ?? header.targetMethod) && <> · Method {header.selectedMethod ?? header.targetMethod}</>}
             </p>
             <div className="execution-identifier"><span>Execution ID</span> <code>execution {header.executionId}</code><CopyButton value={header.executionId} label="execution ID" /></div>
@@ -306,10 +307,7 @@ function MatrixTab({
           result={result}
           coordinateMode
           selectedCoordinateId={selectedCoordinateId}
-          onPickCoordinate={(_executionId, runId) => {
-            const coordinate = result.coordinates.find((candidate) => candidate.executionId === runId);
-            if (coordinate) onPick(coordinate);
-          }}
+          onPickCoordinate={onPick}
         />
       </CardContent>
     </Card>

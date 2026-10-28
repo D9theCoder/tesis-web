@@ -9,6 +9,7 @@ import { useReadResource } from "@/lib/use-read-resource";
 import { Badge, Button, Card } from "@/components/ui/primitives";
 import { CopyButton } from "@/components/ui/copy-button";
 import { fmtProvider, fmtIsoFromStr } from "@/lib/formatters";
+import { LEVEL_LABELS, PAYLOAD_MODE_LABELS, labelFor } from "@/lib/control-options";
 import styles from "./experiment-inventory.module.css";
 
 export function ExperimentInventoryPage() {
@@ -49,7 +50,7 @@ function ExperimentRow({ entry }: { entry: ExperimentEntry }) {
         {run.hasArtifact ? <Link href={resultHref(run.executionId)}>{experimentLabel(run)}</Link> : <strong>{entry.kind === "unresolved" ? "Unresolved execution identity" : experimentLabel(run)}</strong>}
         <Badge variant="outline">{entry.kind}</Badge>
       </div>
-      <div className="table-secondary">{[run.securityLevel, run.payloadMode].filter(Boolean).join(" · ") || "Security / payload context unavailable"}</div>
+      <div className="table-secondary">{[run.securityLevel && labelFor(LEVEL_LABELS, run.securityLevel), run.payloadMode && labelFor(PAYLOAD_MODE_LABELS, run.payloadMode)].filter(Boolean).join(" · ") || "Security / payload context unavailable"}</div>
       {entry.contextFromMembers && <div className="table-secondary">Shared coordinate context</div>}
       <div className="inventory-identity">
         <code>{run.executionId}</code><CopyButton value={run.executionId} label={`execution ID ${run.executionId}`} />

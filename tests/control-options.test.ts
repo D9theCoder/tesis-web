@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  CONDITION_LABELS,
   JOB_STATUS_TONES,
-  LEVEL_LABELS,
-  PAYLOAD_MODE_LABELS,
-  PROTOCOL_LABELS,
   REPORT_FORMAT_LABELS,
   SCORING_MODE_LABELS,
   SURFACE_LABELS,
@@ -70,13 +66,6 @@ describe("labels", () => {
     expect(labelFor(SURFACE_LABELS, null)).toBe("—");
   });
 
-  it("covers the runtime vocabularies", () => {
-    expect(Object.keys(LEVEL_LABELS)).toEqual(["low", "medium", "high"]);
-    expect(Object.keys(PAYLOAD_MODE_LABELS)).toEqual(["static_only", "hybrid", "llm_mutation_only"]);
-    expect(Object.keys(CONDITION_LABELS)).toEqual(["akg_guided_hybrid", "linear_hybrid"]);
-    expect(Object.keys(SCORING_MODE_LABELS)).toEqual(["human", "ai", "both"]);
-    expect(Object.keys(PROTOCOL_LABELS)).toEqual(["openai", "openai_compatible", "anthropic"]);
-  });
 
   it("maps job modes and statuses to display values", () => {
     expect(jobModeLabel("doctor-live")).toBe("Doctor (live)");

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { CoordinateSummary, NormalizedResult } from "@/lib/schemas";
 import { Badge, Button } from "@/components/ui/primitives";
 import { fmtProvider, fmtScore } from "@/lib/formatters";
+import { CONDITION_LABELS, LEVEL_LABELS, PAYLOAD_MODE_LABELS, SURFACE_LABELS, labelFor } from "@/lib/control-options";
 
 type SortKey = "index" | "execution" | "outcome" | "condition" | "method" | "score";
 
@@ -162,8 +163,12 @@ export function CoordinateIndex({
                     </button>
                   </td>
                   <td>
-                    <span>{coordinate.experimentCondition || [coordinate.surface, coordinate.securityLevel].filter(isPresentString).map(readable).join(" · ") || "Unavailable"}</span>
-                    <small>{[coordinate.surface, coordinate.securityLevel, coordinate.payloadMode].filter(isPresentString).map(readable).join(" · ") || "Condition details unavailable"}</small>
+                    <span>{condition(coordinate)}</span>
+                    <small>{[
+                      coordinate.surface && labelFor(SURFACE_LABELS, coordinate.surface),
+                      coordinate.securityLevel && labelFor(LEVEL_LABELS, coordinate.securityLevel),
+                      coordinate.payloadMode && labelFor(PAYLOAD_MODE_LABELS, coordinate.payloadMode),
+                    ].filter(isPresentString).join(" · ") || "Condition details unavailable"}</small>
                   </td>
                   <td>
                     <span>{coordinate.selectedMethod ?? coordinate.targetMethod ?? "Unavailable"}</span>
@@ -221,7 +226,7 @@ function uniqueOptions(values: string[]): string[] {
 }
 
 function condition(coordinate: CoordinateSummary): string {
-  return coordinate.experimentCondition || [coordinate.surface, coordinate.securityLevel, coordinate.payloadMode].filter(isPresentString).join(" ") || "";
+  return coordinate.experimentCondition ? labelFor(CONDITION_LABELS, coordinate.experimentCondition) : "Unavailable";
 }
 
 function compare(left: string, right: string): number {

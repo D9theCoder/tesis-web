@@ -363,16 +363,30 @@ const componentSchema = z.object({
   Smethod: z.number().finite().min(0).max(4), Spayload: z.number().finite().min(0).max(4),
   Sexploit: z.number().finite().min(0).max(4), Schain: z.number().finite().min(0).max(4), Soutput: z.number().finite().min(0).max(4),
 });
+const reviewDenominatorSchema = z.union([
+  z.number().finite().nonnegative(),
+  z.object({
+    numerator: z.number().finite().nullable(),
+    denominator: z.number().finite().nonnegative().nullable(),
+    population: z.string().nullable().optional(),
+    origin: z.string().nullable().optional(),
+    method: z.string().nullable().optional(),
+    visit_id: z.string().nullable().optional(),
+    coverage: z.number().finite().min(0).max(1).nullable().optional(),
+    reason: z.string().nullable().optional(),
+  }).passthrough(),
+]);
 export const reviewMetricsSchema = z.object({
   values: z.record(z.number().finite().nullable()),
   availability: z.record(z.boolean()),
-  unavailable_reason: z.record(z.string()),
-  denominators: z.record(z.number().finite().nonnegative()),
-});
+  unavailable_reason: z.record(z.string().nullable()),
+  denominators: z.record(reviewDenominatorSchema),
+}).passthrough();
 export const reviewReceiptSchema = z.object({
   artifact_type: z.literal("thesis_score_receipt"), execution_id: z.string(), run_id: z.string().nullable().optional(),
   source_sha256: z.string().regex(/^[a-f0-9]{64}$/), source_path: z.string(),
   rubric_version: z.literal("scoring.v4"), scoring_mode: z.enum(["human", "ai"]), status: z.literal("final"),
+  selection: z.enum(["human", "ai", "both"]).nullable().optional(),
   generated_at: z.string().datetime({ offset: true }), method: z.string(), config: z.record(z.unknown()),
   components: componentSchema, Spayload_final: z.number().finite().min(0).max(4), Srun_final: z.number().finite().min(0).max(4),
   numerator: z.number().finite().nonnegative(), denominator: z.number().int().positive(),

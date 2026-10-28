@@ -2,11 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { CoordinateSummary, NormalizedResult, ScoreRow } from "@/lib/schemas";
+import type { CoordinateSummary, NormalizedResult, ReviewWorkflow, ScoreRow } from "@/lib/schemas";
 import { Badge, Button } from "@/components/ui/primitives";
 import { CopyButton } from "@/components/ui/copy-button";
 import { buildScoreRows, compositeFormula } from "@/lib/result-normalizer";
 import { fmtProvider, fmtCost, fmtNumber, fmtPercent, fmtScore } from "@/lib/formatters";
+import {
+  CONDITION_LABELS, LEVEL_LABELS, PAYLOAD_MODE_LABELS, SCORING_MODE_LABELS, SURFACE_LABELS, labelFor,
+} from "@/lib/control-options";
 
 type ScoreOrigin = "runtime" | "human" | "ai";
 type MatrixSortKey = "index" | "condition" | "method" | "execution" | "outcome" | "repeat" | "score";
@@ -21,7 +24,7 @@ export function ScoringTable({
   result: NormalizedResult;
   coordinateMode?: boolean;
   selectedCoordinateId?: string | null;
-  onPickCoordinate?: (executionId: string, runId: string) => void;
+  onPickCoordinate?: (coordinate: CoordinateSummary) => void;
   onEvidenceRef?: (ref: string) => void;
 }) {
   const search = useSearchParams(), router = useRouter(), pathname = usePathname();
@@ -103,15 +106,9 @@ export function ScoringTable({
       </section>
       {origin !== "runtime" && <section aria-label={`${scoreLabel} metrics`} className="review-metrics">
         <h3>{scoreLabel} metrics</h3>
-        {workflow?.metrics ? <>
-          <dl className="metrics-list">{Object.entries(workflow.metrics.values).map(([key, value]) => <div key={key}>
-            <dt>{readable(key)}</dt><dd>{workflow.metrics!.availability[key] && value !== null ? fmtNumber(value, 4) : "Unavailable"}
-              {(!workflow.metrics!.availability[key] || value === null) && <p>{workflow.metrics!.unavailable_reason[key] ?? "Not established by this receipt"}</p>}
-            </dd>
-          </div>)}</dl>
-          <h4>Recorded denominators</h4>
-          <dl className="metrics-list">{Object.entries(workflow.metrics.denominators).map(([key, value]) => <div key={key}><dt>{readable(key)}</dt><dd>{fmtNumber(value)}</dd></div>)}</dl>
-        </> : <p className="notice">No metric vector is recorded for this review. Runtime metrics are not substituted.</p>}
+        {workflow?.metrics
+          ? <ReviewMetrics metrics={workflow.metrics} />
+          : <p className="notice">No metric vector is recorded for this review. Runtime metrics are not substituted.</p>}
       </section>}
 
       {rows.length > 0 ? (
@@ -133,7 +130,7 @@ export function ScoringTable({
           <summary>Saved review receipts ({result.reviews.history.length})</summary>
           {result.reviews.history.map((receipt) => (
             <details key={`${receipt.sha256}${receipt.path}`}>
-              <summary>{readable(receipt.workflow)} · {receipt.accepted ? "Eligible" : readable(receipt.reason ?? "unavailable")} · {receipt.path}</summary>
+              <summary>{labelFor(SCORING_MODE_LABELS, receipt.workflow)} · {receipt.accepted ? "Eligible" : readable(receipt.reason ?? "unavailable")} · {receipt.path}</summary>
               <p>SHA-256 <code>{receipt.sha256}</code></p>
               <pre>{JSON.stringify(receipt.receipt, null, 2)}</pre>
             </details>
@@ -144,6 +141,49 @@ export function ScoringTable({
   );
 }
 
+type ReviewMetricsValue = NonNullable<ReviewWorkflow["metrics"]>;
+type ReviewDenominator = ReviewMetricsValue["denominators"][string];
+
+function MetricContext({ record }: { record: ReviewDenominator | undefined }) {
+  if (record === undefined) return null;
+  if (typeof record === "number") return <p>Denominator: {fmtNumber(record, 4)}</p>;
+  return <>
+    {(record.numerator !== null || record.denominator !== null) && (
+      <p>Numerator / denominator: {fmtNumber(record.numerator, 4)} / {fmtNumber(record.denominator, 4)}</p>
+    )}
+    {record.population && <p>Population: {readable(record.population)}</p>}
+    {record.origin && <p>Origin: {readable(record.origin)}</p>}
+    {record.coverage != null && <p>Coverage: {fmtPercent(record.coverage, 2)}</p>}
+  </>;
+}
+
+function ReviewMetrics({ metrics }: { metrics: ReviewMetricsValue }) {
+  const additional = Object.entries(metrics.denominators).filter(([key]) => !(key in metrics.values));
+  return <>
+    <dl className="metrics-list">{Object.entries(metrics.values).map(([key, value]) => {
+      const record = metrics.denominators[key];
+      const unavailable = !metrics.availability[key] || value === null;
+      const reason = metrics.unavailable_reason[key]
+        ?? (typeof record === "object" ? record.reason : null)
+        ?? "Not established by this receipt";
+      return <div key={key}>
+        <dt>{readable(key)}</dt>
+        <dd>
+          {unavailable ? "Unavailable" : fmtNumber(value, 4)}
+          {unavailable && <p>{reason}</p>}
+          <MetricContext record={record} />
+        </dd>
+      </div>;
+    })}</dl>
+    {additional.length > 0 && <>
+      <h4>Additional denominator records</h4>
+      <dl className="metrics-list">{additional.map(([key, record]) => (
+        <div key={key}><dt>{readable(key)}</dt><dd><MetricContext record={record} /></dd></div>
+      ))}</dl>
+    </>}
+  </>;
+}
+
 function MatrixComparison({
   result,
   selectedCoordinateId,
@@ -151,7 +191,7 @@ function MatrixComparison({
 }: {
   result: NormalizedResult;
   selectedCoordinateId: string | null;
-  onPickCoordinate?: (executionId: string, runId: string) => void;
+  onPickCoordinate?: (coordinate: CoordinateSummary) => void;
 }) {
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<MatrixSortKey>("index");
@@ -237,15 +277,19 @@ function MatrixComparison({
                       className="coordinate-select ui-link"
                       aria-label={`Coordinate ${coordinate.index + 1}: ${coordinate.executionStatus ?? "unknown"}, ${coordinate.securityOutcome ?? "unknown"}, ${coordinate.executionId}`}
                       aria-pressed={selected}
-                      onClick={() => onPickCoordinate?.(coordinate.executionId, coordinate.executionId)}
+                      onClick={() => onPickCoordinate?.(coordinate)}
                     >
                       <span>Coordinate {coordinate.index + 1}</span>
                       <code>{coordinate.executionId}</code>
                     </button>
                   </td>
                   <td>
-                    <span>{condition(coordinate) || "Unavailable"}</span>
-                    <small>{[coordinate.surface, coordinate.securityLevel, coordinate.payloadMode].filter(isPresentString).map(readable).join(" · ") || "Condition details unavailable"}</small>
+                    <span>{condition(coordinate)}</span>
+                    <small>{[
+                      coordinate.surface && labelFor(SURFACE_LABELS, coordinate.surface),
+                      coordinate.securityLevel && labelFor(LEVEL_LABELS, coordinate.securityLevel),
+                      coordinate.payloadMode && labelFor(PAYLOAD_MODE_LABELS, coordinate.payloadMode),
+                    ].filter(isPresentString).join(" · ") || "Condition details unavailable"}</small>
                   </td>
                   <td>
                     <span>{coordinate.selectedMethod ?? coordinate.targetMethod ?? "Unavailable"}</span>
@@ -367,7 +411,7 @@ function EvidenceReference({ reference, onClick }: { reference: string; onClick?
 }
 
 function condition(coordinate: CoordinateSummary): string {
-  return coordinate.experimentCondition || [coordinate.surface, coordinate.securityLevel, coordinate.payloadMode].filter(isPresentString).map(readable).join(" · ");
+  return coordinate.experimentCondition ? labelFor(CONDITION_LABELS, coordinate.experimentCondition) : "Unavailable";
 }
 
 function dimensionLabel(dimension: string): string {

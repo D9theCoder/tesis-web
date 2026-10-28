@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import ResultsPage from "@/app/results/[executionId]/page";
 import { normalizeResult } from "@/lib/result-normalizer";
 import * as api from "@/lib/api-client";
-import type { NormalizedResult, ReviewWorkflow } from "@/lib/schemas";
+import type { NormalizedResult, ReviewBundle, ReviewWorkflow } from "@/lib/schemas";
 import { navigation, useRouter, useSearchParams, usePathname } from "./navigation-mock";
 const route = vi.hoisted(() => ({ executionId: "matrix-a" }));
 vi.mock("next/navigation", () => ({
@@ -34,7 +34,7 @@ const matrixWithReviews = () => {
   return {
     ...matrix(),
     source,
-    reviews: { human: { ...review("final", 3.125), source }, ai: review("missing", null), history: [] },
+    reviews: { human: { ...review("final", 3.125), source }, ai: review("missing", null), history: [] as ReviewBundle["history"] },
   };
 };
 const evidenceResult = () => normalizeResult({
@@ -47,6 +47,16 @@ const matrixForScoreSorting = () => normalizeResult({ execution_id: "score-sort"
   { execution_id: "score-low", status: "success", execution_status: "completed", security_outcome: "no_finding", composite_score: 2.75 },
   { execution_id: "score-missing", status: "success", execution_status: "completed", security_outcome: "no_finding" },
 ] });
+const templateMatrix = () => normalizeResult({ execution_id: "matrix-template", status: "success", execution_status: "completed",
+  security_outcome: "no_finding", experiment_condition: "akg_guided_hybrid", surface: "sqli", security_level: "low",
+  payload_mode: "llm_template", config: {}, runs: [
+    { execution_id: "child-template", run_id: "shared-run-id", status: "success", execution_status: "completed",
+      security_outcome: "no_finding", experiment_condition: "akg_guided_hybrid", surface: "sqli", security_level: "low",
+      payload_mode: "llm_template", selected_method: "fixture-method", repeat_index: 0, composite_score: 3 },
+    { execution_id: "child-legacy", run_id: "shared-run-id", status: "success", execution_status: "completed",
+      security_outcome: "no_finding", payload_mode: "static_only", selected_method: "fixture-method",
+      repeat_index: 1, composite_score: 2 },
+  ] });
 async function flush() { await act(async () => { await Promise.resolve(); }); }
 function openCoordinateBrowser() { fireEvent.click(screen.getByText("Browse coordinates")); }
 beforeEach(() => { vi.resetAllMocks(); navigation.url = "/results/matrix-a"; route.executionId="matrix-a"; vi.mocked(api.fetchResult).mockResolvedValue(matrix()); vi.mocked(api.fetchCoordinateResult).mockResolvedValue(null); });
@@ -118,6 +128,34 @@ describe("results review workflow", () => {
     expect(screen.getByText("execution child-b")).toBeVisible();
   });
 
+  it("renders Template runs with the shared payload-mode vocabulary and selects coordinates by execution identity", async () => {
+    vi.mocked(api.fetchResult).mockResolvedValue(templateMatrix());
+    route.executionId = "matrix-template"; navigation.url = "/results/matrix-template";
+    render(<ResultsPage />); await flush();
+
+    const description = document.querySelector<HTMLElement>(".page-description")!;
+    expect(description).toHaveTextContent("AKG-guided hybrid · SQL injection · Low · Template");
+    const execution = screen.getByRole("heading", { name: "Execution", level: 2 }).closest<HTMLElement>("section")!;
+    expect(within(execution).getByText("Template")).toBeVisible();
+    expect(within(execution).getByText("SQL injection · Low")).toBeVisible();
+    expect(document.body.textContent).not.toMatch(/Llm Template/);
+
+    fireEvent.click(screen.getByRole("tab", { name: /Matrix/ }));
+    const table = screen.getByRole("table", { name: "Scoring matrix" });
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows[0]).toHaveTextContent("AKG-guided hybrid");
+    expect(rows[0]).toHaveTextContent("SQL injection · Low · Template");
+    expect(rows[1]).toHaveTextContent("Unavailable");
+    expect(rows[1]).toHaveTextContent("Static only");
+    expect(table.textContent).not.toMatch(/llm_template|static_only|Llm Template/);
+
+    fireEvent.click(within(table).getByRole("button", { name: /Coordinate 1:.*child-template/ }));
+    await flush();
+    expect(navigation.url).toContain("coordinate=child-template");
+    expect(screen.getByText("execution child-template")).toBeVisible();
+    expect(screen.getByText("Viewing coordinate #1")).toBeVisible();
+  });
+
   it("keeps provisional, Human, and AI score origins independent and preserves final precision", async () => {
     vi.mocked(api.fetchResult).mockResolvedValue(matrixWithReviews());
     render(<ResultsPage />); await flush();
@@ -135,6 +173,57 @@ describe("results review workflow", () => {
     expect(ai).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("scoring.v4 · Missing")).toBeVisible();
     expect(screen.getAllByText("No accepted receipt is available.").length).toBeGreaterThan(0);
+  });
+
+  it("shows source-bound metric populations, coverage, zeros, and unavailable reasons", async () => {
+    const result = matrixWithReviews();
+    result.reviews.human.metrics = {
+      schema_version: "research-metrics.v2",
+      values: { payload_validity_rate: 0, first_choice_accuracy: null, guardrail_activation_rate: 0 },
+      availability: { payload_validity_rate: true, first_choice_accuracy: false, guardrail_activation_rate: true },
+      unavailable_reason: { payload_validity_rate: null, first_choice_accuracy: "no_model_decision", guardrail_activation_rate: null },
+      denominators: {
+        payload_validity_rate: { numerator: 0, denominator: 2, population: "model_candidates",
+          origin: "model", method: "sqli_union", visit_id: null, coverage: 0.5 },
+        guardrail_activation_rate: { numerator: 0, denominator: 4, population: null,
+          origin: null, method: "sqli_union", visit_id: null, coverage: 0 },
+        first_choice_accuracy: { numerator: null, denominator: null, population: "model_decisions",
+          origin: null, method: "sqli_union", visit_id: null },
+        legacy_count: 4,
+      },
+    };
+    vi.mocked(api.fetchResult).mockResolvedValue(result);
+    render(<ResultsPage />); await flush();
+    fireEvent.click(screen.getByRole("tab", { name: /Scoring/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Human review" }));
+    const metrics = screen.getByRole("region", { name: "Human review metrics" });
+    const valid = within(metrics).getByText("Payload Validity Rate").parentElement!;
+    expect(valid).toHaveTextContent("0");
+    expect(valid).toHaveTextContent("Numerator / denominator: 0 / 2");
+    expect(valid).toHaveTextContent("Population: Model Candidates");
+    expect(valid).toHaveTextContent("Coverage: 50.00%");
+    expect(metrics).toHaveTextContent("no_model_decision");
+    const guardrail = within(metrics).getByText("Guardrail Activation Rate").parentElement!;
+    expect(guardrail).not.toHaveTextContent("Unavailable");
+    expect(guardrail).toHaveTextContent("Coverage: 0.00%");
+    expect(metrics).toHaveTextContent("Legacy Count");
+    expect(metrics).toHaveTextContent("Denominator: 4");
+    fireEvent.click(screen.getByRole("button", { name: "AI review" }));
+    expect(screen.getByRole("region", { name: "AI review metrics" })).toHaveTextContent("No metric vector");
+  });
+
+  it("labels a saved AI receipt by review origin and its rejection reason", async () => {
+    const result = matrixWithReviews();
+    result.reviews.history = [{ path: "reviews/ai.ai-verified.json", sha256: "b".repeat(64), workflow: "ai",
+      accepted: false, reason: "receipt_source_hash_mismatch", receipt: { artifact_type: "thesis_score_receipt" } }];
+    vi.mocked(api.fetchResult).mockResolvedValue(result);
+    render(<ResultsPage />); await flush();
+    fireEvent.click(screen.getByRole("tab", { name: /Scoring/ }));
+
+    const receipts = screen.getByText("Saved review receipts (1)").parentElement!;
+    expect(receipts).toHaveTextContent("AI rubric · Receipt Source Hash Mismatch · reviews/ai.ai-verified.json");
+    expect(receipts).toHaveTextContent("b".repeat(64));
+    expect(receipts).not.toHaveTextContent("· Ai ·");
   });
 
   it("sorts matrix scores numerically and keeps unavailable values last in both directions", async () => {

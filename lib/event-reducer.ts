@@ -333,9 +333,18 @@ export function reduceEvents(
         (candidate.length >= next.akgPath.length &&
           next.akgPath.every((node, index) => candidate[index] === node));
       if (extendsObserved) {
+        const advanced = candidate.length > next.akgPath.length;
         next.akgPath = [...candidate];
-        next.currentNode = candidate[candidate.length - 1];
+        if (advanced || !next.chain.length) next.currentNode = candidate[candidate.length - 1];
       }
+    }
+    // TESIS retains one connected akg_path; a separately routed branch lives
+    // in current_chain. Never graft the branch onto that historical traversal.
+    const chain = data.current_chain ?? (type === "akg.route.selected" && data.reason === "chain_ready" ? data.chain : undefined);
+    if (Array.isArray(chain) && chain.every(id => typeof id === "string" && id.trim().length > 0)) {
+      next.chain = [...chain];
+      if (chain.length) next.currentNode = chain[chain.length - 1];
+      if (type === "akg.route.selected") next.selectedMethod = asStr(data, "target_agent") ?? next.selectedMethod;
     }
     next.confirmedVulns = pushManyUnique(next.confirmedVulns, data.confirmed_vulns);
     next.achievedOutcomes = pushManyUnique(next.achievedOutcomes, data.achieved_outcomes);

@@ -67,7 +67,13 @@ export function EvidenceDrawer({
               <h3 className="section-heading">Related event IDs</h3>
               <div className="related-event-list">
                 {row.relatedEventIds.map((id) => (
-                  <button key={id} type="button" className="ui-link" onClick={() => onSelectRelated?.(id)}>{id}</button>
+                  <button key={id} type="button" className="ui-link" onClick={event => {
+                    // The related-record button may disappear after navigation.
+                    // Move focus to the stable header before replacing its body.
+                    event.currentTarget.closest('[role="dialog"]')
+                      ?.querySelector<HTMLButtonElement>('button[aria-label="Close"]')?.focus();
+                    onSelectRelated?.(id);
+                  }}>{id}</button>
                 ))}
               </div>
             </section>

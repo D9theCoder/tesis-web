@@ -3,6 +3,7 @@ import type { NormalizedResult, ReviewWorkflow, StatusReason } from "@/lib/schem
 import { Badge } from "@/components/ui/primitives";
 import { CopyButton } from "@/components/ui/copy-button";
 import { fmtProvider, fmtDuration, fmtIsoFromStr, fmtNumber, fmtScore, prettyJson } from "@/lib/formatters";
+import { CONDITION_LABELS, LEVEL_LABELS, PAYLOAD_MODE_LABELS, SURFACE_LABELS, labelFor } from "@/lib/control-options";
 
 export function ResultsSummary({
   result,
@@ -29,11 +30,11 @@ export function ResultsSummary({
           <SummaryValue label="Execution status"><ExecutionBadge value={result.executionStatus ?? "unknown"} /></SummaryValue>
           <SummaryValue label="Started">{fmtIsoFromStr(result.startedAt)}</SummaryValue>
           <SummaryValue label="Duration">{fmtDuration(result.durationMs)}</SummaryValue>
-          <SummaryValue label="Condition">{result.experimentCondition ?? "Unavailable"}</SummaryValue>
-          <SummaryValue label="Surface and level">{[result.surface, result.securityLevel].filter(isPresentString).map(readable).join(" · ") || "Unavailable"}</SummaryValue>
+          <SummaryValue label="Condition">{result.experimentCondition ? labelFor(CONDITION_LABELS, result.experimentCondition) : "Unavailable"}</SummaryValue>
+          <SummaryValue label="Surface and level">{[result.surface && labelFor(SURFACE_LABELS, result.surface), result.securityLevel && labelFor(LEVEL_LABELS, result.securityLevel)].filter(isPresentString).join(" · ") || "Unavailable"}</SummaryValue>
           <SummaryValue label="Method">{result.selectedMethod ?? result.targetMethod ?? "Unavailable"}</SummaryValue>
           <SummaryValue label="Provider and model">{[fmtProvider(result.provider), result.model].filter(Boolean).join(" · ") || "Unavailable"}</SummaryValue>
-          <SummaryValue label="Payload mode">{result.payloadMode ? readable(result.payloadMode) : "Unavailable"}</SummaryValue>
+          <SummaryValue label="Payload mode">{result.payloadMode ? labelFor(PAYLOAD_MODE_LABELS, result.payloadMode) : "Unavailable"}</SummaryValue>
           {result.workflow && <>
             <SummaryValue label="Stop policy">{readable(result.workflow.stop_policy)}</SummaryValue>
             <SummaryValue label="Method visits">{result.workflow.iteration_count} / {result.workflow.max_iterations}</SummaryValue>
